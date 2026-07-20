@@ -1,0 +1,449 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  CUSTOMER
+  MOVER
+  ADMIN
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
+  NAVER
+  KAKAO
+}
+
+enum MoveType {
+  SMALL
+  HOME
+  OFFICE
+}
+
+enum EstimateRequestStatus {
+  PENDING
+  OPEN
+  CONFIRMED
+  COMPLETED
+  EXPIRED
+  CANCELED
+}
+
+enum EstimateStatus {
+  SENT
+  CONFIRMED
+  EXPIRED
+  CANCELED
+}
+
+enum EstimateRequestHistoryType {
+  CREATED
+  UPDATED
+  SUBMITTED
+  CANCELED
+}
+
+enum NotificationType {
+  ESTIMATE_REQUEST_RECEIVED
+  DESIGNATED_REQUEST_RECEIVED
+  ESTIMATE_RECEIVED
+  ESTIMATE_CONFIRMED
+  ESTIMATE_REQUEST_REJECTED
+  MOVE_DAY_REMINDER
+  ESTIMATE_EXPIRATION_REMINDER
+  REVIEW_AVAILABLE
+  REVIEW_RECEIVED
+  CHAT_MESSAGE_RECEIVED
+  ESTIMATE_REVISION_REQUESTED
+  ESTIMATE_REVISION_APPROVED
+  ESTIMATE_REVISION_REJECTED
+}
+
+enum ChatMessageType {
+  TEXT
+  IMAGE
+  SYSTEM
+  ESTIMATE_REVISION
+}
+
+enum EstimateRevisionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELED
+}
+
+model User {
+  id                 String       @id @default(uuid()) @db.Uuid
+  email              String       @unique
+  password           String?
+  authProvider       AuthProvider @default(LOCAL)
+  providerUserId     String?
+  name               String
+  phone              String?      @unique
+  role               UserRole
+  isActive           Boolean      @default(true)
+  isProfileCompleted Boolean      @default(false)
+
+  customerProfile CustomerProfile?
+  moverProfile    MoverProfile?
+  refreshTokens   RefreshToken[]
+
+  estimateRequests          EstimateRequest[]          @relation("CustomerEstimateRequests")
+  moverEstimates            Estimate[]                 @relation("MoverEstimates")
+  designatedRequests        DesignatedMover[]          @relation("DesignatedMoverUser")
+  estimateRequestRejections EstimateRequestRejection[]
+  estimateRequestHistories  EstimateRequestHistory[]   @relation("EstimateRequestHistoryChangedBy")
+
+  favoritesGiven    FavoriteMover[] @relation("CustomerFavorites")
+  favoritesReceived FavoriteMover[] @relation("MoverFavorites")
+  reviewsWritten    Review[]        @relation("CustomerReviews")
+  reviewsReceived   Review[]        @relation("MoverReviews")
+  notifications     Notification[]
+
+  customerChatRooms          ChatRoom[]         @relation("CustomerChatRooms")
+  moverChatRooms             ChatRoom[]         @relation("MoverChatRooms")
+  sentMessages               ChatMessage[]
+  requestedEstimateRevisions EstimateRevision[] @relation("RevisionRequester")
+  respondedEstimateRevisions EstimateRevision[] @relation("RevisionResponder")
+
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  deletedAt DateTime?
+
+  @@unique([authProvider, providerUserId])
+  @@index([role])
+  @@index([isActive])
+}
+
+model RefreshToken {
+  id        Int       @id @default(autoincrement())
+  userId    String    @db.Uuid
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model CustomerProfile {
+  id        Int      @id @default(autoincrement())
+  userId    String   @unique @db.Uuid
+  nickname  String
+  imageUrl  String?
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("customer_profiles")
+}
+
+model MoverProfile {
+  id             Int                @id @default(autoincrement())
+  userId         String             @unique @db.Uuid
+  nickname       String             @unique
+  imageUrl       String?
+  career         Int                @default(0)
+  shortIntro     String
+  description    String             @db.Text
+  confirmedCount Int                @default(0)
+  averageRating  Decimal            @default(0) @db.Decimal(2, 1)
+  reviewCount    Int                @default(0)
+  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceAreas   MoverServiceArea[]
+  serviceTypes   MoverServiceType[]
+  createdAt      DateTime           @default(now())
+  updatedAt      DateTime           @updatedAt
+
+  @@index([averageRating])
+  @@index([reviewCount])
+  @@index([career])
+  @@index([confirmedCount])
+  @@map("mover_profiles")
+}
+
+model MoverServiceArea {
+  id             Int          @id @default(autoincrement())
+  moverProfileId Int
+  regionId       Int
+  moverProfile   MoverProfile @relation(fields: [moverProfileId], references: [id], onDelete: Cascade)
+  region         Region       @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  createdAt      DateTime     @default(now())
+
+  @@unique([moverProfileId, regionId])
+  @@index([regionId])
+  @@map("mover_service_areas")
+}
+
+model Region {
+  id                          Int                @id @default(autoincrement())
+  name                        String             @unique
+  moverServiceAreas           MoverServiceArea[]
+  departureEstimateRequests   EstimateRequest[]  @relation("EstimateRequestFromRegion")
+  destinationEstimateRequests EstimateRequest[]  @relation("EstimateRequestToRegion")
+  createdAt                   DateTime           @default(now())
+  updatedAt                   DateTime           @updatedAt
+
+  @@map("regions")
+}
+
+model MoverServiceType {
+  id             Int          @id @default(autoincrement())
+  moverProfileId Int
+  moveType       MoveType
+  moverProfile   MoverProfile @relation(fields: [moverProfileId], references: [id], onDelete: Cascade)
+  createdAt      DateTime     @default(now())
+
+  @@unique([moverProfileId, moveType])
+  @@index([moveType])
+  @@map("mover_service_types")
+}
+
+model EstimateRequest {
+  id                  Int                   @id @default(autoincrement())
+  customerId          String                @db.Uuid
+  moveType            MoveType
+  moveDate            DateTime
+  fromZipCode         String
+  fromAddress         String
+  fromDetailAddress   String?
+  fromRegionId        Int
+  toZipCode           String
+  toAddress           String
+  toDetailAddress     String?
+  toRegionId          Int
+  status              EstimateRequestStatus @default(PENDING)
+  isActive            Boolean               @default(true)
+  expiresAt           DateTime
+  expiredAt           DateTime?
+  confirmedEstimateId Int?                  @unique
+
+  customer          User                       @relation("CustomerEstimateRequests", fields: [customerId], references: [id], onDelete: Cascade)
+  fromRegion        Region                     @relation("EstimateRequestFromRegion", fields: [fromRegionId], references: [id], onDelete: Restrict)
+  toRegion          Region                     @relation("EstimateRequestToRegion", fields: [toRegionId], references: [id], onDelete: Restrict)
+  estimates         Estimate[]                 @relation("RequestEstimates")
+  designatedMovers  DesignatedMover[]
+  rejections        EstimateRequestRejection[]
+  histories         EstimateRequestHistory[]
+  confirmedEstimate Estimate?                  @relation("ConfirmedEstimate", fields: [confirmedEstimateId], references: [id], onDelete: SetNull)
+  chatRooms         ChatRoom[]
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  canceledAt  DateTime?
+  completedAt DateTime?
+
+  @@index([customerId])
+  @@index([status])
+  @@index([moveType])
+  @@index([fromRegionId])
+  @@index([toRegionId])
+  @@index([moveDate])
+  @@index([expiresAt])
+  @@index([createdAt])
+  @@map("estimate_requests")
+}
+
+model DesignatedMover {
+  id                Int             @id @default(autoincrement())
+  estimateRequestId Int
+  moverId           String          @db.Uuid
+  estimateRequest   EstimateRequest @relation(fields: [estimateRequestId], references: [id], onDelete: Cascade)
+  mover             User            @relation("DesignatedMoverUser", fields: [moverId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now())
+
+  @@unique([estimateRequestId, moverId])
+  @@index([moverId])
+  @@map("designated_movers")
+}
+
+model Estimate {
+  id                Int            @id @default(autoincrement())
+  estimateRequestId Int            @map("estimate_request_id")
+  moverId           String         @map("mover_id") @db.Uuid
+  price             Int
+  comment           String         @db.Text
+  status            EstimateStatus @default(SENT)
+  isDesignated      Boolean        @default(false) @map("is_designated")
+
+  estimateRequest     EstimateRequest    @relation("RequestEstimates", fields: [estimateRequestId], references: [id], onDelete: Cascade)
+  mover               User               @relation("MoverEstimates", fields: [moverId], references: [id], onDelete: Cascade)
+  confirmedForRequest EstimateRequest?   @relation("ConfirmedEstimate")
+  review              Review?
+  chatRoom            ChatRoom?
+  revisions           EstimateRevision[]
+
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  confirmedAt DateTime? @map("confirmed_at")
+  expiredAt   DateTime? @map("expired_at")
+  canceledAt  DateTime? @map("canceled_at")
+
+  @@unique([estimateRequestId, moverId])
+  @@index([moverId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("estimates")
+}
+
+model EstimateRequestHistory {
+  id                Int                        @id @default(autoincrement())
+  estimateRequestId Int
+  changedBy         String                     @db.Uuid
+  type              EstimateRequestHistoryType
+  previousData      Json?
+  changedData       Json?
+  estimateRequest   EstimateRequest            @relation(fields: [estimateRequestId], references: [id], onDelete: Cascade)
+  changedByUser     User                       @relation("EstimateRequestHistoryChangedBy", fields: [changedBy], references: [id], onDelete: Restrict)
+  createdAt         DateTime                   @default(now())
+
+  @@index([estimateRequestId, createdAt])
+  @@index([changedBy])
+  @@index([type])
+  @@map("estimate_request_histories")
+}
+
+model EstimateRequestRejection {
+  id                Int             @id @default(autoincrement())
+  estimateRequestId Int             @map("estimate_request_id")
+  moverId           String          @map("mover_id") @db.Uuid
+  reason            String          @db.Text
+  estimateRequest   EstimateRequest @relation(fields: [estimateRequestId], references: [id], onDelete: Cascade)
+  mover             User            @relation(fields: [moverId], references: [id], onDelete: Cascade)
+  createdAt         DateTime        @default(now()) @map("created_at")
+
+  @@unique([estimateRequestId, moverId])
+  @@index([moverId])
+  @@index([estimateRequestId])
+  @@map("estimate_request_rejections")
+}
+
+model FavoriteMover {
+  id         Int      @id @default(autoincrement())
+  customerId String   @map("customer_id") @db.Uuid
+  moverId    String   @map("mover_id") @db.Uuid
+  customer   User     @relation("CustomerFavorites", fields: [customerId], references: [id], onDelete: Cascade)
+  mover      User     @relation("MoverFavorites", fields: [moverId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([customerId, moverId])
+  @@index([moverId])
+  @@index([customerId, createdAt])
+  @@map("favorite_movers")
+}
+
+model Review {
+  id         Int      @id @default(autoincrement())
+  customerId String   @map("customer_id") @db.Uuid
+  moverId    String   @map("mover_id") @db.Uuid
+  estimateId Int      @unique @map("estimate_id")
+  rating     Int
+  content    String   @db.Text
+  customer   User     @relation("CustomerReviews", fields: [customerId], references: [id], onDelete: Cascade)
+  mover      User     @relation("MoverReviews", fields: [moverId], references: [id], onDelete: Cascade)
+  estimate   Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  @@index([moverId, createdAt])
+  @@index([customerId, createdAt])
+  @@map("reviews")
+}
+
+model Notification {
+  id        Int              @id @default(autoincrement())
+  userId    String           @map("user_id") @db.Uuid
+  type      NotificationType
+  title     String
+  content   String           @db.Text
+  linkUrl   String?          @map("link_url")
+  isRead    Boolean          @default(false) @map("is_read")
+  readAt    DateTime?        @map("read_at")
+  expiresAt DateTime?        @map("expires_at")
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now()) @map("created_at")
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+  @@map("notifications")
+}
+
+model ChatRoom {
+  id                Int                @id @default(autoincrement())
+  estimateRequestId Int                @map("estimate_request_id")
+  estimateId        Int                @unique @map("estimate_id")
+  customerId        String             @map("customer_id") @db.Uuid
+  moverId           String             @map("mover_id") @db.Uuid
+  lastMessageAt     DateTime?          @map("last_message_at")
+  estimateRequest   EstimateRequest    @relation(fields: [estimateRequestId], references: [id], onDelete: Cascade)
+  estimate          Estimate           @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  customer          User               @relation("CustomerChatRooms", fields: [customerId], references: [id], onDelete: Cascade)
+  mover             User               @relation("MoverChatRooms", fields: [moverId], references: [id], onDelete: Cascade)
+  messages          ChatMessage[]
+  revisions         EstimateRevision[]
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+
+  @@unique([estimateRequestId, moverId])
+  @@index([customerId, lastMessageAt])
+  @@index([moverId, lastMessageAt])
+  @@map("chat_rooms")
+}
+
+model ChatMessage {
+  id        Int               @id @default(autoincrement())
+  roomId    Int               @map("room_id")
+  senderId  String            @map("sender_id") @db.Uuid
+  type      ChatMessageType   @default(TEXT)
+  content   String?           @db.Text
+  imageUrl  String?           @map("image_url")
+  isRead    Boolean           @default(false) @map("is_read")
+  readAt    DateTime?         @map("read_at")
+  room      ChatRoom          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  sender    User              @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  revision  EstimateRevision?
+  createdAt DateTime          @default(now()) @map("created_at")
+
+  @@index([roomId, createdAt])
+  @@index([roomId, isRead])
+  @@index([senderId])
+  @@map("chat_messages")
+}
+
+model EstimateRevision {
+  id               Int                    @id @default(autoincrement())
+  chatRoomId       Int                    @map("chat_room_id")
+  estimateId       Int                    @map("estimate_id")
+  requesterId      String                 @map("requester_id") @db.Uuid
+  responderId      String?                @map("responder_id") @db.Uuid
+  messageId        Int?                   @unique @map("message_id")
+  previousPrice    Int                    @map("previous_price")
+  requestedPrice   Int                    @map("requested_price")
+  previousComment  String                 @map("previous_comment") @db.Text
+  requestedComment String                 @map("requested_comment") @db.Text
+  status           EstimateRevisionStatus @default(PENDING)
+  chatRoom         ChatRoom               @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  estimate         Estimate               @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  requester        User                   @relation("RevisionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  responder        User?                  @relation("RevisionResponder", fields: [responderId], references: [id], onDelete: SetNull)
+  message          ChatMessage?           @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  createdAt        DateTime               @default(now()) @map("created_at")
+  respondedAt      DateTime?              @map("responded_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+
+  @@index([chatRoomId, createdAt])
+  @@index([estimateId, createdAt])
+  @@index([status])
+  @@map("estimate_revisions")
+}
