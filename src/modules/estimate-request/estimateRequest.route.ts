@@ -15,9 +15,6 @@ const estimateRequestRouter = Router();
 
 estimateRequestRouter.use(authenticate, authorize("CUSTOMER"));
 
-/**
- * 정적 경로를 :estimateRequestId 보다 먼저 등록해야 합니다.
- */
 estimateRequestRouter.get("/active", estimateRequestController.getActiveEstimateRequest);
 
 estimateRequestRouter

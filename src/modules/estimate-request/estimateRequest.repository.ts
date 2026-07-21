@@ -54,7 +54,7 @@ export type EstimateRequestDetail = Prisma.EstimateRequestGetPayload<{
 }>;
 
 export const estimateRequestRepository = {
-  /* 지역 ------------------------------------------------------------------ */
+  // 지역
 
   findRegionByName(name: string, db: Db = prisma) {
     return db.region.findUnique({
@@ -63,7 +63,7 @@ export const estimateRequestRepository = {
     });
   },
 
-  /* 견적 요청 -------------------------------------------------------------- */
+  // 견적 요청
 
   findActiveByCustomerId(customerId: string, db: Db = prisma) {
     return db.estimateRequest.findFirst({
@@ -125,13 +125,13 @@ export const estimateRequestRepository = {
     return { items, totalCount };
   },
 
-  /* 이력 ------------------------------------------------------------------ */
+  // 이력
 
   createHistory(data: Prisma.EstimateRequestHistoryUncheckedCreateInput, db: Db = prisma) {
     return db.estimateRequestHistory.create({ data });
   },
 
-  /* 지정 견적 요청 ---------------------------------------------------------- */
+  // 지정 견적 요청
 
   findMoverForDesignation(moverId: string, db: Db = prisma) {
     return db.user.findFirst({
@@ -168,13 +168,12 @@ export const estimateRequestRepository = {
     });
   },
 
-  /* 기사님 매칭 ------------------------------------------------------------ */
+  //* 기사님 매칭
 
   /**
    * 견적 요청을 전달받을 기사님 userId 목록.
    *
-   * 출발지 또는 도착지 중 하나라도 서비스 지역에 포함되고,
-   * 해당 이사 유형을 취급하는 활성 기사님을 찾습니다.
+   * 출발지 또는 도착지 중 하나라도 서비스 지역에 포함되고,  해당 이사 유형을 취급하는 활성 기사님에게 자동으로 매침
    */
   async findMatchingMoverIds(
     params: { fromRegionId: number; toRegionId: number; moveType: MoveType },
@@ -203,11 +202,10 @@ export const estimateRequestRepository = {
     return profiles.map((profile) => profile.userId);
   },
 
-  /* 알림 ------------------------------------------------------------------ */
+  // 알림 ------------------------------------------------------------------ */
 
   /**
    * notification 모듈이 완성되기 전까지 사용하는 임시 알림 생성.
-   * 담당자가 모듈을 만들면 해당 서비스 호출로 교체합니다.
    */
   createNotifications(data: Prisma.NotificationCreateManyInput[], db: Db = prisma) {
     return db.notification.createMany({ data });

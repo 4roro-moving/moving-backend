@@ -2,9 +2,7 @@ import { z } from "zod";
 
 /**
  * 카카오(다음) 우편번호 서비스 결과를 그대로 담는 주소 객체.
- *
- * regionId 는 클라이언트가 보내지 않습니다.
- * 서버가 sido 를 regions.name 으로 매핑해 결정합니다.
+ * 서버가 sido 를 regions.name 으로 매핑해 결정
  */
 const addressSchema = z.object({
   zipCode: z

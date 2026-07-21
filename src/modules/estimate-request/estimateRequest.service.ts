@@ -14,13 +14,13 @@ import type {
 
 type Tx = Prisma.TransactionClient;
 
-/** 지정 견적을 요청할 수 있는 최대 기사님 수 */
+// 지정 견적을 요청할 수 있는 최대 기사님 수
 const MAX_DESIGNATED_MOVERS = 3;
 
-/** 생성 시점부터의 기본 만료 기간(일) */
+// 생성 시점부터의 기본 만료 기간(일)
 const DEFAULT_EXPIRATION_DAYS = 7;
 
-/** 이사일이 임박한 경우 보장되는 최소 만료 기간(시간) */
+// 이사일이 임박한 경우 보장되는 최소 만료 기간(시간)
 const MIN_EXPIRATION_HOURS = 24;
 
 const MS_PER_HOUR = 60 * 60 * 1000;
@@ -36,7 +36,7 @@ const MOVE_TYPE_LABEL: Record<MoveType, string> = {
  * 시/도 이름 정규화 표.
  *
  * 카카오(다음) 우편번호 서비스는 축약형("서울")을 반환하지만
- * 정식 명칭이 들어올 수 있어 regions.name 과 매칭되도록 정규화합니다.
+ * 정식 명칭이 들어올 수 있어 regions.name 과 매칭되도록 정규화
  */
 const SIDO_ALIAS: Record<string, string> = {
   서울특별시: "서울",
@@ -90,9 +90,8 @@ function resolveExpiresAt(moveDate: Date): Date {
   return new Date(Math.max(candidate, minimumExpiration));
 }
 
-/**
- * 주소의 시/도를 regions 레코드로 변환
- */
+// 주소의 시/도를 regions 레코드로 변환
+
 async function resolveRegionId(address: AddressInput, db: Tx): Promise<number> {
   const trimmed = address.sido.trim();
   const name = SIDO_ALIAS[trimmed] ?? trimmed;
@@ -151,7 +150,7 @@ type DesignateParams = {
 
 export const estimateRequestService = {
   /**
-   * 견적 요청을 생성하고 매칭된 기사님들에게 알림을 보냅니다.
+   * 견적 요청을 생성하고 매칭된 기사님들에게 알림을 보낸다. 진행 중인 견적 요청이 이미 존재하면 에러를 던진다.
    */
   async createEstimateRequest({ customerId, input }: CreateParams): Promise<EstimateRequestDetail> {
     const moveDate = resolveMoveDate(input.moveDate);
@@ -233,7 +232,7 @@ export const estimateRequestService = {
   },
 
   /**
-   * 진행 중인 견적 요청을 조회합니다. 없으면 null 을 반환합니다.
+   * 진행 중인 견적 요청을 조회하고 없으면 null 을 반환
    */
   getActiveEstimateRequest(customerId: string): Promise<EstimateRequestDetail | null> {
     return estimateRequestRepository.findActiveByCustomerId(customerId);
@@ -270,7 +269,7 @@ export const estimateRequestService = {
   },
 
   /**
-   * 견적이 도착하기 전까지만 수정할 수 있습니다.
+   * 견적이 도착하기 전까지만 수정가능
    */
   async updateEstimateRequest({
     estimateRequestId,
@@ -397,7 +396,7 @@ export const estimateRequestService = {
   },
 
   /**
-   * 특정 기사님을 지정해 견적을 요청합니다.
+   * 특정 기사님을 지정해 견적을 요청
    */
   async designateMover({
     estimateRequestId,
