@@ -10,32 +10,36 @@ export const reviewService = {
     const estimates = await reviewRepository.findReviewableEstimatesByCustomerId(customerId);
 
     return {
-      reviewableEstimates: estimates.map((estimate) => ({
-        estimateId: estimate.id,
-        price: estimate.price,
-        confirmedAt: estimate.confirmedAt,
-        estimateRequest: {
-          id: estimate.estimateRequest.id,
-          moveType: estimate.estimateRequest.moveType,
-          moveDate: estimate.estimateRequest.moveDate,
-          fromAddress: estimate.estimateRequest.fromAddress,
-          toAddress: estimate.estimateRequest.toAddress,
-          status: estimate.estimateRequest.status,
-        },
-        mover: {
-          id: estimate.mover.id,
+      reviewableEstimates: estimates.map((estimate) => {
+        const moverProfile = estimate.mover.moverProfile;
 
-          // 기사 프로필 정책이 확정되기 전까지는 데이터 불일치에 대비해 nullable 방어를 유지
-          nickname: estimate.mover.moverProfile?.nickname ?? null,
-          imageUrl: estimate.mover.moverProfile?.imageUrl ?? null,
-          career: estimate.mover.moverProfile?.career ?? 0,
+        return {
+          estimateId: estimate.id,
+          price: estimate.price,
+          confirmedAt: estimate.confirmedAt,
+          estimateRequest: {
+            id: estimate.estimateRequest.id,
+            moveType: estimate.estimateRequest.moveType,
+            moveDate: estimate.estimateRequest.moveDate,
+            fromAddress: estimate.estimateRequest.fromAddress,
+            toAddress: estimate.estimateRequest.toAddress,
+            status: estimate.estimateRequest.status,
+          },
+          mover: {
+            id: estimate.mover.id,
 
-          // Prisma Decimal은 API 응답에서 다루기 쉽도록 number로 변환
-          averageRating: Number(estimate.mover.moverProfile?.averageRating ?? 0),
+            // 프로필이 없는 경우 실제 0 값과 구분할 수 있도록 null을 반환
+            nickname: moverProfile?.nickname ?? null,
+            imageUrl: moverProfile?.imageUrl ?? null,
+            career: moverProfile?.career ?? null,
 
-          reviewCount: estimate.mover.moverProfile?.reviewCount ?? 0,
-        },
-      })),
+            // Prisma Decimal은 API 응답에서 다루기 쉽도록 number로 변환
+            averageRating: moverProfile ? Number(moverProfile.averageRating) : null,
+
+            reviewCount: moverProfile?.reviewCount ?? null,
+          },
+        };
+      }),
     };
   },
 };
