@@ -4,14 +4,33 @@ import cors from "cors";
 import express from "express";
 import helmet from "helmet";
 
+import { apiReference } from "@scalar/express-api-reference";
+
 import morganMiddleware from "./config/morgan";
+import { generateOpenApiDocument } from "./config/openapi";
 import estimateRequestRouter from "./modules/estimate-request/estimateRequest.route";
 import errorHandler from "./middlewares/errorHandler";
 import notFoundHandler from "./middlewares/notFoundHandler";
 
+// 스웨거용
+// import type { RequestHandler } from "express";
+// import swaggerUi from "swagger-ui-express";
+
 const app = express();
 
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        ...helmet.contentSecurityPolicy.getDefaultDirectives(),
+        "script-src": ["'self'", "https://cdn.jsdelivr.net", "'unsafe-inline'"],
+        "style-src": ["'self'", "https:", "'unsafe-inline'"],
+        "img-src": ["'self'", "data:", "https://cdn.jsdelivr.net"],
+        "worker-src": ["'self'", "blob:"],
+      },
+    },
+  }),
+);
 
 app.use(
   cors({
@@ -33,6 +52,40 @@ app.get("/api/health", (_req, res) => {
   });
 });
 
+/**
+ * API 문서
+ * - /openapi.json : OpenAPI 3.1 문서
+ * - /docs         : Scalar API Reference 화면
+ */
+app.get("/openapi.json", (_req, res, next) => {
+  generateOpenApiDocument()
+    .then((document) => {
+      res.status(200).json(document);
+    })
+    .catch(next);
+});
+
+app.use(
+  "/docs",
+  apiReference({
+    url: "/openapi.json",
+    theme: "purple",
+    pageTitle: "Moving API",
+  }),
+);
+
+// 스웨거로 볼때 전환
+// const swaggerHandler: RequestHandler = (req, res, next) => {
+//   generateOpenApiDocument()
+//     .then((document) => {
+//       swaggerUi.setup(document)(req, res, next);
+//     })
+//     .catch(next);
+// };
+
+// app.use("/docs", swaggerUi.serve, swaggerHandler);
+
+// app.use("/api/auth", authRouter);
 app.use("/api/estimate-requests", estimateRequestRouter);
 
 app.use(notFoundHandler);
