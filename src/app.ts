@@ -7,10 +7,10 @@ import helmet from "helmet";
 import { apiReference } from "@scalar/express-api-reference";
 
 import morganMiddleware from "./config/morgan";
+import errorHandler from "./middlewares/error-handler";
+import notFoundHandler from "./middlewares/not-found-handler";
 import { generateOpenApiDocument } from "./config/openapi";
 import estimateRequestRouter from "./modules/estimate-request/estimateRequest.route";
-import errorHandler from "./middlewares/errorHandler";
-import notFoundHandler from "./middlewares/notFoundHandler";
 
 // 스웨거용
 // import type { RequestHandler } from "express";
@@ -88,7 +88,10 @@ app.use(
 // app.use("/api/auth", authRouter);
 app.use("/api/estimate-requests", estimateRequestRouter);
 
+// 존재하지 않는 경로 처리
 app.use(notFoundHandler);
+
+// 전역 에러 처리
 app.use(errorHandler);
 
 export default app;

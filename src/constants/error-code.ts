@@ -1,3 +1,4 @@
+// 공통 에러 코드
 export const ERROR_CODES = {
   BAD_REQUEST: {
     status: 400,
@@ -90,4 +91,5 @@ export const ERROR_CODES = {
   },
 } as const;
 
-export type ErrorCodeKey = keyof typeof ERROR_CODES;
+// ErrorCode의 key 타입
+export type ErrorCode = keyof typeof ERROR_CODES;

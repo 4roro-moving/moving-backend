@@ -1,5 +1,5 @@
 import { estimateRepository } from "../repositories/estimate.repository";
-import { ApiError } from "../utils/ApiError";
+import { AppError } from "../lib/app-error";
 
 type GetReceivedEstimateListParams = {
   estimateRequestId: number;
@@ -11,13 +11,13 @@ export const estimateService = {
     const estimateRequest = await estimateRepository.findEstimateRequestById(estimateRequestId);
 
     if (!estimateRequest) {
-      throw new ApiError("NOT_FOUND", {
+      throw new AppError("NOT_FOUND", {
         message: "견적 요청을 찾을 수 없습니다.",
       });
     }
 
     if (estimateRequest.customerId !== customerId) {
-      throw new ApiError("FORBIDDEN", {
+      throw new AppError("FORBIDDEN", {
         message: "본인의 견적 요청만 조회할 수 있습니다.",
       });
     }

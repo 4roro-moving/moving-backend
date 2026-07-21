@@ -1,7 +1,8 @@
 import type { ErrorRequestHandler, Request, Response } from "express";
 
 import logger from "../config/logger";
-import { ApiError } from "../utils/ApiError";
+import { ERROR_CODES } from "../constants/error-code";
+import { AppError } from "../lib/app-error";
 
 type ErrorResponse = {
   success: false;
@@ -15,13 +16,14 @@ type ErrorResponse = {
   timestamp: string;
 };
 
+// 전역 에러 처리
 const errorHandler: ErrorRequestHandler = (
   error: unknown,
   req: Request,
   res: Response<ErrorResponse>,
   _next,
 ) => {
-  if (error instanceof ApiError) {
+  if (error instanceof AppError) {
     res.status(error.status).json({
       success: false,
       error: {
@@ -45,11 +47,13 @@ const errorHandler: ErrorRequestHandler = (
     method: req.method,
   });
 
-  res.status(500).json({
+  const internalError = ERROR_CODES.INTERNAL_SERVER_ERROR;
+
+  res.status(internalError.status).json({
     success: false,
     error: {
-      code: "INTERNAL_SERVER_ERROR",
-      message: "서버 내부 오류가 발생했습니다.",
+      code: internalError.code,
+      message: internalError.message,
     },
     path: req.originalUrl,
     method: req.method,
