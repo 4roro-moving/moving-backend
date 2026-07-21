@@ -1,4 +1,4 @@
-import { estimateRepository } from "../repositories/estimateRepository";
+import { estimateRepository } from "../repositories/estimate.repository";
 import { ApiError } from "../utils/ApiError";
 
 type GetReceivedEstimateListParams = {
