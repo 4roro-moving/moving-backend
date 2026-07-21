@@ -1,6 +1,6 @@
 import type { Request, RequestHandler } from "express";
 
-import { ApiError } from "../../utils/ApiError";
+import { AppError } from "../../lib/app-error";
 import { estimateRequestService } from "./estimateRequest.service";
 import type {
   CreateEstimateRequestInput,
@@ -12,7 +12,7 @@ import type {
 
 function getCustomerId(req: Request): string {
   if (!req.user) {
-    throw new ApiError("UNAUTHORIZED");
+    throw new AppError("UNAUTHORIZED");
   }
 
   return req.user.id;

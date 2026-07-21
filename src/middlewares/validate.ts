@@ -1,7 +1,7 @@
 import type { RequestHandler } from "express";
 import type { ZodType } from "zod";
 
-import { ApiError } from "../utils/ApiError";
+import { AppError } from "../lib/app-error";
 
 type Schemas = {
   body?: ZodType;
@@ -45,7 +45,7 @@ export function validate(schemas: Schemas): RequestHandler {
     check("query", req.query);
 
     if (errors.length > 0) {
-      next(new ApiError("VALIDATION_ERROR", { data: errors }));
+      next(new AppError("VALIDATION_ERROR", { data: errors }));
       return;
     }
 

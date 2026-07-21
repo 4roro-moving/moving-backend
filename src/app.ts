@@ -5,9 +5,9 @@ import express from "express";
 import helmet from "helmet";
 
 import morganMiddleware from "./config/morgan";
+import errorHandler from "./middlewares/error-handler";
+import notFoundHandler from "./middlewares/not-found-handler";
 import estimateRequestRouter from "./modules/estimate-request/estimateRequest.route";
-import errorHandler from "./middlewares/errorHandler";
-import notFoundHandler from "./middlewares/notFoundHandler";
 
 const app = express();
 
@@ -35,7 +35,10 @@ app.get("/api/health", (_req, res) => {
 
 app.use("/api/estimate-requests", estimateRequestRouter);
 
+// 존재하지 않는 경로 처리
 app.use(notFoundHandler);
+
+// 전역 에러 처리
 app.use(errorHandler);
 
 export default app;
