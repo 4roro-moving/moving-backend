@@ -27,7 +27,6 @@
   "homepage": "https://github.com/4roro-moving/moving-backend#readme",
   "dependencies": {
     "@prisma/client": "^6.16.2",
-    "@types/jsonwebtoken": "^9.0.10",
     "bcrypt": "^6.0.0",
     "compression": "^1.8.1",
     "cookie-parser": "^1.4.7",
@@ -49,6 +48,7 @@
     "@types/cookie-parser": "^1.4.10",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
     "@types/node": "^26.1.1",
     "eslint": "^10.7.0",

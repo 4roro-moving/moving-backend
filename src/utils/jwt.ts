@@ -1,10 +1,11 @@
+import type { UserRole } from "@prisma/client";
 import jwt, { type JwtPayload, type SignOptions } from "jsonwebtoken";
 
-import { ApiError } from "../../src/utils/ApiError";
+import { ApiError } from "./ApiError";
 
 export type TokenPayload = {
   userId: string;
-  role: string;
+  role: UserRole;
 };
 
 export type VerifiedTokenPayload = TokenPayload & JwtPayload;

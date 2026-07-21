@@ -10,6 +10,6 @@ const getTokenHashSecret = (): string => {
   return tokenHashSecret;
 };
 
-export const hashToken = (token: string): string => {
+export const tokenHash = (token: string): string => {
   return createHmac("sha256", getTokenHashSecret()).update(token).digest("hex");
 };

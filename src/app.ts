@@ -7,6 +7,7 @@ import helmet from "helmet";
 import morganMiddleware from "./config/morgan";
 import errorHandler from "./middlewares/errorHandler";
 import notFoundHandler from "./middlewares/notFoundHandler";
+import { authRouter } from "./modules/auth/auth.route";
 
 const app = express();
 
@@ -35,7 +36,7 @@ app.get("/api/health", (_req, res) => {
 /**
  * 실제 API 라우터는 이 위치에 연결
  */
-// app.use("/api/auth", authRouter);
+app.use("/api/auth", authRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
