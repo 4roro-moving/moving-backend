@@ -3,7 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import type { ListMoverQuery } from "./mover.type";
 
-// 기사님 목록 조회 응답에 필요한 필드
+// 기사 목록 조회 응답에 필요한 필드
 const moverListSelect = {
   id: true,
   userId: true,
@@ -11,6 +11,7 @@ const moverListSelect = {
   imageUrl: true,
   career: true,
   shortIntro: true,
+  description: true,
   confirmedCount: true,
   averageRating: true,
   reviewCount: true,
@@ -101,6 +102,7 @@ export const moverRepository = {
         nickname: mover.nickname,
         profileImageUrl: mover.imageUrl,
         shortIntro: mover.shortIntro,
+        description: mover.description,
         career: mover.career,
         rating: Number(mover.averageRating),
         reviewCount: mover.reviewCount,
