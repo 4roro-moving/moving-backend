@@ -118,51 +118,56 @@ export const reviewRepository = {
     content,
     moverProfileId,
   }: CreateReviewData) {
-    return prisma.$transaction(async (tx) => {
-      const review = await tx.review.create({
-        data: {
-          customerId,
-          moverId,
-          estimateId,
-          rating,
-          content,
-        },
-        select: {
-          id: true,
-          estimateId: true,
-          rating: true,
-          content: true,
-          createdAt: true,
-        },
-      });
+    return prisma.$transaction(
+      async (tx) => {
+        const review = await tx.review.create({
+          data: {
+            customerId,
+            moverId,
+            estimateId,
+            rating,
+            content,
+          },
+          select: {
+            id: true,
+            estimateId: true,
+            rating: true,
+            content: true,
+            createdAt: true,
+          },
+        });
 
-      const reviewStats = await tx.review.aggregate({
-        where: {
-          moverId,
-        },
-        _avg: {
-          rating: true,
-        },
-        _count: {
-          _all: true,
-        },
-      });
+        const reviewStats = await tx.review.aggregate({
+          where: {
+            moverId,
+          },
+          _avg: {
+            rating: true,
+          },
+          _count: {
+            _all: true,
+          },
+        });
 
-      const averageRating = reviewStats._avg.rating ?? 0;
-      const roundedAverageRating = Math.round(averageRating * 10) / 10;
+        const averageRating = reviewStats._avg.rating ?? 0;
+        const roundedAverageRating = Math.round(averageRating * 10) / 10;
 
-      await tx.moverProfile.update({
-        where: {
-          id: moverProfileId,
-        },
-        data: {
-          // 리뷰 생성과 기사님 평점 갱신은 하나의 작업 단위이므로 transaction 안에서 함께 처리한다.
-          averageRating: new Prisma.Decimal(roundedAverageRating),
-          reviewCount: reviewStats._count._all,
-        },
-      });
+        await tx.moverProfile.update({
+          where: {
+            id: moverProfileId,
+          },
+          data: {
+            averageRating: new Prisma.Decimal(roundedAverageRating),
+            reviewCount: reviewStats._count._all,
+          },
+        });
 
-      return review;
-    });
+        return review;
+      },
+      {
+        // 같은 기사님에게 여러 리뷰가 동시에 등록될 때 통계 재계산 결과가 덮어써지는 것을 방지
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
   },
 };
