@@ -74,7 +74,7 @@ app.use(
   }),
 );
 
-// 스웨거로 볼때 전환
+// 스웨거로 볼 때 전환용
 // const swaggerHandler: RequestHandler = (req, res, next) => {
 //   generateOpenApiDocument()
 //     .then((document) => {
@@ -85,7 +85,6 @@ app.use(
 
 // app.use("/docs", swaggerUi.serve, swaggerHandler);
 
-// app.use("/api/auth", authRouter);
 app.use("/api/estimate-requests", estimateRequestRouter);
 
 // 존재하지 않는 경로 처리
