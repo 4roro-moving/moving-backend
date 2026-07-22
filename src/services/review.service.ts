@@ -86,7 +86,7 @@ export const reviewService = {
       });
     }
 
-    const moverProfileId = estimate.mover.moverProfile?.id;
+    const moverProfileId = estimate.mover.moverProfile;
 
     if (!moverProfileId) {
       throw new AppError("BAD_REQUEST", {
@@ -100,7 +100,6 @@ export const reviewService = {
       estimateId: estimate.id,
       rating,
       content,
-      moverProfileId,
     });
 
     return {

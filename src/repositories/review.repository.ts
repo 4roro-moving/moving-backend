@@ -70,7 +70,6 @@ type CreateReviewData = {
   estimateId: number;
   rating: number;
   content: string;
-  moverProfileId: number;
 };
 
 export const reviewRepository = {
@@ -116,7 +115,6 @@ export const reviewRepository = {
     estimateId,
     rating,
     content,
-    moverProfileId,
   }: CreateReviewData) {
     return prisma.$transaction(
       async (tx) => {
@@ -154,7 +152,7 @@ export const reviewRepository = {
 
         await tx.moverProfile.update({
           where: {
-            id: moverProfileId,
+            userId: moverId,
           },
           data: {
             averageRating: new Prisma.Decimal(roundedAverageRating),
