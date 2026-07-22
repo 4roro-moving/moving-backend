@@ -2,13 +2,14 @@ import type { MoveType, Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../lib/app-error";
+import { buildPagination } from "../../utils/pagination.util";
+
 import { estimateRequestRepository } from "./estimateRequest.repository";
 import type { EstimateRequestDetail } from "./estimateRequest.repository";
 import type {
   AddressInput,
   CreateEstimateRequestInput,
   ListEstimateRequestQuery,
-  Pagination,
   UpdateEstimateRequestInput,
 } from "./estimateRequest.type";
 
@@ -113,18 +114,6 @@ function assertOwnership(request: EstimateRequestDetail, customerId: string): vo
       message: "본인의 견적 요청만 접근할 수 있습니다.",
     });
   }
-}
-
-function buildPagination(totalCount: number, page: number, limit: number): Pagination {
-  const totalPages = Math.ceil(totalCount / limit);
-
-  return {
-    page,
-    limit,
-    totalCount,
-    totalPages,
-    hasNext: page < totalPages,
-  };
 }
 
 /* -------------------------------------------------------------------------- */
