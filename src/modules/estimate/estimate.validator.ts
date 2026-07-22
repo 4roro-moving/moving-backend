@@ -4,7 +4,7 @@
 2026.07.21 add 윤소정
 
 Query parameter 검사
-ex. GET /api/movers/estimate-requests?limit=10&isDesignated=true&moveType=SMALL
+ex. GET /api/estimates/requests?limit=10&isDesignated=true&moveType=SMALL
 */
 
 //Boolean 문자열 변환

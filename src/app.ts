@@ -91,7 +91,7 @@ app.use(
 app.use("/api/auth", authRouter);
 
 app.use("/api/estimate-requests", estimateRequestRouter);
-app.use("/api/movers/estimate-requests", moverEstimateRequestRouter);
+app.use("/api/estimates", moverEstimateRequestRouter);
 
 // 존재하지 않는 경로 처리
 app.use(notFoundHandler);

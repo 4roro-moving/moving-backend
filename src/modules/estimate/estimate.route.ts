@@ -9,7 +9,7 @@ const moverEstimateRequestRouter = Router();
 
 moverEstimateRequestRouter.use(authenticate, authorize("MOVER"));
 moverEstimateRequestRouter.get(
-  "/",
+  "/requests",
   validate({ query: moverEstimateRequestListQuerySchema }),
   moverEstimateRequestController.getList,
 );
