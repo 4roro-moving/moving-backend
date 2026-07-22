@@ -7,6 +7,8 @@ import helmet from "helmet";
 import { apiReference } from "@scalar/express-api-reference";
 
 import morganMiddleware from "./config/morgan";
+
+import { authRouter } from "./modules/auth/auth.route";
 import errorHandler from "./middlewares/error-handler";
 import notFoundHandler from "./middlewares/not-found-handler";
 import { generateOpenApiDocument } from "./config/openapi";
@@ -84,6 +86,8 @@ app.use(
 // };
 
 // app.use("/docs", swaggerUi.serve, swaggerHandler);
+
+app.use("/api/auth", authRouter);
 
 app.use("/api/estimate-requests", estimateRequestRouter);
 
