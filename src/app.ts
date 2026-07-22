@@ -76,7 +76,7 @@ app.use(
   }),
 );
 
-// 스웨거로 볼때 전환
+// 스웨거로 볼 때 전환용
 // const swaggerHandler: RequestHandler = (req, res, next) => {
 //   generateOpenApiDocument()
 //     .then((document) => {
