@@ -1,7 +1,7 @@
-import type { MoveType } from "@prisma/client";
+﻿import type { MoveType } from "@prisma/client";
 import type { z } from "zod";
 
-import type { moverEstimateRequestListQuerySchema } from "./mover-estimate-request.validator";
+import type { moverEstimateRequestListQuerySchema } from "./estimate.validator";
 
 /* 
 2026.07.21 add 윤소정

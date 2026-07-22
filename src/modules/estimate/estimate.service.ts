@@ -1,12 +1,12 @@
-import type { MoveType } from "@prisma/client";
+﻿import type { MoveType } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
-import { moverEstimateRequestRepository } from "./mover-estimate-request.repository";
+import { moverEstimateRequestRepository } from "./estimate.repository";
 import type {
   MoverEstimateRequestListItem,
   MoverEstimateRequestListQuery,
   MoverEstimateRequestListResult,
-} from "./mover-estimate-request.type";
+} from "./estimate.type";
 
 /* 
 2026.07.22 add 윤소정

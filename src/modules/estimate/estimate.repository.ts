@@ -1,7 +1,7 @@
-import type { MoveType, Prisma } from "@prisma/client";
+﻿import type { MoveType, Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
-import type { MoverEstimateRequestListQuery } from "./mover-estimate-request.type";
+import type { MoverEstimateRequestListQuery } from "./estimate.type";
 
 type FindManyParams = {
   moverId: string;
