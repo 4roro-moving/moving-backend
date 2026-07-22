@@ -7,6 +7,8 @@ import helmet from "helmet";
 import { apiReference } from "@scalar/express-api-reference";
 
 import morganMiddleware from "./config/morgan";
+
+import { authRouter } from "./modules/auth/auth.route";
 import errorHandler from "./middlewares/error-handler";
 import notFoundHandler from "./middlewares/not-found-handler";
 import { generateOpenApiDocument } from "./config/openapi";
@@ -75,7 +77,7 @@ app.use(
   }),
 );
 
-// 스웨거로 볼때 전환
+// 스웨거로 볼 때 전환용
 // const swaggerHandler: RequestHandler = (req, res, next) => {
 //   generateOpenApiDocument()
 //     .then((document) => {
@@ -86,7 +88,8 @@ app.use(
 
 // app.use("/docs", swaggerUi.serve, swaggerHandler);
 
-// app.use("/api/auth", authRouter);
+app.use("/api/auth", authRouter);
+
 app.use("/api/estimate-requests", estimateRequestRouter);
 app.use("/api/movers/estimate-requests", moverEstimateRequestRouter);
 
