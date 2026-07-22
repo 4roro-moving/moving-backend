@@ -137,13 +137,15 @@ model RefreshToken {
 }
 
 model CustomerProfile {
-  id        Int      @id @default(autoincrement())
-  userId    String   @unique @db.Uuid
-  nickname  String
-  imageUrl  String?
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id           Int                   @id @default(autoincrement())
+  userId       String                @unique @db.Uuid
+  nickname     String
+  imageUrl     String?
+  user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  serviceAreas CustomerServiceArea[]
+  serviceTypes CustomerServiceType[]
+  createdAt    DateTime              @default(now())
+  updatedAt    DateTime              @updatedAt
 
   @@map("customer_profiles")
 }
@@ -185,16 +187,47 @@ model MoverServiceArea {
   @@map("mover_service_areas")
 }
 
+model CustomerServiceArea {
+  id                Int             @id @default(autoincrement())
+  customerProfileId Int
+  regionId          Int
+  customerProfile   CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+  region            Region          @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  createdAt         DateTime        @default(now())
+
+  @@unique([customerProfileId, regionId])
+  @@index([regionId])
+  @@map("customer_service_areas")
+}
+
 model Region {
-  id                          Int                @id @default(autoincrement())
-  name                        String             @unique
-  moverServiceAreas           MoverServiceArea[]
-  departureEstimateRequests   EstimateRequest[]  @relation("EstimateRequestFromRegion")
-  destinationEstimateRequests EstimateRequest[]  @relation("EstimateRequestToRegion")
-  createdAt                   DateTime           @default(now())
-  updatedAt                   DateTime           @updatedAt
+  id   Int    @id @default(autoincrement())
+  name String @unique
+
+  moverServiceAreas    MoverServiceArea[]
+  customerServiceAreas CustomerServiceArea[] // 추가
+
+  departureEstimateRequests   EstimateRequest[] @relation("EstimateRequestFromRegion")
+  destinationEstimateRequests EstimateRequest[] @relation("EstimateRequestToRegion")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@map("regions")
+}
+
+model CustomerServiceType {
+  id                Int      @id @default(autoincrement())
+  customerProfileId Int
+  moveType          MoveType
+
+  customerProfile CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([customerProfileId, moveType])
+  @@index([moveType])
+  @@map("customer_service_types")
 }
 
 model MoverServiceType {
