@@ -16,7 +16,7 @@ export const authenticate: RequestHandler = (req, _res, next) => {
 
     const [scheme, token] = authorization.split(" ");
 
-    if (scheme !== "Bearer" || !token) {
+    if (scheme?.toLowerCase() !== "bearer" || !token) {
       throw new AppError("UNAUTHORIZED", {
         message: "Authorization 헤더 형식이 올바르지 않습니다.",
       });
