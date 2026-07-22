@@ -59,8 +59,8 @@ const saveRefreshToken = async (
 /*
  * HMAC-SHA256으로 해싱된 Refresh Token을 조회한다.
  *
- * DB에는 Refresh Token 원문을 저장하지 않으므로
- * 클라이언트가 전달한 토큰을 해싱한 후 조회해야 한다.
+ * revoke 여부까지 Service에서 확인할 수 있도록
+ * tokenHash가 일치하는 레코드를 그대로 반환한다.
  */
 const findRefreshTokenByHash = async (tokenHash: string, db: DbClient = prisma) => {
   return db.refreshToken.findUnique({
@@ -71,32 +71,41 @@ const findRefreshTokenByHash = async (tokenHash: string, db: DbClient = prisma) 
 };
 
 /*
- * 전달된 tokenHash와 일치하는 Refresh Token을 삭제한다.
+ * 아직 revoke되지 않은 Refresh Token을 폐기한다.
  *
- * delete가 아닌 deleteMany를 사용하여
- * 이미 삭제된 토큰이더라도 에러 없이 처리할 수 있게 한다.
+ * updateMany를 사용하므로 이미 revoke되었거나
+ * 존재하지 않는 토큰이어도 에러가 발생하지 않는다.
  *
- * 반환되는 count를 사용하면 Refresh Token Rotation 시
- * 기존 토큰이 실제로 삭제됐는지 확인할 수 있다.
+ * Refresh Token Rotation에서는 반환되는 count를 확인하여
+ * 동일한 토큰으로 동시에 재발급하는 요청 중
+ * 하나의 요청만 성공하도록 한다.
  */
-const deleteRefreshTokenByHash = async (tokenHash: string, db: DbClient = prisma) => {
-  return db.refreshToken.deleteMany({
+const revokeRefreshTokenByHash = async (tokenHash: string, db: DbClient = prisma) => {
+  return db.refreshToken.updateMany({
     where: {
       tokenHash,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: new Date(),
     },
   });
 };
 
 /*
- * 사용자의 모든 Refresh Token을 삭제한다.
+ * 사용자의 아직 revoke되지 않은 모든 Refresh Token을 폐기한다.
  *
  * 비밀번호 변경, 계정 탈퇴, 전체 기기 로그아웃처럼
  * 모든 로그인 세션을 종료해야 할 때 사용할 수 있다.
  */
-const deleteAllRefreshTokensByUserId = async (userId: string, db: DbClient = prisma) => {
-  return db.refreshToken.deleteMany({
+const revokeAllRefreshTokensByUserId = async (userId: string, db: DbClient = prisma) => {
+  return db.refreshToken.updateMany({
     where: {
       userId,
+      revokedAt: null,
+    },
+    data: {
+      revokedAt: new Date(),
     },
   });
 };
@@ -109,6 +118,6 @@ export const authRepository = {
   update,
   saveRefreshToken,
   findRefreshTokenByHash,
-  deleteRefreshTokenByHash,
-  deleteAllRefreshTokensByUserId,
+  revokeRefreshTokenByHash,
+  revokeAllRefreshTokensByUserId,
 };

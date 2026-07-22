@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
+
 import type { UserRole } from "@prisma/client";
 import jwt, { type JwtPayload, type SignOptions } from "jsonwebtoken";
 
-import { ApiError } from "./ApiError";
+import { AppError } from "../lib/app-error";
 
 export type TokenPayload = {
   userId: string;
@@ -16,7 +18,7 @@ const getJwtSecret = (): string => {
   const jwtSecret = process.env.JWT_SECRET;
 
   if (!jwtSecret) {
-    throw new ApiError("INTERNAL_SERVER_ERROR", {
+    throw new AppError("INTERNAL_SERVER_ERROR", {
       message: "JWT_SECRET environment variable is not set",
     });
   }
@@ -28,7 +30,7 @@ const getRefreshSecret = (): string => {
   const refreshSecret = process.env.REFRESH_SECRET;
 
   if (!refreshSecret) {
-    throw new ApiError("INTERNAL_SERVER_ERROR", {
+    throw new AppError("INTERNAL_SERVER_ERROR", {
       message: "REFRESH_SECRET environment variable is not set",
     });
   }
@@ -40,7 +42,7 @@ const getAccessTokenExpiresIn = (): TokenExpiresIn => {
   const expiresIn = process.env.ACCESS_TOKEN_EXPIRES_IN;
 
   if (!expiresIn) {
-    throw new ApiError("INTERNAL_SERVER_ERROR", {
+    throw new AppError("INTERNAL_SERVER_ERROR", {
       message: "ACCESS_TOKEN_EXPIRES_IN environment variable is not set",
     });
   }
@@ -52,7 +54,7 @@ const getRefreshTokenExpiresIn = (): TokenExpiresIn => {
   const expiresIn = process.env.REFRESH_TOKEN_EXPIRES_IN;
 
   if (!expiresIn) {
-    throw new ApiError("INTERNAL_SERVER_ERROR", {
+    throw new AppError("INTERNAL_SERVER_ERROR", {
       message: "REFRESH_TOKEN_EXPIRES_IN environment variable is not set",
     });
   }
@@ -77,6 +79,7 @@ export const createAccessToken = (payload: TokenPayload): string => {
 export const createRefreshToken = (payload: TokenPayload): string => {
   return jwt.sign(payload, getRefreshSecret(), {
     expiresIn: getRefreshTokenExpiresIn(),
+    jwtid: randomUUID(),
   });
 };
 
@@ -85,14 +88,14 @@ export const verifyAccessToken = (token: string): VerifiedTokenPayload => {
     const payload = jwt.verify(token, getJwtSecret());
 
     if (!isTokenPayload(payload)) {
-      throw new ApiError("UNAUTHORIZED", {
+      throw new AppError("UNAUTHORIZED", {
         message: "유효하지 않은 Access Token입니다.",
       });
     }
 
     return payload;
   } catch {
-    throw new ApiError("UNAUTHORIZED", {
+    throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않은 Access Token입니다.",
     });
   }
@@ -103,14 +106,14 @@ export const verifyRefreshToken = (token: string): VerifiedTokenPayload => {
     const payload = jwt.verify(token, getRefreshSecret());
 
     if (!isTokenPayload(payload)) {
-      throw new ApiError("UNAUTHORIZED", {
+      throw new AppError("UNAUTHORIZED", {
         message: "유효하지 않은 Refresh Token입니다.",
       });
     }
 
     return payload;
   } catch {
-    throw new ApiError("UNAUTHORIZED", {
+    throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않은 Refresh Token입니다.",
     });
   }

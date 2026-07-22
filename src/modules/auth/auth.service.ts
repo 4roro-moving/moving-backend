@@ -12,7 +12,7 @@ import type {
   SignUpInput,
 } from "./auth.type";
 
-import { ApiError } from "../../utils/ApiError";
+import { AppError } from "../../lib/app-error";
 
 import { createAccessToken, createRefreshToken, verifyRefreshToken } from "../../utils/jwt";
 
@@ -52,20 +52,22 @@ const isUniqueConstraintError = (
  * Access Token과 Refresh Token을 발급하고,
  * Refresh Token의 만료 시간을 계산한다.
  */
-const createAuthTokens = (userId: string, role: UserRole) => {
+const createAuthTokens = (
+  userId: string,
+  role: UserRole,
+): AuthTokens & { refreshTokenExpiresAt: Date } => {
   const tokenPayload = {
     userId,
     role,
   };
 
   const accessToken = createAccessToken(tokenPayload);
-
   const refreshToken = createRefreshToken(tokenPayload);
 
   const refreshTokenPayload = verifyRefreshToken(refreshToken);
 
   if (!refreshTokenPayload.exp) {
-    throw new ApiError("INTERNAL_SERVER_ERROR", {
+    throw new AppError("INTERNAL_SERVER_ERROR", {
       message: "Refresh Token 만료 시간을 확인할 수 없습니다.",
     });
   }
@@ -85,7 +87,6 @@ const createAuthTokens = (userId: string, role: UserRole) => {
  */
 const createLocalUser = async (input: SignUpInput, role: SignUpRole): Promise<AuthResponse> => {
   const email = input.email.trim().toLowerCase();
-
   const name = input.name.trim();
 
   /*
@@ -108,7 +109,7 @@ const createLocalUser = async (input: SignUpInput, role: SignUpRole): Promise<Au
   const existingUser = await authRepository.findByEmail(email);
 
   if (existingUser) {
-    throw new ApiError("CONFLICT", {
+    throw new AppError("CONFLICT", {
       message: "이미 사용 중인 이메일입니다.",
     });
   }
@@ -167,17 +168,17 @@ const createLocalUser = async (input: SignUpInput, role: SignUpRole): Promise<Au
      * DB UNIQUE 제약조건에 의해 하나만 성공한다.
      */
     if (isUniqueConstraintError(error, "email")) {
-      throw new ApiError("CONFLICT", {
+      throw new AppError("CONFLICT", {
         message: "이미 사용 중인 이메일입니다.",
       });
     }
 
     /*
-     * 전화번호가 UNIQUE로 설정되어 있다면
+     * 전화번호가 UNIQUE로 설정되어 있으므로
      * 중복 전화번호 회원가입 요청을 처리한다.
      */
     if (isUniqueConstraintError(error, "phone")) {
-      throw new ApiError("CONFLICT", {
+      throw new AppError("CONFLICT", {
         message: "이미 사용 중인 전화번호입니다.",
       });
     }
@@ -216,8 +217,18 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
    * 동일한 메시지를 사용하여 계정 존재 여부 노출을 줄인다.
    */
   if (!user) {
-    throw new ApiError("UNAUTHORIZED", {
+    throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
+    });
+  }
+
+  /*
+   * 비활성화되었거나 탈퇴 처리된 사용자는
+   * 새로운 로그인 세션을 생성할 수 없다.
+   */
+  if (!user.isActive || user.deletedAt !== null) {
+    throw new AppError("FORBIDDEN", {
+      message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
     });
   }
 
@@ -226,7 +237,7 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
    * 사용할 수 없도록 막는다.
    */
   if (user.authProvider !== AuthProvider.LOCAL || !user.password) {
-    throw new ApiError("UNAUTHORIZED", {
+    throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
     });
   }
@@ -234,7 +245,7 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
   const isPasswordMatched = await bcrypt.compare(input.password, user.password);
 
   if (!isPasswordMatched) {
-    throw new ApiError("UNAUTHORIZED", {
+    throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
     });
   }
@@ -274,8 +285,11 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
  *
  * Refresh Token Rotation을 적용한다.
  *
- * 기존 Refresh Token을 삭제한 뒤
- * 새로운 Access Token과 Refresh Token을 발급한다.
+ * 기존 Refresh Token은 물리적으로 삭제하지 않고
+ * revokedAt을 기록하여 사용 불가능한 상태로 변경한다.
+ *
+ * 기존 토큰 revoke와 신규 토큰 저장은
+ * 하나의 트랜잭션으로 처리한다.
  */
 const refresh = async (input: RefreshInput): Promise<AuthTokens> => {
   const currentRefreshToken = input.refreshToken;
@@ -285,7 +299,7 @@ const refresh = async (input: RefreshInput): Promise<AuthTokens> => {
   try {
     refreshTokenPayload = verifyRefreshToken(currentRefreshToken);
   } catch {
-    throw new ApiError("UNAUTHORIZED", {
+    throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않거나 만료된 Refresh Token입니다.",
     });
   }
@@ -295,12 +309,22 @@ const refresh = async (input: RefreshInput): Promise<AuthTokens> => {
   const storedRefreshToken = await authRepository.findRefreshTokenByHash(currentTokenHash);
 
   /*
-   * JWT 자체가 유효하더라도 DB에 토큰이 없으면
-   * 로그아웃되었거나 이미 사용된 Refresh Token이다.
+   * JWT 자체가 유효하더라도 DB에 저장된 토큰이 없다면
+   * 서버가 발급한 유효한 로그인 세션으로 볼 수 없다.
    */
   if (!storedRefreshToken) {
-    throw new ApiError("UNAUTHORIZED", {
+    throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않거나 만료된 Refresh Token입니다.",
+    });
+  }
+
+  /*
+   * 이미 Rotation 또는 로그아웃으로 revoke된 토큰은
+   * 다시 사용할 수 없다.
+   */
+  if (storedRefreshToken.revokedAt !== null) {
+    throw new AppError("UNAUTHORIZED", {
+      message: "이미 사용되었거나 폐기된 Refresh Token입니다.",
     });
   }
 
@@ -309,11 +333,14 @@ const refresh = async (input: RefreshInput): Promise<AuthTokens> => {
    *
    * JWT exp 검증과 별개로 서버가 저장한 세션의
    * 만료 상태를 다시 확인한다.
+   *
+   * 만료된 토큰은 삭제하지 않고 revoke 처리하여
+   * 일정 기간 이력을 유지한다.
    */
   if (storedRefreshToken.expiresAt.getTime() <= Date.now()) {
-    await authRepository.deleteRefreshTokenByHash(currentTokenHash);
+    await authRepository.revokeRefreshTokenByHash(currentTokenHash);
 
-    throw new ApiError("UNAUTHORIZED", {
+    throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않거나 만료된 Refresh Token입니다.",
     });
   }
@@ -323,7 +350,7 @@ const refresh = async (input: RefreshInput): Promise<AuthTokens> => {
    * 일치하는지 확인한다.
    */
   if (refreshTokenPayload.userId !== storedRefreshToken.userId) {
-    throw new ApiError("UNAUTHORIZED", {
+    throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않거나 만료된 Refresh Token입니다.",
     });
   }
@@ -331,7 +358,17 @@ const refresh = async (input: RefreshInput): Promise<AuthTokens> => {
   const user = await authRepository.findById(storedRefreshToken.userId);
 
   if (!user) {
-    throw new ApiError("UNAUTHORIZED", {
+    throw new AppError("UNAUTHORIZED", {
+      message: "유효하지 않거나 만료된 Refresh Token입니다.",
+    });
+  }
+
+  /*
+   * 비활성화되었거나 탈퇴 처리된 사용자는
+   * 기존 Refresh Token이 남아 있더라도 재발급할 수 없다.
+   */
+  if (!user.isActive || user.deletedAt !== null) {
+    throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않거나 만료된 Refresh Token입니다.",
     });
   }
@@ -339,18 +376,18 @@ const refresh = async (input: RefreshInput): Promise<AuthTokens> => {
   const { accessToken, refreshToken, refreshTokenExpiresAt } = createAuthTokens(user.id, user.role);
 
   /*
-   * 기존 Refresh Token 삭제와 신규 Refresh Token 저장은
-   * 하나의 트랜잭션으로 처리한다.
+   * 기존 Refresh Token revoke와
+   * 새로운 Refresh Token 저장을 하나의 트랜잭션으로 처리한다.
    *
-   * deleteMany 결과의 count를 확인하여
+   * revoke 결과 count가 1인 요청만 성공하도록 하여
    * 동일 Refresh Token으로 동시에 재발급 요청이 들어와도
-   * 하나의 요청만 성공하도록 한다.
+   * 하나의 요청만 Rotation에 성공하도록 한다.
    */
   await runTransaction(async (tx) => {
-    const deleteResult = await authRepository.deleteRefreshTokenByHash(currentTokenHash, tx);
+    const revokeResult = await authRepository.revokeRefreshTokenByHash(currentTokenHash, tx);
 
-    if (deleteResult.count !== 1) {
-      throw new ApiError("UNAUTHORIZED", {
+    if (revokeResult.count !== 1) {
+      throw new AppError("UNAUTHORIZED", {
         message: "이미 사용되었거나 유효하지 않은 Refresh Token입니다.",
       });
     }
@@ -375,20 +412,22 @@ const refresh = async (input: RefreshInput): Promise<AuthTokens> => {
  * 현재 로그인 세션 로그아웃
  *
  * 다중 로그인을 허용하므로 사용자의 모든 Refresh Token을
- * 삭제하지 않고 전달된 Refresh Token에 해당하는 세션만 삭제한다.
+ * 폐기하지 않고 전달된 Refresh Token에 해당하는 세션만 폐기한다.
+ *
+ * Refresh Token 레코드는 삭제하지 않고
+ * revokedAt을 기록하여 로그아웃 이력을 유지한다.
  */
 const logout = async (input: LogoutInput): Promise<void> => {
   const currentRefreshToken = input.refreshToken;
-
   const currentTokenHash = tokenHash(currentRefreshToken);
 
   /*
    * 로그아웃은 멱등성을 유지한다.
    *
-   * 이미 삭제된 토큰으로 다시 로그아웃 요청이 들어와도
-   * 에러를 발생시키지 않고 정상 처리한다.
+   * 이미 revoke된 토큰이나 존재하지 않는 토큰으로
+   * 다시 요청해도 에러를 발생시키지 않고 정상 처리한다.
    */
-  await authRepository.deleteRefreshTokenByHash(currentTokenHash);
+  await authRepository.revokeRefreshTokenByHash(currentTokenHash);
 };
 
 export const authService = {
