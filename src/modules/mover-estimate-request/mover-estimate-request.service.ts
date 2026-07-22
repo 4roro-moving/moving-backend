@@ -1,6 +1,6 @@
 import type { MoveType } from "@prisma/client";
 
-import { ApiError } from "../../utils/ApiError";
+import { AppError } from "../../lib/app-error";
 import { moverEstimateRequestRepository } from "./mover-estimate-request.repository";
 import type {
   MoverEstimateRequestListItem,
@@ -46,7 +46,7 @@ export const moverEstimateRequestService = {
     const profile = await moverEstimateRequestRepository.findMoverProfile(moverId);
 
     if (!profile) {
-      throw new ApiError("MOVER_NOT_FOUND");
+      throw new AppError("MOVER_NOT_FOUND");
     }
 
     //기사 서비스 유형 배열 생성

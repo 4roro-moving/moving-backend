@@ -1,7 +1,7 @@
 import type { MoveType, Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
-import { ApiError } from "../../utils/ApiError";
+import { AppError } from "../../lib/app-error";
 import { estimateRequestRepository } from "./estimateRequest.repository";
 import type { EstimateRequestDetail } from "./estimateRequest.repository";
 import type {
@@ -72,7 +72,7 @@ function resolveMoveDate(moveDate: string): Date {
   );
 
   if (parsed.getTime() < todayInKst.getTime()) {
-    throw new ApiError("INVALID_MOVE_DATE");
+    throw new AppError("INVALID_MOVE_DATE");
   }
 
   return parsed;
@@ -99,7 +99,7 @@ async function resolveRegionId(address: AddressInput, db: Tx): Promise<number> {
   const region = await estimateRequestRepository.findRegionByName(name, db);
 
   if (!region) {
-    throw new ApiError("REGION_NOT_FOUND", {
+    throw new AppError("REGION_NOT_FOUND", {
       data: { sido: address.sido },
     });
   }
@@ -109,7 +109,7 @@ async function resolveRegionId(address: AddressInput, db: Tx): Promise<number> {
 
 function assertOwnership(request: EstimateRequestDetail, customerId: string): void {
   if (request.customerId !== customerId) {
-    throw new ApiError("FORBIDDEN", {
+    throw new AppError("FORBIDDEN", {
       message: "본인의 견적 요청만 접근할 수 있습니다.",
     });
   }
@@ -160,7 +160,7 @@ export const estimateRequestService = {
       const existing = await estimateRequestRepository.findActiveByCustomerId(customerId, tx);
 
       if (existing) {
-        throw new ApiError("ACTIVE_REQUEST_EXISTS", {
+        throw new AppError("ACTIVE_REQUEST_EXISTS", {
           data: { activeRequestId: existing.id },
         });
       }
@@ -245,7 +245,7 @@ export const estimateRequestService = {
     const request = await estimateRequestRepository.findById(estimateRequestId);
 
     if (!request) {
-      throw new ApiError("ESTIMATE_REQUEST_NOT_FOUND");
+      throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
     }
 
     assertOwnership(request, customerId);
@@ -280,17 +280,17 @@ export const estimateRequestService = {
       const request = await estimateRequestRepository.findById(estimateRequestId, tx);
 
       if (!request) {
-        throw new ApiError("ESTIMATE_REQUEST_NOT_FOUND");
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
       }
 
       assertOwnership(request, customerId);
 
       if (request.status !== "PENDING" && request.status !== "OPEN") {
-        throw new ApiError("REQUEST_NOT_EDITABLE");
+        throw new AppError("REQUEST_NOT_EDITABLE");
       }
 
       if (request._count.estimates > 0) {
-        throw new ApiError("REQUEST_NOT_EDITABLE");
+        throw new AppError("REQUEST_NOT_EDITABLE");
       }
 
       const data: Prisma.EstimateRequestUncheckedUpdateInput = {};
@@ -355,7 +355,7 @@ export const estimateRequestService = {
       const request = await estimateRequestRepository.findById(estimateRequestId, tx);
 
       if (!request) {
-        throw new ApiError("ESTIMATE_REQUEST_NOT_FOUND");
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
       }
 
       assertOwnership(request, customerId);
@@ -365,7 +365,7 @@ export const estimateRequestService = {
         request.status === "COMPLETED" ||
         request.status === "EXPIRED"
       ) {
-        throw new ApiError("REQUEST_NOT_EDITABLE", {
+        throw new AppError("REQUEST_NOT_EDITABLE", {
           message: "이미 종료된 견적 요청입니다.",
         });
       }
@@ -407,19 +407,19 @@ export const estimateRequestService = {
       const request = await estimateRequestRepository.findById(estimateRequestId, tx);
 
       if (!request) {
-        throw new ApiError("ESTIMATE_REQUEST_NOT_FOUND");
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
       }
 
       assertOwnership(request, customerId);
 
       if (request.status !== "PENDING" && request.status !== "OPEN") {
-        throw new ApiError("REQUEST_NOT_EDITABLE", {
+        throw new AppError("REQUEST_NOT_EDITABLE", {
           message: "지금은 지정 견적을 요청할 수 없는 상태입니다.",
         });
       }
 
       if (request.expiresAt.getTime() <= Date.now()) {
-        throw new ApiError("REQUEST_NOT_EDITABLE", {
+        throw new AppError("REQUEST_NOT_EDITABLE", {
           message: "만료된 견적 요청입니다.",
         });
       }
@@ -427,7 +427,7 @@ export const estimateRequestService = {
       const mover = await estimateRequestRepository.findMoverForDesignation(moverId, tx);
 
       if (!mover) {
-        throw new ApiError("MOVER_NOT_FOUND");
+        throw new AppError("MOVER_NOT_FOUND");
       }
 
       const existing = await estimateRequestRepository.findDesignation(
@@ -437,7 +437,7 @@ export const estimateRequestService = {
       );
 
       if (existing) {
-        throw new ApiError("ALREADY_DESIGNATED");
+        throw new AppError("ALREADY_DESIGNATED");
       }
 
       const designationCount = await estimateRequestRepository.countDesignations(
@@ -446,7 +446,7 @@ export const estimateRequestService = {
       );
 
       if (designationCount >= MAX_DESIGNATED_MOVERS) {
-        throw new ApiError("DESIGNATION_LIMIT_EXCEEDED");
+        throw new AppError("DESIGNATION_LIMIT_EXCEEDED");
       }
 
       await estimateRequestRepository.createDesignation(estimateRequestId, moverId, tx);
@@ -467,7 +467,7 @@ export const estimateRequestService = {
       const refreshed = await estimateRequestRepository.findById(estimateRequestId, tx);
 
       if (!refreshed) {
-        throw new ApiError("ESTIMATE_REQUEST_NOT_FOUND");
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
       }
 
       return refreshed;

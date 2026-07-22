@@ -1,6 +1,6 @@
 import type { Request, RequestHandler } from "express";
 
-import { ApiError } from "../../utils/ApiError";
+import { AppError } from "../../lib/app-error";
 import { moverEstimateRequestService } from "./mover-estimate-request.service";
 import type { MoverEstimateRequestListQuery } from "./mover-estimate-request.type";
 
@@ -11,7 +11,7 @@ import type { MoverEstimateRequestListQuery } from "./mover-estimate-request.typ
 //로그인한 기사 ID
 function getMoverId(req: Request) {
   if (!req.user) {
-    throw new ApiError("UNAUTHORIZED");
+    throw new AppError("UNAUTHORIZED");
   }
 
   return req.user.id;
