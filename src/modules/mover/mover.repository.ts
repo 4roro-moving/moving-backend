@@ -1,7 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
-import type { ListMoverQuery } from "./mover.type";
+import type { MoverListSort, FindManyMoversParams } from "./mover.type";
 
 // 기사 목록 조회 응답에 필요한 필드
 const moverListSelect = {
@@ -36,10 +36,10 @@ const sortMap = {
   rating: { averageRating: "desc" },
   career: { career: "desc" },
   confirmedCount: { confirmedCount: "desc" },
-} satisfies Record<ListMoverQuery["sort"], Prisma.MoverProfileOrderByWithRelationInput>;
+} satisfies Record<MoverListSort, Prisma.MoverProfileOrderByWithRelationInput>;
 
 // 검색어, 지역, 이사 유형 필터를 Prisma where 조건으로 변환
-function buildWhere(query: ListMoverQuery): Prisma.MoverProfileWhereInput {
+function buildWhere(params: FindManyMoversParams): Prisma.MoverProfileWhereInput {
   return {
     user: {
       role: "MOVER",
@@ -47,23 +47,23 @@ function buildWhere(query: ListMoverQuery): Prisma.MoverProfileWhereInput {
       isProfileCompleted: true,
       deletedAt: null,
     },
-    ...(query.keyword && {
+    ...(params.keyword && {
       nickname: {
-        contains: query.keyword,
+        contains: params.keyword,
         mode: "insensitive",
       },
     }),
-    ...(query.serviceArea && {
+    ...(params.serviceArea && {
       serviceAreas: {
         some: {
-          regionId: query.serviceArea,
+          regionId: params.serviceArea,
         },
       },
     }),
-    ...(query.moveType && {
+    ...(params.moveType && {
       serviceTypes: {
         some: {
-          moveType: query.moveType,
+          moveType: params.moveType,
         },
       },
     }),
@@ -71,14 +71,14 @@ function buildWhere(query: ListMoverQuery): Prisma.MoverProfileWhereInput {
 }
 
 export const moverRepository = {
-  async findMany(params: { query: ListMoverQuery; skip: number; take: number }) {
-    const where = buildWhere(params.query);
+  async findMany(params: FindManyMoversParams) {
+    const where = buildWhere(params);
 
     const [movers, totalCount] = await Promise.all([
       prisma.moverProfile.findMany({
         where,
         select: moverListSelect,
-        orderBy: [sortMap[params.query.sort], { id: "asc" }], // 같은 정렬값일 때 조회 순서 고정
+        orderBy: [sortMap[params.sort], { id: "asc" }], // 같은 정렬값일 때 조회 순서 고정
         skip: params.skip,
         take: params.take,
       }),

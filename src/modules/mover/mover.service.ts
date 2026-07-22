@@ -5,12 +5,15 @@ import type { ListMoverQuery } from "./mover.type";
 
 export const moverService = {
   async getMoverList(query: ListMoverQuery) {
-    const { page, limit } = query;
+    const { keyword, sort, serviceArea, moveType, page, limit } = query;
 
     const { movers, totalCount } = await moverRepository.findMany({
-      query,
+      sort,
       skip: (page - 1) * limit,
       take: limit,
+      ...(keyword !== undefined && { keyword }),
+      ...(serviceArea !== undefined && { serviceArea }),
+      ...(moveType !== undefined && { moveType }),
     });
 
     return {
