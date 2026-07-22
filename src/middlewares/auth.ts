@@ -1,44 +1,32 @@
 import type { UserRole } from "@prisma/client";
 import type { RequestHandler } from "express";
 
-import { prisma } from "../lib/prisma";
 import { AppError } from "../lib/app-error";
+import { verifyAccessToken } from "../utils/jwt";
 
-/**
- * 개발용 인증.
- *   x-mock-user: customer1@test.com
- */
-export const authenticate: RequestHandler = async (req, _res, next) => {
+export const authenticate: RequestHandler = (req, _res, next) => {
   try {
-    if (process.env.NODE_ENV === "production") {
-      throw new AppError("UNAUTHORIZED");
-    }
+    const authorization = req.header("authorization");
 
-    const email = req.header("x-mock-user") ?? process.env.MOCK_USER_EMAIL;
-
-    if (!email) {
+    if (!authorization) {
       throw new AppError("UNAUTHORIZED", {
-        message: "x-mock-user 헤더에 시드 계정 이메일을 넣어주세요.",
+        message: "Access Token이 필요합니다.",
       });
     }
 
-    const user = await prisma.user.findUnique({
-      where: { email },
-      select: {
-        id: true,
-        role: true,
-        isActive: true,
-        deletedAt: true,
-      },
-    });
+    const [scheme, token] = authorization.split(" ");
 
-    if (!user || !user.isActive || user.deletedAt !== null) {
-      throw new AppError("UNAUTHORIZED");
+    if (scheme?.toLowerCase() !== "bearer" || !token) {
+      throw new AppError("UNAUTHORIZED", {
+        message: "Authorization 헤더 형식이 올바르지 않습니다.",
+      });
     }
 
+    const payload = verifyAccessToken(token);
+
     req.user = {
-      id: user.id,
-      role: user.role,
+      id: payload.userId,
+      role: payload.role,
     };
 
     next();
@@ -50,13 +38,21 @@ export const authenticate: RequestHandler = async (req, _res, next) => {
 export function authorize(...roles: UserRole[]): RequestHandler {
   return (req, _res, next) => {
     if (!req.user) {
-      next(new AppError("UNAUTHORIZED"));
+      next(
+        new AppError("UNAUTHORIZED", {
+          message: "인증이 필요합니다.",
+        }),
+      );
 
       return;
     }
 
     if (!roles.includes(req.user.role)) {
-      next(new AppError("FORBIDDEN"));
+      next(
+        new AppError("FORBIDDEN", {
+          message: "해당 요청을 수행할 권한이 없습니다.",
+        }),
+      );
 
       return;
     }

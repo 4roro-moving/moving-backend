@@ -37,3 +37,8 @@ export interface AuthResponse {
   user: AuthUser;
   tokens: AuthTokens;
 }
+
+export interface RequestUser {
+  id: string;
+  role: UserRole;
+}
