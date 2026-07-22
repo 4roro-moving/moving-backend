@@ -6,6 +6,7 @@ import helmet from "helmet";
 
 import morganMiddleware from "./config/morgan";
 import estimateRequestRouter from "./modules/estimate-request/estimateRequest.route";
+import moverEstimateRequestRouter from "./modules/mover-estimate-request/mover-estimate-request.route";
 import errorHandler from "./middlewares/errorHandler";
 import notFoundHandler from "./middlewares/notFoundHandler";
 
@@ -34,6 +35,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/estimate-requests", estimateRequestRouter);
+app.use("/api/movers/estimate-requests", moverEstimateRequestRouter);
 
 app.use(notFoundHandler);
 app.use(errorHandler);
