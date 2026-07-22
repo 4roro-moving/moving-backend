@@ -1,6 +1,6 @@
 import type { z } from "zod";
 
-import type { listMoverQuerySchema } from "./mover.validator";
+import type { listMoverQuerySchema, moverIdParamSchema } from "./mover.validator";
 
 export type ListMoverQuery = z.infer<typeof listMoverQuerySchema>;
 
@@ -15,3 +15,5 @@ export type FindManyMoversParams = {
   skip: number;
   take: number;
 };
+
+export type MoverIdParam = z.infer<typeof moverIdParamSchema>;

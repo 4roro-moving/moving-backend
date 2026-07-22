@@ -1,3 +1,4 @@
+import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 
 import { moverRepository } from "./mover.repository";
@@ -32,6 +33,33 @@ export const moverService = {
         moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
       })),
       pagination: buildPagination(totalCount, page, limit),
+    };
+  },
+
+  async getMoverDetail(moverId: string) {
+    const mover = await moverRepository.findByUserId(moverId);
+
+    if (!mover) {
+      throw new AppError("MOVER_NOT_FOUND");
+    }
+
+    return {
+      id: mover.userId,
+      moverProfileId: mover.id,
+      nickname: mover.nickname,
+      profileImageUrl: mover.imageUrl,
+      shortIntro: mover.shortIntro,
+      description: mover.description,
+      career: mover.career,
+      rating: Number(mover.averageRating),
+      reviewCount: mover.reviewCount,
+      confirmedEstimateCount: mover.confirmedCount,
+      favoriteCount: mover.user._count.favoritesReceived,
+      moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
+      serviceAreas: mover.serviceAreas.map((serviceArea) => ({
+        id: serviceArea.region.id,
+        name: serviceArea.region.name,
+      })),
     };
   },
 };
