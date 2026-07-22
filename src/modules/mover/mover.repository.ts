@@ -15,16 +15,6 @@ const moverListSelect = {
   confirmedCount: true,
   averageRating: true,
   reviewCount: true,
-  serviceAreas: {
-    select: {
-      region: {
-        select: {
-          id: true,
-          name: true,
-        },
-      },
-    },
-  },
   serviceTypes: {
     select: {
       moveType: true,
@@ -108,10 +98,6 @@ export const moverRepository = {
         reviewCount: mover.reviewCount,
         confirmedEstimateCount: mover.confirmedCount,
         favoriteCount: mover.user._count.favoritesReceived,
-        serviceAreas: mover.serviceAreas.map((serviceArea) => ({
-          id: serviceArea.region.id,
-          name: serviceArea.region.name,
-        })),
         moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
       })),
       totalCount,
