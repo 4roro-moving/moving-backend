@@ -4,6 +4,41 @@ import { buildPagination } from "../../utils/pagination.util";
 import { moverRepository } from "./mover.repository";
 import type { ListMoverQuery } from "./mover.type";
 
+// 목록 조회 결과 중 기사님 1명 원본 데이터 타입
+type MoverBase = Awaited<ReturnType<typeof moverRepository.findMany>>["movers"][number];
+
+// 상세 조회 결과 중 null이 아닌 기사님 원본 데이터 타입
+type MoverDetail = NonNullable<Awaited<ReturnType<typeof moverRepository.findByUserId>>>;
+
+// 기사님 목록/상세 응답에 공통으로 들어가는 필드
+function mapMoverBase(mover: MoverBase | MoverDetail) {
+  return {
+    id: mover.userId,
+    moverProfileId: mover.id,
+    nickname: mover.nickname,
+    profileImageUrl: mover.imageUrl,
+    shortIntro: mover.shortIntro,
+    description: mover.description,
+    career: mover.career,
+    rating: Number(mover.averageRating),
+    reviewCount: mover.reviewCount,
+    confirmedEstimateCount: mover.confirmedCount,
+    favoriteCount: mover.user._count.favoritesReceived,
+    moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
+  };
+}
+
+// 상세 응답에서만 필요한 서비스 가능 지역 추가
+function mapMoverDetail(mover: MoverDetail) {
+  return {
+    ...mapMoverBase(mover),
+    serviceAreas: mover.serviceAreas.map((serviceArea) => ({
+      id: serviceArea.region.id,
+      name: serviceArea.region.name,
+    })),
+  };
+}
+
 export const moverService = {
   async getMoverList(query: ListMoverQuery) {
     const { keyword, sort, serviceArea, moveType, page, limit } = query;
@@ -18,20 +53,7 @@ export const moverService = {
     });
 
     return {
-      movers: movers.map((mover) => ({
-        id: mover.userId,
-        moverProfileId: mover.id,
-        nickname: mover.nickname,
-        profileImageUrl: mover.imageUrl,
-        shortIntro: mover.shortIntro,
-        description: mover.description,
-        career: mover.career,
-        rating: Number(mover.averageRating),
-        reviewCount: mover.reviewCount,
-        confirmedEstimateCount: mover.confirmedCount,
-        favoriteCount: mover.user._count.favoritesReceived,
-        moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
-      })),
+      movers: movers.map(mapMoverBase),
       pagination: buildPagination(totalCount, page, limit),
     };
   },
@@ -43,23 +65,6 @@ export const moverService = {
       throw new AppError("MOVER_NOT_FOUND");
     }
 
-    return {
-      id: mover.userId,
-      moverProfileId: mover.id,
-      nickname: mover.nickname,
-      profileImageUrl: mover.imageUrl,
-      shortIntro: mover.shortIntro,
-      description: mover.description,
-      career: mover.career,
-      rating: Number(mover.averageRating),
-      reviewCount: mover.reviewCount,
-      confirmedEstimateCount: mover.confirmedCount,
-      favoriteCount: mover.user._count.favoritesReceived,
-      moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
-      serviceAreas: mover.serviceAreas.map((serviceArea) => ({
-        id: serviceArea.region.id,
-        name: serviceArea.region.name,
-      })),
-    };
+    return mapMoverDetail(mover);
   },
 };
