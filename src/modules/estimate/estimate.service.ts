@@ -75,14 +75,12 @@ export const moverEstimateRequestService = {
 
     const hasNextPage = rows.length > query.limit;
     const pageRows = rows.slice(0, query.limit);
-    const items: MoverEstimateRequestListItem[] = [];
-
-    for (const row of pageRows) {
+    const items: MoverEstimateRequestListItem[] = pageRows.map((row) => {
       const isDesignated = row.designatedMovers.some((designation) => {
         return designation.moverId === moverId;
       });
 
-      items.push({
+      return {
         id: row.id,
         customer: row.customer,
         moveType: row.moveType,
@@ -93,8 +91,8 @@ export const moverEstimateRequestService = {
         toRegion: row.toRegion.name,
         isDesignated,
         createdAt: row.createdAt.toISOString(),
-      });
-    }
+      };
+    });
 
     let nextCursor: string | null = null;
     const lastItem = items[items.length - 1];

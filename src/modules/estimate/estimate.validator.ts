@@ -22,6 +22,10 @@ function parseBoolean(value: unknown) {
 
 //값을 배열로 변환 - 이사 유형(small, home, office)
 function makeArray(value: unknown) {
+  if (value == null) {
+    return value;
+  }
+
   if (Array.isArray(value)) {
     return value;
   }
