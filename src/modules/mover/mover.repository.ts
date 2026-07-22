@@ -86,20 +86,7 @@ export const moverRepository = {
     ]);
 
     return {
-      items: movers.map((mover) => ({
-        id: mover.userId,
-        moverProfileId: mover.id,
-        nickname: mover.nickname,
-        profileImageUrl: mover.imageUrl,
-        shortIntro: mover.shortIntro,
-        description: mover.description,
-        career: mover.career,
-        rating: Number(mover.averageRating),
-        reviewCount: mover.reviewCount,
-        confirmedEstimateCount: mover.confirmedCount,
-        favoriteCount: mover.user._count.favoritesReceived,
-        moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
-      })),
+      movers,
       totalCount,
     };
   },
