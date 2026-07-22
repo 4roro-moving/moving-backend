@@ -11,6 +11,7 @@ import errorHandler from "./middlewares/error-handler";
 import notFoundHandler from "./middlewares/not-found-handler";
 import { generateOpenApiDocument } from "./config/openapi";
 import estimateRequestRouter from "./modules/estimate-request/estimateRequest.route";
+import moverRouter from "./modules/mover/mover.route";
 
 // 스웨거용
 // import type { RequestHandler } from "express";
@@ -86,6 +87,7 @@ app.use(
 // app.use("/docs", swaggerUi.serve, swaggerHandler);
 
 app.use("/api/estimate-requests", estimateRequestRouter);
+app.use("/api/movers", moverRouter);
 
 // 존재하지 않는 경로 처리
 app.use(notFoundHandler);
