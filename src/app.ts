@@ -18,6 +18,7 @@ import estimateRequestRouter from "./modules/estimate-request/estimateRequest.ro
 // import type { RequestHandler } from "express";
 // import swaggerUi from "swagger-ui-express";
 import moverEstimateRequestRouter from "./modules/estimate/estimate.route";
+import reviewRouter from "./modules/review/review.route";
 
 const app = express();
 
@@ -92,6 +93,7 @@ app.use("/api/auth", authRouter);
 
 app.use("/api/estimate-requests", estimateRequestRouter);
 app.use("/api/estimates", moverEstimateRequestRouter);
+app.use("/api/reviews", reviewRouter);
 
 // 존재하지 않는 경로 처리
 app.use(notFoundHandler);
