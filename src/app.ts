@@ -1,4 +1,4 @@
-import compression from "compression";
+﻿import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
@@ -17,6 +17,7 @@ import estimateRequestRouter from "./modules/estimate-request/estimateRequest.ro
 // 스웨거용
 // import type { RequestHandler } from "express";
 // import swaggerUi from "swagger-ui-express";
+import moverEstimateRequestRouter from "./modules/estimate/estimate.route";
 
 const app = express();
 
@@ -90,6 +91,7 @@ app.use(
 app.use("/api/auth", authRouter);
 
 app.use("/api/estimate-requests", estimateRequestRouter);
+app.use("/api/estimates", moverEstimateRequestRouter);
 
 // 존재하지 않는 경로 처리
 app.use(notFoundHandler);
