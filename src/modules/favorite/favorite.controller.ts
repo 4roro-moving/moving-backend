@@ -17,12 +17,13 @@ const createFavoriteMover: RequestHandler = async (req, res, next) => {
   try {
     const { moverId } = res.locals.params as FavoriteMoverParam;
 
-    const favoriteMover = await favoriteService.createFavoriteMover({
+    const { isNew, ...favoriteMover } = await favoriteService.createFavoriteMover({
       customerId: getCustomerId(req),
       moverId,
     });
 
-    return sendResponse(res, 201, favoriteMover);
+    // 생성 여부에 따라 201 Created와 200 OK 구분
+    return sendResponse(res, isNew ? 201 : 200, favoriteMover);
   } catch (error) {
     next(error);
   }

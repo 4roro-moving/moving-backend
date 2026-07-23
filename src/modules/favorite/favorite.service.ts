@@ -27,17 +27,21 @@ export const favoriteService = {
       throw new AppError("MOVER_NOT_FOUND");
     }
 
+    let isNew = true;
     try {
       await favoriteRepository.createFavoriteMover(params);
     } catch (error) {
+      // 고객-기사님 복합 unique 충돌인 경우에만 성공 처리, 다른 unique 에러는 에러 처리
       if (!isFavoriteMoverUniqueError(error)) {
         throw error;
       }
+      isNew = false;
     }
 
     return {
       moverId: params.moverId,
       isFavorite: true,
+      isNew,
     };
   },
 
@@ -48,7 +52,6 @@ export const favoriteService = {
       throw new AppError("MOVER_NOT_FOUND");
     }
 
-    // 삭제할 찜이 없어도 찜 해제 상태로 응답
     await favoriteRepository.deleteFavoriteMover(params);
 
     return {
