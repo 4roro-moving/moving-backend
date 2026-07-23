@@ -11,7 +11,7 @@ type MoverBase = Awaited<ReturnType<typeof moverRepository.findMany>>["movers"][
 type MoverDetail = NonNullable<Awaited<ReturnType<typeof moverRepository.findByMoverUserId>>>;
 
 // 기사님 목록/상세 응답에 공통으로 들어가는 필드
-function mapMoverBase(mover: MoverBase | MoverDetail) {
+function mapMoverBase(mover: MoverBase | MoverDetail, isFavorite = false) {
   return {
     id: mover.userId,
     moverProfileId: mover.id,
@@ -25,6 +25,7 @@ function mapMoverBase(mover: MoverBase | MoverDetail) {
     confirmedEstimateCount: mover.confirmedCount,
     favoriteCount: mover.user._count.favoritesReceived,
     moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
+    isFavorite,
   };
 }
 
@@ -40,7 +41,7 @@ function mapMoverDetail(mover: MoverDetail) {
 }
 
 export const moverService = {
-  async getMoverList(query: ListMoverQuery) {
+  async getMoverList(query: ListMoverQuery, customerId?: string) {
     const { keyword, sort, serviceArea, moveType, page, limit } = query;
 
     const { movers, totalCount } = await moverRepository.findMany({
@@ -52,8 +53,20 @@ export const moverService = {
       ...(moveType !== undefined && { moveType }),
     });
 
+    const favoriteMoverIds = customerId
+      ? await moverRepository.findFavoriteMoverIds({
+          customerId,
+          moverIds: movers.map((mover) => mover.userId),
+        })
+      : [];
+
+    const favoriteMoverIdSet = new Set(favoriteMoverIds);
+
     return {
-      movers: movers.map(mapMoverBase),
+      movers: movers.map((mover) => ({
+        ...mapMoverBase(mover),
+        isFavorite: favoriteMoverIdSet.has(mover.userId),
+      })),
       pagination: buildPagination(totalCount, page, limit),
     };
   },

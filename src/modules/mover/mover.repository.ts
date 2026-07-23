@@ -119,4 +119,20 @@ export const moverRepository = {
       select: MOVER_DETAIL_SELECT,
     });
   },
+
+  findFavoriteMoverIds(params: { customerId: string; moverIds: string[] }) {
+    return prisma.favoriteMover
+      .findMany({
+        where: {
+          customerId: params.customerId,
+          moverId: {
+            in: params.moverIds,
+          },
+        },
+        select: {
+          moverId: true,
+        },
+      })
+      .then((favorites) => favorites.map((favorite) => favorite.moverId));
+  },
 };

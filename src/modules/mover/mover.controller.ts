@@ -5,12 +5,13 @@ import { moverService } from "./mover.service";
 import type { ListMoverQuery, MoverIdParam } from "./mover.type";
 
 export const moverController = {
-  // GET /api/movers
-  getMovers: (async (_req, res, next) => {
+  //GET /api/movers
+  getMovers: (async (req, res, next) => {
     try {
       const query = res.locals.query as ListMoverQuery;
+      const customerId = req.user?.role === "CUSTOMER" ? req.user.id : undefined;
 
-      const result = await moverService.getMoverList(query);
+      const result = await moverService.getMoverList(query, customerId);
 
       return sendResponse(res, 200, result.movers, {
         pagination: result.pagination,
