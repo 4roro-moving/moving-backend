@@ -20,6 +20,7 @@ import moverRouter from "./modules/mover/mover.route";
 // import swaggerUi from "swagger-ui-express";
 import moverEstimateRequestRouter from "./modules/estimate/estimate.route";
 import reviewRouter from "./modules/review/review.route";
+import favoriteRouter from "./modules/favorite/favorite.route";
 
 const app = express();
 
@@ -96,6 +97,7 @@ app.use("/api/estimate-requests", estimateRequestRouter);
 app.use("/api/movers", moverRouter);
 app.use("/api/estimates", moverEstimateRequestRouter);
 app.use("/api/reviews", reviewRouter);
+app.use("/api/favorites", favoriteRouter);
 
 // 존재하지 않는 경로 처리
 app.use(notFoundHandler);
