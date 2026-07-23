@@ -2,6 +2,8 @@ import { Router } from "express";
 
 import { authenticate, authorize } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
+import { estimateController } from "../estimate/estimate.controller";
+import { receivedEstimateRequestIdParamSchema } from "../estimate/estimate.validator";
 import { estimateRequestController } from "./estimateRequest.controller";
 import {
   createEstimateRequestSchema,
@@ -45,6 +47,12 @@ estimateRequestRouter
     validate({ params: estimateRequestIdParamSchema }),
     estimateRequestController.cancelEstimateRequest,
   );
+
+estimateRequestRouter.get(
+  "/:estimateRequestId/estimates",
+  validate({ params: receivedEstimateRequestIdParamSchema }),
+  estimateController.getReceivedEstimateList,
+);
 
 estimateRequestRouter.post(
   "/:estimateRequestId/designate",

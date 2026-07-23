@@ -2,7 +2,7 @@
 
 import { authenticate, authorize } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
-import { moverEstimateRequestController } from "./estimate.controller";
+import { estimateController } from "./estimate.controller";
 import { moverEstimateRequestListQuerySchema } from "./estimate.validator";
 
 const moverEstimateRequestRouter = Router();
@@ -11,7 +11,7 @@ moverEstimateRequestRouter.use(authenticate, authorize("MOVER"));
 moverEstimateRequestRouter.get(
   "/requests",
   validate({ query: moverEstimateRequestListQuerySchema }),
-  moverEstimateRequestController.getList,
+  estimateController.getList,
 );
 
 export default moverEstimateRequestRouter;

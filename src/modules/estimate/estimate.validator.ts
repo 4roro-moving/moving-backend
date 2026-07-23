@@ -7,6 +7,11 @@ Query parameter 검사
 ex. GET /api/estimates/requests?limit=10&isDesignated=true&moveType=SMALL
 */
 
+/* 
+2026.07.23 add 김성현
+받은 견적 목록 요청값 검증
+*/
+
 //Boolean 문자열 변환
 function parseBoolean(value: unknown) {
   if (value === "true") {
@@ -53,4 +58,9 @@ export const moverEstimateRequestListQuerySchema = z.object({
   isDesignated: booleanSchema.optional(), //지정 견적 요청 여부
   isServiceArea: booleanSchema.optional(), //서비스 가능 지역 일치하는지 확인
   sort: z.enum(["moveDate", "requestedAt"]).default("requestedAt"),
+});
+
+// 받은 견적 목록 path parameter 검증
+export const receivedEstimateRequestIdParamSchema = z.object({
+  estimateRequestId: z.coerce.number().int().positive(),
 });
