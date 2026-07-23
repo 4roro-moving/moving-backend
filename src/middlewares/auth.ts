@@ -60,3 +60,34 @@ export function authorize(...roles: UserRole[]): RequestHandler {
     next();
   };
 }
+
+// 비회원 조회를 허용하되, 토큰이 있으면 로그인 사용자 정보 설정
+export const optionalAuthenticate: RequestHandler = (req, _res, next) => {
+  try {
+    const authorization = req.header("authorization");
+
+    if (authorization === undefined) {
+      next();
+      return;
+    }
+
+    const [scheme, token, ...rest] = authorization.trim().split(/\s+/);
+
+    if (scheme?.toLowerCase() !== "bearer" || !token || rest.length > 0) {
+      throw new AppError("UNAUTHORIZED", {
+        message: "Authorization 헤더 형식이 올바르지 않습니다.",
+      });
+    }
+
+    const payload = verifyAccessToken(token);
+
+    req.user = {
+      id: payload.userId,
+      role: payload.role,
+    };
+
+    next();
+  } catch (error) {
+    next(error);
+  }
+};

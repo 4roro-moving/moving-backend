@@ -1,16 +1,17 @@
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 
+import { favoriteRepository } from "../favorite/favorite.repository";
 import { moverRepository } from "./mover.repository";
 import type { ListMoverQuery } from "./mover.type";
 
-// 목록 조회 결과 중 기사님 1명 원본 데이터 타입
+// 목록 조회 repository 결과에서 기사 1명의 타입
 type MoverBase = Awaited<ReturnType<typeof moverRepository.findMany>>["movers"][number];
 
-// 상세 조회 결과 중 null이 아닌 기사님 원본 데이터 타입
+// 상세 조회 repository 결과에서 null을 제외한 기사 타입
 type MoverDetail = NonNullable<Awaited<ReturnType<typeof moverRepository.findByMoverUserId>>>;
 
-// 기사님 목록/상세 응답에 공통으로 들어가는 필드
+// 기사 목록/상세 응답에 공통으로 들어가는 필드
 function mapMoverBase(mover: MoverBase | MoverDetail) {
   return {
     id: mover.userId,
@@ -39,8 +40,20 @@ function mapMoverDetail(mover: MoverDetail) {
   };
 }
 
+// 목록 응답의 isFavorite 계산을 위해 찜한 기사 ID를 Set으로 변환
+async function getFavoriteMoverIdSet(customerId: string | undefined, moverIds: string[]) {
+  if (!customerId || moverIds.length === 0) {
+    return new Set<string>();
+  }
+  const favorites = await favoriteRepository.findFavoriteMoversByCustomerId({
+    customerId,
+    moverIds,
+  });
+  return new Set(favorites.map((f) => f.moverId));
+}
+
 export const moverService = {
-  async getMoverList(query: ListMoverQuery) {
+  async getMoverList(query: ListMoverQuery, customerId?: string) {
     const { keyword, sort, serviceArea, moveType, page, limit } = query;
 
     const { movers, totalCount } = await moverRepository.findMany({
@@ -52,19 +65,34 @@ export const moverService = {
       ...(moveType !== undefined && { moveType }),
     });
 
+    const favoriteMoverIdSet = await getFavoriteMoverIdSet(
+      customerId,
+      movers.map((mover) => mover.userId),
+    );
+
     return {
-      movers: movers.map(mapMoverBase),
+      movers: movers.map((mover) => ({
+        ...mapMoverBase(mover),
+        isFavorite: favoriteMoverIdSet.has(mover.userId),
+      })),
       pagination: buildPagination(totalCount, page, limit),
     };
   },
 
-  async getMoverDetail(moverUserId: string) {
+  async getMoverDetail(moverUserId: string, customerId?: string) {
     const mover = await moverRepository.findByMoverUserId(moverUserId);
 
     if (!mover) {
       throw new AppError("MOVER_NOT_FOUND");
     }
 
-    return mapMoverDetail(mover);
+    const favorite = customerId
+      ? await favoriteRepository.findFavoriteMover({ customerId, moverId: moverUserId })
+      : null;
+
+    return {
+      ...mapMoverDetail(mover),
+      isFavorite: favorite !== null,
+    };
   },
 };

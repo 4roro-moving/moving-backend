@@ -49,4 +49,20 @@ export const favoriteRepository = {
       },
     });
   },
+
+  findFavoriteMoversByCustomerId({
+    customerId,
+    moverIds,
+  }: {
+    customerId: string;
+    moverIds: string[];
+  }) {
+    return prisma.favoriteMover.findMany({
+      where: {
+        customerId,
+        moverId: { in: moverIds },
+      },
+      select: { moverId: true },
+    });
+  },
 };
