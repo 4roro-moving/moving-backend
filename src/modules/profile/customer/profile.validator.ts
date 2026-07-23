@@ -23,8 +23,8 @@ const passwordSchema = z
   .min(8, {
     message: "비밀번호는 8자 이상이어야 합니다.",
   })
-  .max(72, {
-    message: "비밀번호는 72자 이하로 입력해주세요.",
+  .refine((password) => Buffer.byteLength(password, "utf8") <= 72, {
+    message: "비밀번호는 UTF-8 기준 72바이트 이하로 입력해주세요.",
   });
 
 const imageUrlSchema = z.url({
@@ -82,9 +82,7 @@ export const updateProfileSchema = z
   })
   .superRefine((data, ctx) => {
     const hasCurrentPassword = data.currentPassword !== undefined;
-
     const hasNewPassword = data.newPassword !== undefined;
-
     const hasNewPasswordConfirm = data.newPasswordConfirm !== undefined;
 
     const isPasswordChangeRequested = hasCurrentPassword || hasNewPassword || hasNewPasswordConfirm;

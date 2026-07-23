@@ -7,8 +7,6 @@ import { AppError } from "../../../lib/app-error";
 import { profileRepository } from "./profile.repository";
 import type { CreateProfileInput, ProfileResponse, UpdateProfileInput } from "./profile.type";
 
-type UserWithPassword = NonNullable<Awaited<ReturnType<typeof profileRepository.findUserById>>>;
-
 type CustomerProfileWithRelations = NonNullable<
   Awaited<ReturnType<typeof profileRepository.findProfileByUserId>>
 >;
@@ -19,7 +17,15 @@ const isUniqueConstraintError = (error: unknown): error is Prisma.PrismaClientKn
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 };
 
-const validateActiveCustomer = (user: UserWithPassword | null): UserWithPassword => {
+const validateActiveCustomer = <
+  T extends {
+    isActive: boolean;
+    deletedAt: Date | null;
+    role: UserRole;
+  },
+>(
+  user: T | null,
+): T => {
   if (!user) {
     throw new AppError("NOT_FOUND", {
       message: "사용자를 찾을 수 없습니다.",
@@ -132,8 +138,10 @@ const getProfileStatus = async (
 }> => {
   const user = validateActiveCustomer(await profileRepository.findUserById(userId));
 
+  const profile = await profileRepository.findProfileByUserId(user.id);
+
   return {
-    isProfileCompleted: user.isProfileCompleted,
+    isProfileCompleted: user.isProfileCompleted && profile !== null,
   };
 };
 
@@ -183,13 +191,20 @@ const updateProfile = async (
       });
     }
 
-    if (!user.password) {
+    const userWithPassword = validateActiveCustomer(
+      await profileRepository.findUserWithPasswordById(user.id),
+    );
+
+    if (!userWithPassword.password) {
       throw new AppError("BAD_REQUEST", {
         message: "소셜 로그인 계정은 비밀번호를 변경할 수 없습니다.",
       });
     }
 
-    const isCurrentPasswordValid = await bcrypt.compare(input.currentPassword, user.password);
+    const isCurrentPasswordValid = await bcrypt.compare(
+      input.currentPassword,
+      userWithPassword.password,
+    );
 
     if (!isCurrentPasswordValid) {
       throw new AppError("UNAUTHORIZED", {

@@ -20,6 +20,35 @@ const findUserById = async (userId: string, db: DbClient = prisma) => {
     where: {
       id: userId,
     },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      phone: true,
+      role: true,
+      isActive: true,
+      isProfileCompleted: true,
+      deletedAt: true,
+    },
+  });
+};
+
+const findUserWithPasswordById = async (userId: string, db: DbClient = prisma) => {
+  return db.user.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      phone: true,
+      password: true,
+      role: true,
+      isActive: true,
+      isProfileCompleted: true,
+      deletedAt: true,
+    },
   });
 };
 
@@ -47,7 +76,13 @@ const findProfileByUserId = async (userId: string, db: DbClient = prisma) => {
       userId,
     },
     include: {
-      user: true,
+      user: {
+        select: {
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
       serviceAreas: {
         include: {
           region: true,
@@ -97,7 +132,13 @@ const createProfile = async (userId: string, input: CreateProfileInput, db: DbCl
       },
     },
     include: {
-      user: true,
+      user: {
+        select: {
+          name: true,
+          email: true,
+          phone: true,
+        },
+      },
       serviceAreas: {
         include: {
           region: true,
@@ -204,6 +245,7 @@ const markProfileCompleted = async (userId: string, db: DbClient = prisma) => {
 
 export const profileRepository = {
   findUserById,
+  findUserWithPasswordById,
   findUserByPhoneExcludingUser,
   findProfileByUserId,
   countRegionsByIds,

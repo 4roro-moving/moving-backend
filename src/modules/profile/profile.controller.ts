@@ -38,7 +38,10 @@ const createProfile: RequestHandler = async (req, res, next) => {
     if (user.role === UserRole.CUSTOMER) {
       const profile = await customerProfileService.createProfile(user.id, req.body);
 
-      res.status(201).json(profile);
+      res.status(201).json({
+        success: true,
+        data: profile,
+      });
 
       return;
     }
@@ -46,7 +49,10 @@ const createProfile: RequestHandler = async (req, res, next) => {
     if (user.role === UserRole.MOVER) {
       const profile = await moverProfileService.createProfile(user.id, req.body);
 
-      res.status(201).json(profile);
+      res.status(201).json({
+        success: true,
+        data: profile,
+      });
 
       return;
     }
@@ -72,7 +78,10 @@ const getMyProfile: RequestHandler = async (req, res, next) => {
     if (user.role === UserRole.CUSTOMER) {
       const profile = await customerProfileService.getMyProfile(user.id);
 
-      res.status(200).json(profile);
+      res.status(200).json({
+        success: true,
+        data: profile,
+      });
 
       return;
     }
@@ -80,7 +89,10 @@ const getMyProfile: RequestHandler = async (req, res, next) => {
     if (user.role === UserRole.MOVER) {
       const profile = await moverProfileService.getMyProfile(user.id);
 
-      res.status(200).json(profile);
+      res.status(200).json({
+        success: true,
+        data: profile,
+      });
 
       return;
     }
@@ -106,7 +118,10 @@ const getProfileStatus: RequestHandler = async (req, res, next) => {
     if (user.role === UserRole.CUSTOMER) {
       const status = await customerProfileService.getProfileStatus(user.id);
 
-      res.status(200).json(status);
+      res.status(200).json({
+        success: true,
+        data: status,
+      });
 
       return;
     }
@@ -114,7 +129,10 @@ const getProfileStatus: RequestHandler = async (req, res, next) => {
     if (user.role === UserRole.MOVER) {
       const status = await moverProfileService.getProfileStatus(user.id);
 
-      res.status(200).json(status);
+      res.status(200).json({
+        success: true,
+        data: status,
+      });
 
       return;
     }
@@ -149,7 +167,10 @@ const updateBasicInfo: RequestHandler = async (req, res, next) => {
 
     const profile = await moverProfileService.updateBasicInfo(user.id, req.body);
 
-    res.status(200).json(profile);
+    res.status(200).json({
+      success: true,
+      data: profile,
+    });
   } catch (error) {
     next(error);
   }
@@ -177,7 +198,10 @@ const updateProfile: RequestHandler = async (req, res, next) => {
     if (user.role === UserRole.CUSTOMER) {
       const profile = await customerProfileService.updateProfile(user.id, req.body);
 
-      res.status(200).json(profile);
+      res.status(200).json({
+        success: true,
+        data: profile,
+      });
 
       return;
     }
@@ -185,7 +209,10 @@ const updateProfile: RequestHandler = async (req, res, next) => {
     if (user.role === UserRole.MOVER) {
       const profile = await moverProfileService.updateProfile(user.id, req.body);
 
-      res.status(200).json(profile);
+      res.status(200).json({
+        success: true,
+        data: profile,
+      });
 
       return;
     }
