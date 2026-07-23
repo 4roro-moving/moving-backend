@@ -5,6 +5,7 @@ import { PrismaClient } from "@prisma/client";
 
 import { SALT_ROUNDS, TEST_PASSWORD } from "./seeds/constants.js";
 import { seedCustomers } from "./seeds/seedCustomers.js";
+import { seedEstimateData } from "./seeds/seedEstimateData.js";
 import { seedMovers } from "./seeds/seedMovers.js";
 import { seedRegions } from "./seeds/seedRegions.js";
 
@@ -28,12 +29,17 @@ async function main(): Promise<void> {
   await seedMovers(prisma, passwordHash, regionIdMap);
 
   console.log("");
+
+  await seedEstimateData(prisma, regionIdMap);
+
+  console.log("");
   console.log("🎉 시드 데이터 생성이 완료되었습니다.");
   console.log("");
   console.log("────────────────────────────────────");
   console.log(`공통 비밀번호: ${TEST_PASSWORD}`);
   console.log("고객 계정: customer1@test.com ~ customer8@test.com");
   console.log("기사 계정: mover1@test.com ~ mover8@test.com");
+  console.log("견적 요청 및 견적 테스트 데이터 생성 완료");
   console.log("────────────────────────────────────");
   console.log("");
 }
