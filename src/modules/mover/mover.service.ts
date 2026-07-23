@@ -30,9 +30,9 @@ function mapMoverBase(mover: MoverBase | MoverDetail, isFavorite = false) {
 }
 
 // 상세 응답에서만 필요한 서비스 가능 지역 추가
-function mapMoverDetail(mover: MoverDetail) {
+function mapMoverDetail(mover: MoverDetail, isFavorite = false) {
   return {
-    ...mapMoverBase(mover),
+    ...mapMoverBase(mover, isFavorite),
     serviceAreas: mover.serviceAreas.map((serviceArea) => ({
       id: serviceArea.region.id,
       name: serviceArea.region.name,
@@ -71,13 +71,20 @@ export const moverService = {
     };
   },
 
-  async getMoverDetail(moverUserId: string) {
+  async getMoverDetail(moverUserId: string, customerId?: string) {
     const mover = await moverRepository.findByMoverUserId(moverUserId);
 
     if (!mover) {
       throw new AppError("MOVER_NOT_FOUND");
     }
 
-    return mapMoverDetail(mover);
+    const isFavorite = customerId
+      ? await moverRepository.existsFavoriteMover({
+          customerId,
+          moverId: moverUserId,
+        })
+      : false;
+
+    return mapMoverDetail(mover, isFavorite);
   },
 };

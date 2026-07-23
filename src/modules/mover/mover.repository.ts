@@ -135,4 +135,20 @@ export const moverRepository = {
       })
       .then((favorites) => favorites.map((favorite) => favorite.moverId));
   },
+
+  async existsFavoriteMover(params: { customerId: string; moverId: string }) {
+    const favorite = await prisma.favoriteMover.findUnique({
+      where: {
+        customerId_moverId: {
+          customerId: params.customerId,
+          moverId: params.moverId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+
+    return favorite !== null;
+  },
 };

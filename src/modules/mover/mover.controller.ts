@@ -22,11 +22,12 @@ export const moverController = {
   }) satisfies RequestHandler,
 
   // GET /api/movers/:moverId
-  getMoverDetail: (async (_req, res, next) => {
+  getMoverDetail: (async (req, res, next) => {
     try {
       const { moverId: moverUserId } = res.locals.params as MoverIdParam;
+      const customerId = req.user?.role === "CUSTOMER" ? req.user.id : undefined;
 
-      const mover = await moverService.getMoverDetail(moverUserId);
+      const mover = await moverService.getMoverDetail(moverUserId, customerId);
 
       return sendResponse(res, 200, mover);
     } catch (error) {

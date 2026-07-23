@@ -16,6 +16,7 @@ moverRouter.get(
 
 moverRouter.get(
   "/:moverId",
+  optionalAuthenticate,
   validate({ params: moverIdParamSchema }),
   moverController.getMoverDetail,
 );
