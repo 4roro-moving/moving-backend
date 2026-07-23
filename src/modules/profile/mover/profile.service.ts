@@ -42,8 +42,20 @@ const isUniqueConstraintError = (
 
 /*
  * 프로필 기능을 이용할 수 있는 활성 무버인지 확인한다.
+ *
+ * 전달받은 사용자 객체의 타입을 그대로 반환하도록 제네릭을 사용한다.
+ * 따라서 일반 사용자 조회 결과와 비밀번호 포함 조회 결과에
+ * 동일한 검증 함수를 사용할 수 있다.
  */
-const validateActiveMover = (user: Awaited<ReturnType<typeof profileRepository.findUserById>>) => {
+const validateActiveMover = <
+  T extends {
+    isActive: boolean;
+    deletedAt: Date | null;
+    role: UserRole;
+  },
+>(
+  user: T | null,
+): T => {
   if (!user) {
     throw new AppError("NOT_FOUND", {
       message: "사용자를 찾을 수 없습니다.",
@@ -206,7 +218,11 @@ const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
  * User.isProfileCompleted 값과 실제 MoverProfile 존재 여부를
  * 함께 확인하여 데이터 불일치 상황에서 잘못된 완료 응답을 막는다.
  */
-const getProfileStatus = async (userId: string): Promise<{ isProfileCompleted: boolean }> => {
+const getProfileStatus = async (
+  userId: string,
+): Promise<{
+  isProfileCompleted: boolean;
+}> => {
   const user = validateActiveMover(await profileRepository.findUserById(userId));
 
   const profile = await profileRepository.findProfileByUserId(user.id);
@@ -273,13 +289,24 @@ const updateBasicInfo = async (
       });
     }
 
-    if (!user.password) {
+    /*
+     * 비밀번호 변경이 요청된 경우에만
+     * 비밀번호 해시를 포함한 사용자 정보를 조회한다.
+     */
+    const userWithPassword = validateActiveMover(
+      await profileRepository.findUserWithPasswordById(user.id),
+    );
+
+    if (!userWithPassword.password) {
       throw new AppError("BAD_REQUEST", {
         message: "소셜 로그인 계정은 비밀번호를 변경할 수 없습니다.",
       });
     }
 
-    const isCurrentPasswordValid = await bcrypt.compare(input.currentPassword, user.password);
+    const isCurrentPasswordValid = await bcrypt.compare(
+      input.currentPassword,
+      userWithPassword.password,
+    );
 
     if (!isCurrentPasswordValid) {
       throw new AppError("UNAUTHORIZED", {

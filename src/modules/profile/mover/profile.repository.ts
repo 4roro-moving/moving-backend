@@ -41,12 +41,35 @@ const profileInclude = {
 } as const;
 
 /*
- * 사용자 ID로 사용자 조회
+ * 사용자 ID로 일반 사용자 정보 조회
  *
- * 기본정보 및 비밀번호 변경을 위해
- * password 필드도 함께 조회한다.
+ * 프로필 등록, 조회, 상태 조회, 프로필 정보 수정 등
+ * 비밀번호가 필요하지 않은 흐름에서 사용한다.
  */
 const findUserById = async (userId: string, db: DbClient = prisma) => {
+  return db.user.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      role: true,
+      isActive: true,
+      isProfileCompleted: true,
+      deletedAt: true,
+    },
+  });
+};
+
+/*
+ * 사용자 ID로 비밀번호를 포함한 사용자 정보 조회
+ *
+ * 기본정보 수정 중 비밀번호 변경이 요청된 경우에만 사용한다.
+ */
+const findUserWithPasswordById = async (userId: string, db: DbClient = prisma) => {
   return db.user.findUnique({
     where: {
       id: userId,
@@ -306,6 +329,7 @@ const markProfileCompleted = async (userId: string, db: DbClient = prisma) => {
 
 export const profileRepository = {
   findUserById,
+  findUserWithPasswordById,
   findUserByPhoneExcludingUser,
   findProfileByUserId,
   findProfileByNickname,
