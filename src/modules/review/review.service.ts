@@ -1,7 +1,14 @@
 import { EstimateRequestStatus, EstimateStatus } from "@prisma/client";
 
-import { AppError } from "../lib/app-error";
-import { reviewRepository } from "../repositories/review.repository";
+import { AppError } from "../../lib/app-error";
+import type { Pagination } from "../../types/response.type";
+import { reviewRepository } from "./review.repository";
+
+type GetMyReviewListParams = {
+  customerId: string;
+  page: number;
+  limit: number;
+};
 
 type GetReviewableEstimateListParams = {
   // 현재 로그인한 고객 기준으로 고객 ID를 전달받아 리뷰 작성 가능한 견적 리스트를 조회
@@ -15,7 +22,59 @@ type CreateReviewParams = {
   content: string;
 };
 
+function buildPagination(totalCount: number, page: number, limit: number): Pagination {
+  const totalPages = Math.ceil(totalCount / limit);
+
+  return {
+    page,
+    limit,
+    totalCount,
+    totalPages,
+    hasNext: page < totalPages,
+  };
+}
+
 export const reviewService = {
+  async getMyReviewList({ customerId, page, limit }: GetMyReviewListParams) {
+    const skip = (page - 1) * limit;
+
+    const [reviews, totalCount] = await Promise.all([
+      reviewRepository.findMyReviewsByCustomerId(customerId, skip, limit),
+      reviewRepository.countMyReviewsByCustomerId(customerId),
+    ]);
+
+    return {
+      reviews: reviews.map((review) => {
+        const moverProfile = review.mover.moverProfile;
+        const estimateRequest = review.estimate.estimateRequest;
+
+        return {
+          id: review.id,
+          estimateId: review.estimateId,
+          rating: review.rating,
+          content: review.content,
+          createdAt: review.createdAt,
+          price: review.estimate.price,
+          estimateRequest: {
+            id: estimateRequest.id,
+            moveType: estimateRequest.moveType,
+            moveDate: estimateRequest.moveDate,
+            fromAddress: estimateRequest.fromAddress,
+            toAddress: estimateRequest.toAddress,
+          },
+          mover: {
+            id: review.mover.id,
+            name: review.mover.name,
+            nickname: moverProfile?.nickname ?? null,
+            imageUrl: moverProfile?.imageUrl ?? null,
+            shortIntro: moverProfile?.shortIntro ?? null,
+          },
+        };
+      }),
+      pagination: buildPagination(totalCount, page, limit),
+    };
+  },
+
   async getReviewableEstimateList({ customerId }: GetReviewableEstimateListParams) {
     const estimates = await reviewRepository.findReviewableEstimatesByCustomerId(customerId);
 
