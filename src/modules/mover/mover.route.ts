@@ -1,7 +1,7 @@
 import { Router } from "express";
 
-import { validate } from "../../middlewares/validate";
 import { optionalAuthenticate } from "../../middlewares/auth";
+import { validate } from "../../middlewares/validate";
 import { moverController } from "./mover.controller";
 import { listMoverQuerySchema, moverIdParamSchema } from "./mover.validator";
 

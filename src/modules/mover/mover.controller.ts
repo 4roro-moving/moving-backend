@@ -1,15 +1,19 @@
-import type { RequestHandler } from "express";
+import type { Request, RequestHandler } from "express";
 
 import { sendResponse } from "../../utils/response.util";
 import { moverService } from "./mover.service";
 import type { ListMoverQuery, MoverIdParam } from "./mover.type";
 
+function getOptionalCustomerId(req: Request) {
+  return req.user?.role === "CUSTOMER" ? req.user.id : undefined;
+}
+
 export const moverController = {
-  //GET /api/movers
+  // GET /api/movers
   getMovers: (async (req, res, next) => {
     try {
       const query = res.locals.query as ListMoverQuery;
-      const customerId = req.user?.role === "CUSTOMER" ? req.user.id : undefined;
+      const customerId = getOptionalCustomerId(req);
 
       const result = await moverService.getMoverList(query, customerId);
 
@@ -25,7 +29,7 @@ export const moverController = {
   getMoverDetail: (async (req, res, next) => {
     try {
       const { moverId: moverUserId } = res.locals.params as MoverIdParam;
-      const customerId = req.user?.role === "CUSTOMER" ? req.user.id : undefined;
+      const customerId = getOptionalCustomerId(req);
 
       const mover = await moverService.getMoverDetail(moverUserId, customerId);
 
