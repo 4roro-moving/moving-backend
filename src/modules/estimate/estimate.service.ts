@@ -1,8 +1,10 @@
 ﻿import type { MoveType } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
+import { runTransaction } from "../../utils/transaction";
 import { moverEstimateRequestRepository, receivedEstimateRepository } from "./estimate.repository";
 import type {
+  ConfirmReceivedEstimateParams,
   GetReceivedEstimateDetailParams,
   GetReceivedEstimateListParams,
   MoverEstimateRequestListItem,
@@ -22,6 +24,7 @@ import type {
 2026.07.23 add 김성현
 - 받은 견적 목록 비즈니스 로직
 - 받은 견적 상세 비즈니스 로직
+- 받은 견적 확정 비즈니스 로직
 */
 
 function getCursorId(cursor: string | undefined) {
@@ -248,5 +251,128 @@ export const receivedEstimateService = {
           })) ?? [],
       },
     };
+  },
+
+  async confirmReceivedEstimate({
+    estimateRequestId,
+    estimateId,
+    customerId,
+  }: ConfirmReceivedEstimateParams) {
+    return runTransaction(async (tx) => {
+      //확정 대상 견적 조회
+      const estimate = await receivedEstimateRepository.findReceivedEstimateForConfirm(
+        estimateRequestId,
+        estimateId,
+        tx,
+      );
+
+      if (!estimate) {
+        throw new AppError("NOT_FOUND", {
+          message: "견적을 찾을 수 없습니다.",
+        });
+      }
+
+      //견적 요청 소유자 확인
+      if (estimate.estimateRequest.customerId !== customerId) {
+        throw new AppError("FORBIDDEN", {
+          message: "본인의 견적 요청에 도착한 견적만 확정할 수 있습니다.",
+        });
+      }
+
+      if (estimate.estimateRequest.status !== "OPEN") {
+        throw new AppError("CONFLICT", {
+          message: "확정할 수 없는 견적 요청 상태입니다.",
+        });
+      }
+
+      if (estimate.estimateRequest.confirmedEstimateId !== null) {
+        throw new AppError("CONFLICT", {
+          message: "이미 확정된 견적 요청입니다.",
+        });
+      }
+
+      if (estimate.status !== "SENT") {
+        throw new AppError("CONFLICT", {
+          message: "확정할 수 없는 견적 상태입니다.",
+        });
+      }
+
+      const confirmedAt = new Date();
+
+      //견적 요청 확정 상태 선점
+      const claimedEstimateRequest =
+        await receivedEstimateRepository.claimEstimateRequestForConfirm(
+          estimateRequestId,
+          estimate.id,
+          tx,
+        );
+
+      if (claimedEstimateRequest.count === 0) {
+        throw new AppError("CONFLICT", {
+          message: "이미 확정되었거나 확정할 수 없는 견적 요청입니다.",
+        });
+      }
+
+      //선택 견적 확정
+      const confirmedEstimate = await receivedEstimateRepository.confirmEstimate(
+        estimate.id,
+        confirmedAt,
+        tx,
+      );
+
+      //미선택 견적 만료 처리
+      const expiredEstimates = await receivedEstimateRepository.expireOtherSentEstimates(
+        estimateRequestId,
+        estimate.id,
+        confirmedAt,
+        tx,
+      );
+
+      //확정된 견적 요청 조회
+      const confirmedEstimateRequest =
+        await receivedEstimateRepository.findConfirmedEstimateRequestById(estimateRequestId, tx);
+
+      if (!confirmedEstimateRequest) {
+        throw new AppError("NOT_FOUND", {
+          message: "확정된 견적 요청을 찾을 수 없습니다.",
+        });
+      }
+
+      //견적 요청 변경 이력 생성
+      await receivedEstimateRepository.createEstimateRequestHistory(
+        {
+          estimateRequestId,
+          changedBy: customerId,
+          type: "UPDATED",
+          previousData: {
+            status: estimate.estimateRequest.status,
+            confirmedEstimateId: estimate.estimateRequest.confirmedEstimateId,
+          },
+          changedData: {
+            status: confirmedEstimateRequest.status,
+            confirmedEstimateId: confirmedEstimateRequest.confirmedEstimateId,
+          },
+        },
+        tx,
+      );
+
+      //확정 응답 형태 가공
+      return {
+        estimateRequest: confirmedEstimateRequest,
+        estimate: {
+          id: confirmedEstimate.id,
+          price: confirmedEstimate.price,
+          status: confirmedEstimate.status,
+          confirmedAt: confirmedEstimate.confirmedAt,
+          mover: {
+            id: confirmedEstimate.mover.id,
+            name: confirmedEstimate.mover.name,
+            nickname: confirmedEstimate.mover.moverProfile?.nickname ?? null,
+            imageUrl: confirmedEstimate.mover.moverProfile?.imageUrl ?? null,
+          },
+        },
+        expiredEstimateCount: expiredEstimates.count,
+      };
+    });
   },
 };

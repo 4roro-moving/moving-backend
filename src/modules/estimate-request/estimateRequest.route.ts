@@ -4,6 +4,7 @@ import { authenticate, authorize } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
 import { estimateController } from "../estimate/estimate.controller";
 import {
+  confirmReceivedEstimateParamSchema,
   receivedEstimateDetailParamSchema,
   receivedEstimateRequestIdParamSchema,
 } from "../estimate/estimate.validator";
@@ -65,6 +66,16 @@ estimateRequestRouter.get(
   "/:estimateRequestId/estimates/:estimateId",
   validate({ params: receivedEstimateDetailParamSchema }),
   estimateController.getReceivedEstimateDetail,
+);
+
+/*
+2026.07.23 add 김성현
+받은 견적 확정 요청 처리
+*/
+estimateRequestRouter.patch(
+  "/:estimateRequestId/estimates/:estimateId/confirm",
+  validate({ params: confirmReceivedEstimateParamSchema }),
+  estimateController.confirmReceivedEstimate,
 );
 
 estimateRequestRouter.post(
