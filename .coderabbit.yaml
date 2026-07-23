@@ -1,0 +1,235 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+
+language: "ko"
+
+tone_instructions: "간결하고 근거를 들어 리뷰해 주세요. 단순 취향 차이보다 버그, 보안, 데이터 정합성 문제를 우선 지적해 주세요."
+
+reviews:
+  profile: "chill"
+  request_changes_workflow: false
+  high_level_summary: true
+  collapse_walkthrough: true
+  changed_files_summary: true
+  sequence_diagrams: true
+  poem: false
+
+  auto_review:
+    enabled: true
+    drafts: false
+    base_branches:
+      - "dev"
+      - "main"
+
+  # 리뷰에서 제외할 파일
+  path_filters:
+    - "!**/package-lock.json"
+    - "!**/*.log"
+    - "!logs/**"
+    - "!dist/**"
+    - "!node_modules/**"
+    - "!src/generated/**"
+    - "!prisma/migrations/**"
+
+  path_instructions:
+    # ------------------------------------------------------------------
+    # 프로젝트 전반
+    # ------------------------------------------------------------------
+    - path: "src/**/*.ts"
+      instructions: |
+        이사 견적 매칭 서비스(무빙)의 Express 5 + TypeScript(ESM) 백엔드입니다.
+        Prisma(PostgreSQL), zod 검증을 사용합니다.
+
+        [공통 규칙]
+        - tsconfig 가 strict, noUncheckedIndexedAccess, exactOptionalPropertyTypes,
+          verbatimModuleSyntax 를 켜고 있습니다.
+          타입 import 는 `import type` 을 사용해야 하고,
+          optional 속성에 undefined 를 직접 할당하면 컴파일이 실패합니다.
+          `...(value !== undefined && { key: value })` 패턴을 권장합니다.
+        - 에러는 반드시 `AppError` 를 사용하고, 에러 코드는
+          `src/constants/error-code.ts` 에 정의된 것만 사용합니다.
+          문자열 메시지를 직접 throw 하지 마세요.
+        - 응답 형식은 `src/types/response.type.ts` 의 `ApiResponse` 를 따릅니다.
+          모듈마다 응답 구조가 다르면 지적해 주세요.
+        - 콘솔 로그 대신 `src/config/logger.ts` 의 winston logger 를 사용합니다.
+          (단, prisma/seed 스크립트는 console 사용이 허용됩니다)
+        - 사용자 입력값을 에러 메시지에 그대로 넣지 마세요. `data` 필드를 사용합니다.
+
+        [지적하지 않아도 되는 것]
+        - Prettier 로 자동 정리되는 포맷팅(들여쓰기, 줄바꿈, 세미콜론 등)
+        - ESLint 가 이미 잡는 규칙
+
+    # ------------------------------------------------------------------
+    # 모듈 구조
+    # ------------------------------------------------------------------
+    - path: "src/modules/**/*.ts"
+      instructions: |
+        각 기능은 `src/modules/<기능>/` 아래 한 모듈로 관리합니다.
+        파일 구성: `*.controller.ts`, `*.service.ts`, `*.repository.ts`,
+        `*.route.ts`, `*.validator.ts`, `*.type.ts` (필요 시 `*.docs.ts`).
+
+        [레이어 책임]
+        - route: 경로 정의, authenticate/authorize/validate 미들웨어 연결만 합니다.
+        - controller: req/res 처리만 담당합니다. 비즈니스 로직이 있으면 지적해 주세요.
+          모든 핸들러는 try/catch 로 감싸고 에러를 `next(error)` 로 전달해야 합니다.
+        - service: 비즈니스 규칙, 트랜잭션, 권한 검증(소유권 확인)을 담당합니다.
+          여러 테이블을 함께 변경하면 `prisma.$transaction` 으로 묶여야 합니다.
+        - repository: Prisma 쿼리만 담당합니다.
+          비즈니스 조건 판단이 들어가면 지적해 주세요.
+        - validator: zod 스키마. 타입은 `z.infer` 로 파생시킵니다.
+
+        [주의]
+        - `src/services/`, `src/repositories/`, `src/validators/` 는 구 구조입니다.
+          새 코드가 이쪽에 추가되면 `src/modules/` 로 옮기도록 지적해 주세요.
+        - 라우터에서 `/:id` 같은 동적 경로보다 정적 경로(`/active` 등)를
+          먼저 등록해야 합니다.
+
+    # ------------------------------------------------------------------
+    # repository (Prisma)
+    # ------------------------------------------------------------------
+    - path: "src/modules/**/*.repository.ts"
+      instructions: |
+        - `select` 로 필요한 필드만 조회합니다. `password` 등 민감 정보가
+          select 에 포함되면 반드시 지적해 주세요.
+        - 목록 조회는 페이징(`skip`, `take`)이 있어야 하고,
+          `findMany` 와 `count` 를 `Promise.all` 로 함께 호출합니다.
+        - 정렬 시 동일한 정렬값이 있을 수 있으면 `{ id: "asc" }` 같은
+          tie-breaker 를 추가해야 페이지네이션에서 중복/누락이 발생하지 않습니다.
+        - N+1 쿼리가 발생할 수 있는 구조인지 확인해 주세요.
+        - 트랜잭션 클라이언트를 받을 수 있도록 `db: Db = prisma` 형태의
+          기본 인자 패턴을 유지합니다.
+        - `Decimal` 타입(예: averageRating)은 응답 시 `Number()` 변환이
+          필요합니다. 직렬화 문제를 확인해 주세요.
+
+    # ------------------------------------------------------------------
+    # service (비즈니스 로직)
+    # ------------------------------------------------------------------
+    - path: "src/modules/**/*.service.ts"
+      instructions: |
+        - 리소스를 조회한 뒤 반드시 소유권을 확인해야 합니다.
+          (예: `request.customerId !== customerId` 이면 FORBIDDEN)
+          소유권 검증이 빠지면 다른 사용자의 데이터에 접근할 수 있으므로
+          반드시 지적해 주세요.
+        - 도메인 상태 전이가 올바른지 확인해 주세요.
+          이미 종료된(CANCELED/COMPLETED/EXPIRED) 리소스를 다시 변경하면 안 됩니다.
+        - 날짜는 타임존을 주의해 주세요. 이 프로젝트는 이사 예정일을
+          UTC 자정으로 저장하고, 과거 여부만 KST(UTC+9) 기준으로 판단합니다.
+        - 외부 입력(시/도 이름 등)으로 DB 를 조회할 때 매칭에 실패하면
+          조용히 기본값으로 넘어가지 말고 명시적으로 에러를 던져야 합니다.
+        - 트랜잭션 안에서 삭제 후 재생성하는 경우, 중간에 예외가 발생하면
+          데이터가 유실될 수 있습니다. 검증을 먼저 수행하도록 지적해 주세요.
+
+    # ------------------------------------------------------------------
+    # validator (zod)
+    # ------------------------------------------------------------------
+    - path: "src/modules/**/*.validator.ts"
+      instructions: |
+        - 모든 외부 입력은 zod 로 검증되어야 합니다.
+        - 에러 메시지는 한국어로 작성하고, 사용자가 무엇을 고쳐야 하는지
+          알 수 있어야 합니다.
+        - 페이징 파라미터는 상한(`max`)이 있어야 합니다.
+        - `params` 와 `query` 는 OpenAPI 파라미터로 변환되므로
+          `z.object` 여야 합니다.
+        - 클라이언트가 보내면 안 되는 값(예: regionId, userId 등 서버가
+          결정해야 하는 값)이 스키마에 포함되어 있으면 지적해 주세요.
+
+    # ------------------------------------------------------------------
+    # route / controller
+    # ------------------------------------------------------------------
+    - path: "src/modules/**/*.route.ts"
+      instructions: |
+        - 인증이 필요한 경로에 `authenticate` 가 빠지지 않았는지 확인해 주세요.
+        - 역할 제한이 필요한 경로에 `authorize(...)` 가 적용되었는지 확인해 주세요.
+        - 요청 본문/쿼리/경로 변수를 사용하는데 `validate(...)` 가 없으면
+          지적해 주세요.
+
+    - path: "src/modules/**/*.controller.ts"
+      instructions: |
+        - 컨트롤러는 얇아야 합니다. 조건 분기나 데이터 가공이 있으면
+          service 로 옮기도록 지적해 주세요.
+        - `req.user` 는 optional 타입이므로 non-null 단언(`!`) 대신
+          안전하게 접근해야 합니다.
+        - `res.locals.query` / `res.locals.params` 로 검증된 값을 사용합니다.
+          (Express 5 에서 `req.query` 는 재할당할 수 없습니다)
+
+    # ------------------------------------------------------------------
+    # 공통 인프라 (변경 시 영향 범위가 큼)
+    # ------------------------------------------------------------------
+    - path: "src/middlewares/**/*.ts"
+      instructions: |
+        모든 모듈이 공유하는 파일입니다. 변경 시 영향 범위를 함께 언급해 주세요.
+        - `authenticate` 는 `req.user = { id, role }` 형태를 주입해야 합니다.
+          이 형태가 바뀌면 모든 컨트롤러가 영향을 받습니다.
+        - 인증 우회 로직(개발용 목업 등)이 프로덕션에서 동작할 수 있으면
+          반드시 지적해 주세요.
+        - 에러는 throw 대신 `next(error)` 로 전달합니다.
+
+    - path: "src/lib/**/*.ts"
+      instructions: |
+        모든 모듈이 공유하는 파일입니다. 변경 시 영향 범위를 함께 언급해 주세요.
+        - Prisma 클라이언트는 단일 인스턴스를 재사용해야 합니다.
+
+    - path: "src/constants/error-code.ts"
+      instructions: |
+        - 기존 에러 코드의 `code` 문자열이나 HTTP status 를 변경하면
+          클라이언트가 깨질 수 있습니다. 변경이 있으면 지적해 주세요.
+        - 새 코드는 도메인별로 구분되고, status 가 의미에 맞는지 확인해 주세요.
+          (없음 404, 권한 403, 충돌 409, 검증 422)
+
+    - path: "src/config/**/*.ts"
+      instructions: |
+        - 환경변수는 `env.ts` 에서 zod 로 검증합니다.
+          새 환경변수를 추가하면 `.env.example` 에도 반영되어야 합니다.
+        - 시크릿 값이 코드나 로그에 노출되지 않는지 확인해 주세요.
+
+    # ------------------------------------------------------------------
+    # API 문서
+    # ------------------------------------------------------------------
+    - path: "src/modules/**/*.docs.ts"
+      instructions: |
+        OpenAPI 문서 정의입니다. 경로/메서드/요청 스키마는 라우터에서
+        자동 추출되고, 설명만 작성합니다.
+        - 라우터에 있는 엔드포인트가 문서에서 누락되지 않았는지 확인해 주세요.
+        - 실제 동작과 설명이 일치하는지 확인해 주세요.
+          (특히 인증 방식, 상태 코드)
+        - 새 모듈은 `src/config/openapi.ts` 의 `registerModuleDocs` 에
+          import 를 추가해야 문서에 반영됩니다.
+
+    # ------------------------------------------------------------------
+    # Prisma 스키마 / 시드
+    # ------------------------------------------------------------------
+    - path: "prisma/schema.prisma"
+      instructions: |
+        - 스키마 변경은 팀 전체에 영향을 줍니다. 마이그레이션이 필요한
+          변경이면 함께 언급해 주세요.
+        - 컬럼 삭제나 NOT NULL 추가는 기존 데이터에 영향을 줍니다.
+        - 인덱스가 필요한 조회 조건인지 확인해 주세요.
+          (외래키, 자주 조회되는 필터 컬럼)
+        - `onDelete` 정책이 의도에 맞는지 확인해 주세요.
+        - 네이밍 컨벤션(`@@map`, `@map`)이 기존 모델과 일관적인지 확인해 주세요.
+
+    - path: "prisma/seeds/**/*.ts"
+      instructions: |
+        - 여러 번 실행해도 중복 데이터가 생기지 않아야 합니다.
+          (`upsert` 또는 삭제 후 재생성)
+        - 삭제 후 재생성하는 경우, 중간에 예외가 발생하면 데이터가
+          유실될 수 있습니다. 검증을 먼저 하거나 트랜잭션으로 묶어야 합니다.
+        - 실제 비밀번호나 운영 데이터가 포함되면 안 됩니다.
+        - console 로그 사용은 허용됩니다.
+
+    # ------------------------------------------------------------------
+    # 설정 파일
+    # ------------------------------------------------------------------
+    - path: ".github/**"
+      instructions: |
+        - CI 워크플로에서 시크릿이 로그로 노출되지 않는지 확인해 주세요.
+
+chat:
+  auto_reply: true
+
+knowledge_base:
+  learnings:
+    scope: "local"
+  issues:
+    scope: "local"
+  pull_requests:
+    scope: "local"

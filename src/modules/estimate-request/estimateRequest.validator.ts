@@ -8,7 +8,9 @@ const addressSchema = z.object({
   zipCode: z
     .string()
     .trim()
-    .regex(/^\d{5}$/, "우편번호는 5자리 숫자여야 합니다."),
+    .regex(/^\d{5}$/, "우편번호는 5자리 숫자여야 합니다.")
+    .or(z.literal(""))
+    .optional(),
   address: z.string().trim().min(1, "주소를 입력해 주세요.").max(255),
   detailAddress: z.string().trim().max(255).optional(),
   sido: z.string().trim().min(1, "시/도 정보가 필요합니다.").max(30),

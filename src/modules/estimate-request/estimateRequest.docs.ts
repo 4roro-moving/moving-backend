@@ -8,7 +8,7 @@ import estimateRequestRouter from "./estimateRequest.route";
  * JWT 적용 후에는 bearerAuth 시큐리티 스키마로 교체합니다.
  */
 const authHeaderSchema = z.object({
-  "x-mock-user": z.string().meta({ example: "customer1@test.com" }),
+  authorization: z.string().meta({ example: "Bearer <access-token>" }),
 });
 
 registerRouterDocs(estimateRequestRouter, {
