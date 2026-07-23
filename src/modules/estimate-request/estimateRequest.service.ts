@@ -164,13 +164,13 @@ export const estimateRequestService = {
           customerId,
           moveType: input.moveType,
           moveDate,
-          fromZipCode: input.from.zipCode,
+          fromZipCode: input.from.zipCode ?? "",
           fromAddress: input.from.address,
           ...(input.from.detailAddress !== undefined && {
             fromDetailAddress: input.from.detailAddress,
           }),
           fromRegionId,
-          toZipCode: input.to.zipCode,
+          toZipCode: input.to.zipCode ?? "",
           toAddress: input.to.address,
           ...(input.to.detailAddress !== undefined && {
             toDetailAddress: input.to.detailAddress,
@@ -296,14 +296,14 @@ export const estimateRequestService = {
       }
 
       if (input.from !== undefined) {
-        data.fromZipCode = input.from.zipCode;
+        data.fromZipCode = input.from.zipCode ?? "";
         data.fromAddress = input.from.address;
         data.fromDetailAddress = input.from.detailAddress ?? null;
         data.fromRegionId = await resolveRegionId(input.from, tx);
       }
 
       if (input.to !== undefined) {
-        data.toZipCode = input.to.zipCode;
+        data.toZipCode = input.to.zipCode ?? "";
         data.toAddress = input.to.address;
         data.toDetailAddress = input.to.detailAddress ?? null;
         data.toRegionId = await resolveRegionId(input.to, tx);
