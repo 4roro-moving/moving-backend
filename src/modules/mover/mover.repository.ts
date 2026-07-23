@@ -105,10 +105,10 @@ export const moverRepository = {
     };
   },
 
-  findByUserId(moverId: string) {
+  findByMoverUserId(moverUserId: string) {
     return prisma.moverProfile.findFirst({
       where: {
-        userId: moverId,
+        userId: moverUserId,
         user: {
           role: "MOVER",
           isActive: true,

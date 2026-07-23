@@ -8,7 +8,7 @@ import type { ListMoverQuery } from "./mover.type";
 type MoverBase = Awaited<ReturnType<typeof moverRepository.findMany>>["movers"][number];
 
 // 상세 조회 결과 중 null이 아닌 기사님 원본 데이터 타입
-type MoverDetail = NonNullable<Awaited<ReturnType<typeof moverRepository.findByUserId>>>;
+type MoverDetail = NonNullable<Awaited<ReturnType<typeof moverRepository.findByMoverUserId>>>;
 
 // 기사님 목록/상세 응답에 공통으로 들어가는 필드
 function mapMoverBase(mover: MoverBase | MoverDetail) {
@@ -58,8 +58,8 @@ export const moverService = {
     };
   },
 
-  async getMoverDetail(moverId: string) {
-    const mover = await moverRepository.findByUserId(moverId);
+  async getMoverDetail(moverUserId: string) {
+    const mover = await moverRepository.findByMoverUserId(moverUserId);
 
     if (!mover) {
       throw new AppError("MOVER_NOT_FOUND");

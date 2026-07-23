@@ -23,9 +23,9 @@ export const moverController = {
   // GET /api/movers/:moverId
   getMoverDetail: (async (_req, res, next) => {
     try {
-      const { moverId } = res.locals.params as MoverIdParam;
+      const { moverId: moverUserId } = res.locals.params as MoverIdParam;
 
-      const mover = await moverService.getMoverDetail(moverId);
+      const mover = await moverService.getMoverDetail(moverUserId);
 
       return sendResponse(res, 200, mover);
     } catch (error) {
