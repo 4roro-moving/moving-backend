@@ -2,8 +2,8 @@ import { Router } from "express";
 
 import { authenticate, authorize } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
-import { createReviewSchema, listMyReviewQuerySchema } from "../../validators/review.validator";
 import { reviewController } from "./review.controller";
+import { createReviewSchema, listMyReviewQuerySchema } from "./review.validator";
 
 const reviewRouter = Router();
 

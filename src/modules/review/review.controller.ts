@@ -1,8 +1,8 @@
 import type { Request, RequestHandler } from "express";
 
 import { AppError } from "../../lib/app-error";
-import { reviewService } from "../../services/review.service";
-import type { CreateReviewInput, ListMyReviewQuery } from "../../validators/review.validator";
+import { reviewService } from "./review.service";
+import type { CreateReviewInput, ListMyReviewQuery } from "./review.validator";
 
 function getCustomerId(req: Request): string {
   if (!req.user) {

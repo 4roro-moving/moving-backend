@@ -5,7 +5,7 @@ import {
   type Prisma as PrismaType,
 } from "@prisma/client";
 
-import { prisma } from "../lib/prisma";
+import { prisma } from "../../lib/prisma";
 
 const reviewableEstimateSelect = {
   id: true,

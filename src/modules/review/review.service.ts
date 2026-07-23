@@ -1,8 +1,8 @@
 import { EstimateRequestStatus, EstimateStatus } from "@prisma/client";
 
-import { AppError } from "../lib/app-error";
-import { reviewRepository } from "../repositories/review.repository";
-import type { Pagination } from "../types/response.type";
+import { AppError } from "../../lib/app-error";
+import type { Pagination } from "../../types/response.type";
+import { reviewRepository } from "./review.repository";
 
 type GetMyReviewListParams = {
   customerId: string;
