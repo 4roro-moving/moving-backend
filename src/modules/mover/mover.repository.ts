@@ -120,22 +120,24 @@ export const moverRepository = {
     });
   },
 
-  findFavoriteMoverIds(params: { customerId: string; moverIds: string[] }) {
-    return prisma.favoriteMover
-      .findMany({
-        where: {
-          customerId: params.customerId,
-          moverId: {
-            in: params.moverIds,
-          },
+  // 목록 조회 결과에 isFavorite을 추가하기 위해 고객이 찜한 기사 ID만 조회
+  async findFavoriteMoverIds(params: { customerId: string; moverIds: string[] }) {
+    const favorites = await prisma.favoriteMover.findMany({
+      where: {
+        customerId: params.customerId,
+        moverId: {
+          in: params.moverIds,
         },
-        select: {
-          moverId: true,
-        },
-      })
-      .then((favorites) => favorites.map((favorite) => favorite.moverId));
+      },
+      select: {
+        moverId: true,
+      },
+    });
+
+    return favorites.map((favorite) => favorite.moverId);
   },
 
+  // 상세 조회 결과에 isFavorite을 추가하기 위해 단일 찜 여부 확인
   async existsFavoriteMover(params: { customerId: string; moverId: string }) {
     const favorite = await prisma.favoriteMover.findUnique({
       where: {

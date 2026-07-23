@@ -4,13 +4,13 @@ import { buildPagination } from "../../utils/pagination.util";
 import { moverRepository } from "./mover.repository";
 import type { ListMoverQuery } from "./mover.type";
 
-// 목록 조회 결과 중 기사님 1명 원본 데이터 타입
+// 목록 조회 repository 결과에서 기사 1명의 타입
 type MoverBase = Awaited<ReturnType<typeof moverRepository.findMany>>["movers"][number];
 
-// 상세 조회 결과 중 null이 아닌 기사님 원본 데이터 타입
+// 상세 조회 repository 결과에서 null을 제외한 기사 타입
 type MoverDetail = NonNullable<Awaited<ReturnType<typeof moverRepository.findByMoverUserId>>>;
 
-// 기사님 목록/상세 응답에 공통으로 들어가는 필드
+// 기사 목록/상세 응답에 공통으로 들어가는 필드
 function mapMoverBase(mover: MoverBase | MoverDetail, isFavorite = false) {
   return {
     id: mover.userId,
@@ -53,20 +53,19 @@ export const moverService = {
       ...(moveType !== undefined && { moveType }),
     });
 
-    const favoriteMoverIds = customerId
-      ? await moverRepository.findFavoriteMoverIds({
-          customerId,
-          moverIds: movers.map((mover) => mover.userId),
-        })
-      : [];
+    // 기사별 찜 여부를 개별 조회하지 않도록 목록 기준으로 한 번에 조회
+    const favoriteMoverIds =
+      customerId && movers.length > 0
+        ? await moverRepository.findFavoriteMoverIds({
+            customerId,
+            moverIds: movers.map((mover) => mover.userId),
+          })
+        : [];
 
     const favoriteMoverIdSet = new Set(favoriteMoverIds);
 
     return {
-      movers: movers.map((mover) => ({
-        ...mapMoverBase(mover),
-        isFavorite: favoriteMoverIdSet.has(mover.userId),
-      })),
+      movers: movers.map((mover) => mapMoverBase(mover, favoriteMoverIdSet.has(mover.userId))),
       pagination: buildPagination(totalCount, page, limit),
     };
   },
