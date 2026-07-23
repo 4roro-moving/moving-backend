@@ -4,6 +4,21 @@ import { AppError } from "../../lib/app-error";
 import { favoriteRepository } from "./favorite.repository";
 import type { FavoriteMoverParams } from "./favorite.type";
 
+function isFavoriteMoverUniqueError(error: unknown) {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return false;
+  }
+
+  const target = error.meta?.target;
+
+  return (
+    error.code === "P2002" &&
+    Array.isArray(target) &&
+    target.includes("customer_id") &&
+    target.includes("mover_id")
+  );
+}
+
 export const favoriteService = {
   async createFavoriteMover(params: FavoriteMoverParams) {
     const mover = await favoriteRepository.findMoverById(params.moverId);
@@ -15,15 +30,9 @@ export const favoriteService = {
     try {
       await favoriteRepository.createFavoriteMover(params);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
-        // 이미 찜한 상태라면 현재 상태를 그대로 성공 처리
-        return {
-          moverId: params.moverId,
-          isFavorite: true,
-        };
+      if (!isFavoriteMoverUniqueError(error)) {
+        throw error;
       }
-
-      throw error;
     }
 
     return {
