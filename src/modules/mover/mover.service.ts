@@ -1,6 +1,7 @@
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 
+import { favoriteRepository } from "../favorite/favorite.repository";
 import { moverRepository } from "./mover.repository";
 import type { ListMoverQuery } from "./mover.type";
 
@@ -39,18 +40,16 @@ function mapMoverDetail(mover: MoverDetail) {
   };
 }
 
-// 목록 응답의 isFavorite 계산하기 위해 찜한 기사 ID를 Set으로 변환
+// 목록 응답의 isFavorite 계산을 위해 찜한 기사 ID를 Set으로 변환
 async function getFavoriteMoverIdSet(customerId: string | undefined, moverIds: string[]) {
   if (!customerId || moverIds.length === 0) {
     return new Set<string>();
   }
-
-  const favoriteMoverIds = await moverRepository.findFavoriteMoverIds({
+  const favorites = await favoriteRepository.findFavoriteMoversByCustomerId({
     customerId,
     moverIds,
   });
-
-  return new Set(favoriteMoverIds);
+  return new Set(favorites.map((f) => f.moverId));
 }
 
 export const moverService = {
@@ -87,16 +86,13 @@ export const moverService = {
       throw new AppError("MOVER_NOT_FOUND");
     }
 
-    const isFavorite = customerId
-      ? await moverRepository.existsFavoriteMover({
-          customerId,
-          moverId: moverUserId,
-        })
-      : false;
+    const favorite = customerId
+      ? await favoriteRepository.findFavoriteMover({ customerId, moverId: moverUserId })
+      : null;
 
     return {
       ...mapMoverDetail(mover),
-      isFavorite,
+      isFavorite: favorite !== null,
     };
   },
 };
