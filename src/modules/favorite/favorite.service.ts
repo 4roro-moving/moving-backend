@@ -1,3 +1,5 @@
+import { Prisma } from "@prisma/client";
+
 import { AppError } from "../../lib/app-error";
 import { favoriteRepository } from "./favorite.repository";
 import type { FavoriteMoverParams } from "./favorite.type";
@@ -10,11 +12,18 @@ export const favoriteService = {
       throw new AppError("MOVER_NOT_FOUND");
     }
 
-    const favoriteMover = await favoriteRepository.findFavoriteMover(params);
-
-    // 이미 찜한 상태라면 추가 생성 없이 현재 상태만 반환
-    if (!favoriteMover) {
+    try {
       await favoriteRepository.createFavoriteMover(params);
+    } catch (error) {
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        // 이미 찜한 상태라면 현재 상태를 그대로 성공 처리
+        return {
+          moverId: params.moverId,
+          isFavorite: true,
+        };
+      }
+
+      throw error;
     }
 
     return {
