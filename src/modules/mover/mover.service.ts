@@ -11,7 +11,7 @@ type MoverBase = Awaited<ReturnType<typeof moverRepository.findMany>>["movers"][
 type MoverDetail = NonNullable<Awaited<ReturnType<typeof moverRepository.findByMoverUserId>>>;
 
 // 기사 목록/상세 응답에 공통으로 들어가는 필드
-function mapMoverBase(mover: MoverBase | MoverDetail, isFavorite = false) {
+function mapMoverBase(mover: MoverBase | MoverDetail) {
   return {
     id: mover.userId,
     moverProfileId: mover.id,
@@ -25,19 +25,32 @@ function mapMoverBase(mover: MoverBase | MoverDetail, isFavorite = false) {
     confirmedEstimateCount: mover.confirmedCount,
     favoriteCount: mover.user._count.favoritesReceived,
     moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
-    isFavorite,
   };
 }
 
 // 상세 응답에서만 필요한 서비스 가능 지역 추가
-function mapMoverDetail(mover: MoverDetail, isFavorite = false) {
+function mapMoverDetail(mover: MoverDetail) {
   return {
-    ...mapMoverBase(mover, isFavorite),
+    ...mapMoverBase(mover),
     serviceAreas: mover.serviceAreas.map((serviceArea) => ({
       id: serviceArea.region.id,
       name: serviceArea.region.name,
     })),
   };
+}
+
+// 목록 응답의 isFavorite 계산하기 위해 찜한 기사 ID를 Set으로 변환
+async function getFavoriteMoverIdSet(customerId: string | undefined, moverIds: string[]) {
+  if (!customerId || moverIds.length === 0) {
+    return new Set<string>();
+  }
+
+  const favoriteMoverIds = await moverRepository.findFavoriteMoverIds({
+    customerId,
+    moverIds,
+  });
+
+  return new Set(favoriteMoverIds);
 }
 
 export const moverService = {
@@ -53,19 +66,16 @@ export const moverService = {
       ...(moveType !== undefined && { moveType }),
     });
 
-    // 기사별 찜 여부를 개별 조회하지 않도록 목록 기준으로 한 번에 조회
-    const favoriteMoverIds =
-      customerId && movers.length > 0
-        ? await moverRepository.findFavoriteMoverIds({
-            customerId,
-            moverIds: movers.map((mover) => mover.userId),
-          })
-        : [];
-
-    const favoriteMoverIdSet = new Set(favoriteMoverIds);
+    const favoriteMoverIdSet = await getFavoriteMoverIdSet(
+      customerId,
+      movers.map((mover) => mover.userId),
+    );
 
     return {
-      movers: movers.map((mover) => mapMoverBase(mover, favoriteMoverIdSet.has(mover.userId))),
+      movers: movers.map((mover) => ({
+        ...mapMoverBase(mover),
+        isFavorite: favoriteMoverIdSet.has(mover.userId),
+      })),
       pagination: buildPagination(totalCount, page, limit),
     };
   },
@@ -84,6 +94,9 @@ export const moverService = {
         })
       : false;
 
-    return mapMoverDetail(mover, isFavorite);
+    return {
+      ...mapMoverDetail(mover),
+      isFavorite,
+    };
   },
 };
