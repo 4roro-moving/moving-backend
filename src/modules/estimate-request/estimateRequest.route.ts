@@ -3,7 +3,10 @@ import { Router } from "express";
 import { authenticate, authorize } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
 import { estimateController } from "../estimate/estimate.controller";
-import { receivedEstimateRequestIdParamSchema } from "../estimate/estimate.validator";
+import {
+  receivedEstimateDetailParamSchema,
+  receivedEstimateRequestIdParamSchema,
+} from "../estimate/estimate.validator";
 import { estimateRequestController } from "./estimateRequest.controller";
 import {
   createEstimateRequestSchema,
@@ -52,6 +55,16 @@ estimateRequestRouter.get(
   "/:estimateRequestId/estimates",
   validate({ params: receivedEstimateRequestIdParamSchema }),
   estimateController.getReceivedEstimateList,
+);
+
+/*
+2026.07.23 add 김성현
+받은 견적 상세 요청 처리
+*/
+estimateRequestRouter.get(
+  "/:estimateRequestId/estimates/:estimateId",
+  validate({ params: receivedEstimateDetailParamSchema }),
+  estimateController.getReceivedEstimateDetail,
 );
 
 estimateRequestRouter.post(
