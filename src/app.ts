@@ -14,11 +14,14 @@ import errorHandler from "./middlewares/error-handler";
 import notFoundHandler from "./middlewares/not-found-handler";
 import { generateOpenApiDocument } from "./config/openapi";
 import estimateRequestRouter from "./modules/estimate-request/estimateRequest.route";
+import moverRouter from "./modules/mover/mover.route";
 
 // 스웨거용
 // import type { RequestHandler } from "express";
 // import swaggerUi from "swagger-ui-express";
 import moverEstimateRequestRouter from "./modules/estimate/estimate.route";
+import reviewRouter from "./modules/review/review.route";
+import favoriteRouter from "./modules/favorite/favorite.route";
 
 const app = express();
 
@@ -93,7 +96,10 @@ app.use("/api/auth", authRouter);
 app.use("/api/profiles", profileRouter);
 
 app.use("/api/estimate-requests", estimateRequestRouter);
+app.use("/api/movers", moverRouter);
 app.use("/api/estimates", moverEstimateRequestRouter);
+app.use("/api/reviews", reviewRouter);
+app.use("/api/favorites", favoriteRouter);
 
 // 존재하지 않는 경로 처리
 app.use(notFoundHandler);

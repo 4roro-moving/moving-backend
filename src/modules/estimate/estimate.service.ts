@@ -1,8 +1,9 @@
 ﻿import type { MoveType } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
-import { moverEstimateRequestRepository } from "./estimate.repository";
+import { moverEstimateRequestRepository, receivedEstimateRepository } from "./estimate.repository";
 import type {
+  GetReceivedEstimateListParams,
   MoverEstimateRequestListItem,
   MoverEstimateRequestListQuery,
   MoverEstimateRequestListResult,
@@ -14,6 +15,11 @@ import type {
 -조회 조건 정리
 -레퍼지토리 호출
 -DB 결과 API 응답 형태로 가공
+*/
+
+/* 
+2026.07.23 add 김성현
+받은 견적 목록 비즈니스 로직
 */
 
 function getCursorId(cursor: string | undefined) {
@@ -107,6 +113,57 @@ export const moverEstimateRequestService = {
         nextCursor,
         hasNextPage,
       },
+    };
+  },
+};
+
+export const receivedEstimateService = {
+  async getReceivedEstimateList({ estimateRequestId, customerId }: GetReceivedEstimateListParams) {
+    const estimateRequest =
+      await receivedEstimateRepository.findEstimateRequestById(estimateRequestId);
+
+    if (!estimateRequest) {
+      throw new AppError("NOT_FOUND", {
+        message: "견적 요청을 찾을 수 없습니다.",
+      });
+    }
+
+    if (estimateRequest.customerId !== customerId) {
+      throw new AppError("FORBIDDEN", {
+        message: "본인의 견적 요청만 조회할 수 있습니다.",
+      });
+    }
+
+    const estimates =
+      await receivedEstimateRepository.findReceivedEstimatesByEstimateRequestId(estimateRequestId);
+
+    return {
+      estimateRequest: {
+        id: estimateRequest.id,
+        moveType: estimateRequest.moveType,
+        moveDate: estimateRequest.moveDate,
+        fromAddress: estimateRequest.fromAddress,
+        toAddress: estimateRequest.toAddress,
+        status: estimateRequest.status,
+      },
+      estimates: estimates.map((estimate) => ({
+        id: estimate.id,
+        price: estimate.price,
+        status: estimate.status,
+        isDesignated: estimate.isDesignated,
+        createdAt: estimate.createdAt,
+        mover: {
+          id: estimate.mover.id,
+          name: estimate.mover.name,
+          nickname: estimate.mover.moverProfile?.nickname ?? null,
+          imageUrl: estimate.mover.moverProfile?.imageUrl ?? null,
+          career: estimate.mover.moverProfile?.career ?? 0,
+          shortIntro: estimate.mover.moverProfile?.shortIntro ?? null,
+          averageRating: Number(estimate.mover.moverProfile?.averageRating ?? 0),
+          reviewCount: estimate.mover.moverProfile?.reviewCount ?? 0,
+          confirmedCount: estimate.mover.moverProfile?.confirmedCount ?? 0,
+        },
+      })),
     };
   },
 };

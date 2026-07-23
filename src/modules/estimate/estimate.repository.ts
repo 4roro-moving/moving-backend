@@ -11,6 +11,36 @@ type FindManyParams = {
   cursorId: number | undefined;
 };
 
+/* 
+2026.07.23 add 김성현
+받은 견적 목록 조회 필드 정의
+*/
+
+const receivedEstimateSelect = {
+  id: true,
+  price: true,
+  status: true,
+  isDesignated: true,
+  createdAt: true,
+  mover: {
+    select: {
+      id: true,
+      name: true,
+      moverProfile: {
+        select: {
+          nickname: true,
+          imageUrl: true,
+          career: true,
+          shortIntro: true,
+          averageRating: true,
+          reviewCount: true,
+          confirmedCount: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.EstimateSelect;
+
 export const moverEstimateRequestRepository = {
   findMoverProfile(moverId: string) {
     return prisma.moverProfile.findFirst({
@@ -155,6 +185,38 @@ export const moverEstimateRequestRepository = {
       select,
       orderBy,
       take: params.query.limit + 1,
+    });
+  },
+};
+
+// 고객 견적 요청 기준 받은 견적 조회
+export const receivedEstimateRepository = {
+  findEstimateRequestById(estimateRequestId: number) {
+    return prisma.estimateRequest.findUnique({
+      where: {
+        id: estimateRequestId,
+      },
+      select: {
+        id: true,
+        customerId: true,
+        moveType: true,
+        moveDate: true,
+        fromAddress: true,
+        toAddress: true,
+        status: true,
+      },
+    });
+  },
+
+  findReceivedEstimatesByEstimateRequestId(estimateRequestId: number) {
+    return prisma.estimate.findMany({
+      where: {
+        estimateRequestId,
+      },
+      select: receivedEstimateSelect,
+      orderBy: {
+        createdAt: "desc",
+      },
     });
   },
 };

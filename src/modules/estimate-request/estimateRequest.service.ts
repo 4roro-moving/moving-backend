@@ -2,13 +2,14 @@ import type { MoveType, Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../lib/app-error";
+import { buildPagination } from "../../utils/pagination.util";
+
 import { estimateRequestRepository } from "./estimateRequest.repository";
 import type { EstimateRequestDetail } from "./estimateRequest.repository";
 import type {
   AddressInput,
   CreateEstimateRequestInput,
   ListEstimateRequestQuery,
-  Pagination,
   UpdateEstimateRequestInput,
 } from "./estimateRequest.type";
 
@@ -115,18 +116,6 @@ function assertOwnership(request: EstimateRequestDetail, customerId: string): vo
   }
 }
 
-function buildPagination(totalCount: number, page: number, limit: number): Pagination {
-  const totalPages = Math.ceil(totalCount / limit);
-
-  return {
-    page,
-    limit,
-    totalCount,
-    totalPages,
-    hasNext: page < totalPages,
-  };
-}
-
 /* -------------------------------------------------------------------------- */
 /* 서비스                                                                       */
 /* -------------------------------------------------------------------------- */
@@ -175,13 +164,13 @@ export const estimateRequestService = {
           customerId,
           moveType: input.moveType,
           moveDate,
-          fromZipCode: input.from.zipCode,
+          fromZipCode: input.from.zipCode ?? "",
           fromAddress: input.from.address,
           ...(input.from.detailAddress !== undefined && {
             fromDetailAddress: input.from.detailAddress,
           }),
           fromRegionId,
-          toZipCode: input.to.zipCode,
+          toZipCode: input.to.zipCode ?? "",
           toAddress: input.to.address,
           ...(input.to.detailAddress !== undefined && {
             toDetailAddress: input.to.detailAddress,
@@ -307,14 +296,14 @@ export const estimateRequestService = {
       }
 
       if (input.from !== undefined) {
-        data.fromZipCode = input.from.zipCode;
+        data.fromZipCode = input.from.zipCode ?? "";
         data.fromAddress = input.from.address;
         data.fromDetailAddress = input.from.detailAddress ?? null;
         data.fromRegionId = await resolveRegionId(input.from, tx);
       }
 
       if (input.to !== undefined) {
-        data.toZipCode = input.to.zipCode;
+        data.toZipCode = input.to.zipCode ?? "";
         data.toAddress = input.to.address;
         data.toDetailAddress = input.to.detailAddress ?? null;
         data.toRegionId = await resolveRegionId(input.to, tx);
