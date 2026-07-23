@@ -2,7 +2,7 @@ import type { Request, RequestHandler } from "express";
 
 import { AppError } from "../../lib/app-error";
 import { reviewService } from "../../services/review.service";
-import type { CreateReviewInput } from "../../validators/review.validator";
+import type { CreateReviewInput, ListMyReviewQuery } from "../../validators/review.validator";
 
 function getCustomerId(req: Request): string {
   if (!req.user) {
@@ -13,6 +13,30 @@ function getCustomerId(req: Request): string {
 }
 
 export const reviewController = {
+  /**
+   * GET /api/reviews/me
+   *
+   * 현재 로그인한 고객이 작성한 리뷰 목록을 페이지네이션으로 조회
+   */
+  getMyReviewList: (async (req, res, next) => {
+    try {
+      const query = res.locals.query as ListMyReviewQuery;
+      const result = await reviewService.getMyReviewList({
+        customerId: getCustomerId(req),
+        page: query.page,
+        limit: query.limit,
+      });
+
+      res.status(200).json({
+        success: true,
+        data: result.reviews,
+        pagination: result.pagination,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }) satisfies RequestHandler,
+
   /**
    * GET /api/reviews/reviewable
    *

@@ -64,6 +64,41 @@ const reviewTargetEstimateSelect = {
   },
 } satisfies PrismaType.EstimateSelect;
 
+const myReviewSelect = {
+  id: true,
+  estimateId: true,
+  rating: true,
+  content: true,
+  createdAt: true,
+  estimate: {
+    select: {
+      price: true,
+      estimateRequest: {
+        select: {
+          id: true,
+          moveType: true,
+          moveDate: true,
+          fromAddress: true,
+          toAddress: true,
+        },
+      },
+    },
+  },
+  mover: {
+    select: {
+      id: true,
+      name: true,
+      moverProfile: {
+        select: {
+          nickname: true,
+          imageUrl: true,
+          shortIntro: true,
+        },
+      },
+    },
+  },
+} satisfies PrismaType.ReviewSelect;
+
 type CreateReviewData = {
   customerId: string;
   moverId: string;
@@ -73,6 +108,28 @@ type CreateReviewData = {
 };
 
 export const reviewRepository = {
+  findMyReviewsByCustomerId(customerId: string, skip: number, take: number) {
+    return prisma.review.findMany({
+      where: {
+        customerId,
+      },
+      select: myReviewSelect,
+      orderBy: {
+        createdAt: "desc",
+      },
+      skip,
+      take,
+    });
+  },
+
+  countMyReviewsByCustomerId(customerId: string) {
+    return prisma.review.count({
+      where: {
+        customerId,
+      },
+    });
+  },
+
   findReviewableEstimatesByCustomerId(customerId: string) {
     return prisma.estimate.findMany({
       where: {
