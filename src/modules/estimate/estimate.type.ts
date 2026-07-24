@@ -3,6 +3,7 @@ import type { z } from "zod";
 
 import type {
   moverEstimateRequestListQuerySchema,
+  receivedEstimateDetailParamSchema,
   receivedEstimateRequestIdParamSchema,
 } from "./estimate.validator";
 
@@ -16,12 +17,22 @@ API에서 사용하는 데이터 형태 정의
 받은 견적 목록 API 데이터 형태 정의
 */
 
+/* 
+2026.07.23 add 김성현
+받은 견적 상세 API 데이터 형태 정의
+*/
+
 export type MoverEstimateRequestListQuery = z.infer<typeof moverEstimateRequestListQuerySchema>;
 export type ReceivedEstimateRequestIdParam = z.infer<typeof receivedEstimateRequestIdParamSchema>;
+export type ReceivedEstimateDetailParam = z.infer<typeof receivedEstimateDetailParamSchema>;
 
 export type GetReceivedEstimateListParams = {
   estimateRequestId: number;
   customerId: string;
+};
+
+export type GetReceivedEstimateDetailParams = GetReceivedEstimateListParams & {
+  estimateId: number;
 };
 
 export type MoverEstimateRequestListItem = {

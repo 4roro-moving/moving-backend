@@ -59,6 +59,16 @@ registerRouterDocs(estimateRequestRouter, {
       },
     },
 
+    "GET /:estimateRequestId/estimates/:estimateId": {
+      summary: "받은 견적 상세",
+      description: "고객이 본인의 견적 요청에 도착한 특정 견적을 상세 조회합니다.",
+      responses: {
+        200: "조회 성공",
+        403: "본인의 견적 요청에 도착한 견적이 아닙니다.",
+        404: "견적을 찾을 수 없습니다.",
+      },
+    },
+
     "PATCH /:estimateRequestId": {
       summary: "견적 요청 수정",
       description: "견적이 1건이라도 도착하면 수정할 수 없습니다.",

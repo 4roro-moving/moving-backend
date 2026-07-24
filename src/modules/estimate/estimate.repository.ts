@@ -47,7 +47,8 @@ function buildMoverEstimateRequestWhere(params: FindManyParams): Prisma.Estimate
 
 /* 
 2026.07.23 add 김성현
-받은 견적 목록 조회 필드 정의
+- 받은 견적 목록 조회 필드 정의
+- 받은 견적 상세 조회 필드 정의
 */
 
 const receivedEstimateSelect = {
@@ -74,6 +75,95 @@ const receivedEstimateSelect = {
     },
   },
 } satisfies Prisma.EstimateSelect;
+
+// 상세 응답에 필요한 견적, 요청, 기사 필드 선택
+function getReceivedEstimateDetailSelect(customerId: string) {
+  return {
+    id: true,
+    price: true,
+    comment: true,
+    status: true,
+    isDesignated: true,
+    createdAt: true,
+    updatedAt: true,
+    confirmedAt: true,
+    estimateRequest: {
+      select: {
+        id: true,
+        customerId: true,
+        moveType: true,
+        moveDate: true,
+        fromZipCode: true,
+        fromAddress: true,
+        fromDetailAddress: true,
+        fromRegion: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        toZipCode: true,
+        toAddress: true,
+        toDetailAddress: true,
+        toRegion: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+        status: true,
+        confirmedEstimateId: true,
+      },
+    },
+    mover: {
+      select: {
+        id: true,
+        name: true,
+        moverProfile: {
+          select: {
+            nickname: true,
+            imageUrl: true,
+            career: true,
+            shortIntro: true,
+            description: true,
+            averageRating: true,
+            reviewCount: true,
+            confirmedCount: true,
+            serviceTypes: {
+              select: {
+                moveType: true,
+              },
+            },
+            serviceAreas: {
+              select: {
+                region: {
+                  select: {
+                    id: true,
+                    name: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+        favoritesReceived: {
+          where: {
+            customerId,
+          },
+          select: {
+            id: true,
+          },
+          take: 1,
+        },
+        _count: {
+          select: {
+            favoritesReceived: true,
+          },
+        },
+      },
+    },
+  } satisfies Prisma.EstimateSelect;
+}
 
 export const moverEstimateRequestRepository = {
   findMoverProfile(moverId: string) {
@@ -198,6 +288,17 @@ export const receivedEstimateRepository = {
       orderBy: {
         createdAt: "desc",
       },
+    });
+  },
+
+  // 견적 요청에 속한 받은 견적 상세 조회
+  findReceivedEstimateDetail(estimateRequestId: number, estimateId: number, customerId: string) {
+    return prisma.estimate.findFirst({
+      where: {
+        id: estimateId,
+        estimateRequestId,
+      },
+      select: getReceivedEstimateDetailSelect(customerId),
     });
   },
 };
