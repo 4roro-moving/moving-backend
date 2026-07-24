@@ -157,8 +157,10 @@ export const receivedEstimateService = {
     }
 
     //받은 견적 목록 조회
-    const estimates =
-      await receivedEstimateRepository.findReceivedEstimatesByEstimateRequestId(estimateRequestId);
+    const estimates = await receivedEstimateRepository.findReceivedEstimatesByEstimateRequestId(
+      estimateRequestId,
+      customerId,
+    );
 
     //목록 응답 형태 가공
     return {
@@ -186,6 +188,7 @@ export const receivedEstimateService = {
           averageRating: Number(estimate.mover.moverProfile?.averageRating ?? 0),
           reviewCount: estimate.mover.moverProfile?.reviewCount ?? 0,
           confirmedCount: estimate.mover.moverProfile?.confirmedCount ?? 0,
+          isFavorite: estimate.mover.favoritesReceived.length > 0,
         },
       })),
     };
