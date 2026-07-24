@@ -7,6 +7,8 @@ import type {
   MoverEstimateRequestListQuery,
   ReceivedEstimateDetailParam,
   ReceivedEstimateRequestIdParam,
+  SendEstimateInput,
+  SendEstimateParam,
 } from "./estimate.type";
 
 /* 
@@ -49,6 +51,27 @@ const getList: RequestHandler = async (req, res, next) => {
     res.status(200).json({
       success: true,
       data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 기사가 고객의 견적 요청에 견적을 전송
+const sendEstimate: RequestHandler = async (req, res, next) => {
+  try {
+    const { estimateRequestId } = res.locals.params as SendEstimateParam;
+    const input = req.body as SendEstimateInput;
+
+    const estimate = await moverEstimateRequestService.sendEstimate({
+      estimateRequestId,
+      moverId: getMoverId(req),
+      input,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: estimate,
     });
   } catch (error) {
     next(error);
@@ -126,6 +149,7 @@ const confirmReceivedEstimate: RequestHandler = async (req, res, next) => {
 
 export const estimateController = {
   getList,
+  sendEstimate,
   getReceivedEstimateList,
   getReceivedEstimateDetail,
   confirmReceivedEstimate,

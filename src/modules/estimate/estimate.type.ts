@@ -6,6 +6,8 @@ import type {
   moverEstimateRequestListQuerySchema,
   receivedEstimateDetailParamSchema,
   receivedEstimateRequestIdParamSchema,
+  sendEstimateBodySchema,
+  sendEstimateParamSchema,
 } from "./estimate.validator";
 
 /* 
@@ -54,6 +56,19 @@ export type ConfirmReceivedEstimateParams = GetReceivedEstimateListParams & {
 // 기사: 고객의 견적 요청 목록 조회
 // =============================================================================
 
+//견적 제안 API URL 경로 파라미터 -- POST /api/estimates/requests/:estimateRequestId
+export type SendEstimateParam = z.infer<typeof sendEstimateParamSchema>;
+//기사가 견적 보낼 때 전달하는 요청 본문
+export type SendEstimateInput = z.infer<typeof sendEstimateBodySchema>;
+
+//견적 전송 인자
+export type SendEstimateParams = {
+  estimateRequestId: number;
+  moverId: string;
+  input: SendEstimateInput;
+};
+
+//기사에게 노출되는 견적 요청 목록의 단일 항목
 export type MoverEstimateRequestListItem = {
   id: number;
   customer: {
@@ -70,7 +85,7 @@ export type MoverEstimateRequestListItem = {
   createdAt: string;
 };
 
-//Service -> Controller
+//견적 요청 목록 조회 Service의 반환값
 export type MoverEstimateRequestListResult = {
   items: MoverEstimateRequestListItem[];
   pagination: {

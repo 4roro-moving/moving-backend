@@ -66,6 +66,25 @@ export const moverEstimateRequestListQuerySchema = z.object({
   sort: z.enum(["moveDate", "requestedAt"]).default("requestedAt"),
 });
 
+// 견적 제안 estimateRequestID 검증
+export const sendEstimateParamSchema = z.object({
+  estimateRequestId: z.coerce.number().int().positive("올바른 견적 요청 ID가 아닙니다."),
+});
+
+// 견적 제안 Body 검증
+export const sendEstimateBodySchema = z.object({
+  price: z
+    .number()
+    .int("견적가는 정수로 입력해 주세요.")
+    .positive("견적가는 0원보다 커야 합니다.")
+    .max(100_000_000, "견적가는 1억 원 이하로 입력해 주세요."),
+  comment: z
+    .string()
+    .trim()
+    .min(10, "코멘트는 최소 10자 이상 입력해 주세요.")
+    .max(1000, "코멘트는 최대 1000자까지 입력할 수 있습니다."),
+});
+
 // =============================================================================
 // 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
 // =============================================================================
