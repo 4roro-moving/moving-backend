@@ -51,7 +51,7 @@ function buildMoverEstimateRequestWhere(params: FindManyParams): Prisma.Estimate
   return where;
 }
 
-/* 
+/*
 2026.07.23 add 김성현
 - 받은 견적 목록 조회 필드 정의
 - 받은 견적 상세 조회 필드 정의
@@ -61,30 +61,41 @@ function buildMoverEstimateRequestWhere(params: FindManyParams): Prisma.Estimate
 // 고객: 기사에게 받은 견적 목록·상세 조회 필드
 // =============================================================================
 
-const receivedEstimateSelect = {
-  id: true,
-  price: true,
-  status: true,
-  isDesignated: true,
-  createdAt: true,
-  mover: {
-    select: {
-      id: true,
-      name: true,
-      moverProfile: {
-        select: {
-          nickname: true,
-          imageUrl: true,
-          career: true,
-          shortIntro: true,
-          averageRating: true,
-          reviewCount: true,
-          confirmedCount: true,
+function getReceivedEstimateSelect(customerId: string) {
+  return {
+    id: true,
+    price: true,
+    status: true,
+    isDesignated: true,
+    createdAt: true,
+    mover: {
+      select: {
+        id: true,
+        name: true,
+        favoritesReceived: {
+          where: {
+            customerId,
+          },
+          select: {
+            id: true,
+          },
+          take: 1,
+        },
+        moverProfile: {
+          select: {
+            nickname: true,
+            imageUrl: true,
+            career: true,
+            shortIntro: true,
+            averageRating: true,
+            reviewCount: true,
+            confirmedCount: true,
+          },
         },
       },
     },
-  },
-} satisfies Prisma.EstimateSelect;
+  } satisfies Prisma.EstimateSelect;
+}
 
 // 상세 응답에 필요한 견적, 요청, 기사 필드 선택
 function getReceivedEstimateDetailSelect(customerId: string) {
@@ -297,15 +308,13 @@ export const receivedEstimateRepository = {
     });
   },
 
-  findReceivedEstimatesByEstimateRequestId(estimateRequestId: number) {
+  findReceivedEstimatesByEstimateRequestId(estimateRequestId: number, customerId: string) {
     return prisma.estimate.findMany({
       where: {
         estimateRequestId,
       },
-      select: receivedEstimateSelect,
-      orderBy: {
-        createdAt: "desc",
-      },
+      select: getReceivedEstimateSelect(customerId),
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     });
   },
 
