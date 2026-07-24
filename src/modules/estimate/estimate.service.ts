@@ -71,6 +71,7 @@ export const moverEstimateRequestService = {
     });
 
     const cursorId = getCursorId(query.cursor);
+    const referenceDate = new Date();
 
     //목록 조회 요청
     const repositoryParams = {
@@ -79,6 +80,7 @@ export const moverEstimateRequestService = {
       moverRegionIds,
       query,
       cursorId,
+      referenceDate,
     };
     const [rows, totalCount] = await Promise.all([
       moverEstimateRequestRepository.findMany(repositoryParams),

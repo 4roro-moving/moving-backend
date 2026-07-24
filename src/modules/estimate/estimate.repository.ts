@@ -9,13 +9,14 @@ type FindManyParams = {
   moverRegionIds: number[];
   query: MoverEstimateRequestListQuery;
   cursorId: number | undefined;
+  referenceDate: Date;
 };
 
 function buildMoverEstimateRequestWhere(params: FindManyParams): Prisma.EstimateRequestWhereInput {
   const where: Prisma.EstimateRequestWhereInput = {
     status: "OPEN",
     isActive: true,
-    expiresAt: { gt: new Date() },
+    expiresAt: { gt: params.referenceDate },
     moveType: { in: params.moverMoveTypes },
     estimates: { none: { moverId: params.moverId } },
     rejections: { none: { moverId: params.moverId } },
