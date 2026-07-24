@@ -75,8 +75,6 @@ export const reviewService = {
             id: estimateRequest.id,
             moveType: estimateRequest.moveType,
             moveDate: estimateRequest.moveDate,
-            fromAddress: estimateRequest.fromAddress,
-            toAddress: estimateRequest.toAddress,
           },
         };
       }),

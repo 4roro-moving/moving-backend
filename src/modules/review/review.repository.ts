@@ -123,8 +123,6 @@ const moverReviewSelect = {
           id: true,
           moveType: true,
           moveDate: true,
-          fromAddress: true,
-          toAddress: true,
         },
       },
     },
