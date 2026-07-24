@@ -51,9 +51,19 @@ const errorHandler: ErrorRequestHandler = (
 
   const isError = error instanceof Error;
 
+  let serializedError: string | undefined;
+
+  if (!isError) {
+    try {
+      serializedError = typeof error === "object" ? JSON.stringify(error) : String(error);
+    } catch {
+      serializedError = "[Unserializable error]";
+    }
+  }
+
   logger.error(isError ? error.message : "Unhandled error", {
     stack: isError ? error.stack : undefined,
-    error: isError ? undefined : typeof error === "object" ? JSON.stringify(error) : String(error),
+    error: serializedError,
     path: req.path,
     method: req.method,
   });
