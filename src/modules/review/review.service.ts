@@ -40,6 +40,21 @@ function buildPagination(totalCount: number, page: number, limit: number): Pagin
   };
 }
 
+// 리뷰 작성자 이메일 로컬 파트 마스킹
+function maskEmailLocalPart(email: string) {
+  const localPart = email.split("@")[0] ?? "";
+
+  if (localPart.length <= 1) {
+    return `${localPart}*`;
+  }
+
+  if (localPart.length === 2) {
+    return `${localPart[0]}*`;
+  }
+
+  return `${localPart.slice(0, 2)}${"*".repeat(localPart.length - 2)}`;
+}
+
 export const reviewService = {
   async getMoverReviewList({ moverId, page, limit }: GetMoverReviewListParams) {
     // 기사님 리뷰 조회 전 기사님 존재 여부 확인
@@ -68,7 +83,7 @@ export const reviewService = {
           createdAt: review.createdAt,
           customer: {
             id: review.customer.id,
-            name: review.customer.name,
+            displayName: maskEmailLocalPart(review.customer.email),
             imageUrl: review.customer.customerProfile?.imageUrl ?? null,
           },
           estimateRequest: {

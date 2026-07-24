@@ -108,7 +108,7 @@ const moverReviewSelect = {
   customer: {
     select: {
       id: true,
-      name: true,
+      email: true,
       customerProfile: {
         select: {
           imageUrl: true,
@@ -160,9 +160,7 @@ export const reviewRepository = {
         customerId,
       },
       select: myReviewSelect,
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip,
       take,
     });
@@ -183,9 +181,7 @@ export const reviewRepository = {
         moverId,
       },
       select: moverReviewSelect,
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip,
       take,
     });

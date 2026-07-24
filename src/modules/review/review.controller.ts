@@ -1,6 +1,7 @@
 import type { Request, RequestHandler } from "express";
 
 import { AppError } from "../../lib/app-error";
+import type { MoverIdParam } from "../mover/mover.type";
 import { reviewService } from "./review.service";
 import type {
   CreateReviewInput,
@@ -24,7 +25,7 @@ export const reviewController = {
    */
   getMoverReviewList: (async (req, res, next) => {
     try {
-      const { moverId } = res.locals.params as { moverId: string };
+      const { moverId } = res.locals.params as MoverIdParam;
       const query = res.locals.query as ListMoverReviewQuery;
 
       const result = await reviewService.getMoverReviewList({
