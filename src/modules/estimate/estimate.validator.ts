@@ -51,6 +51,10 @@ const moveTypeSchema = z.preprocess(
     .max(3),
 );
 
+// =============================================================================
+// 기사: 고객의 견적 요청 목록 조회
+// =============================================================================
+
 //전체 쿼리 검증
 export const moverEstimateRequestListQuerySchema = z.object({
   cursor: z.string().regex(/^\d+$/).optional(),
@@ -61,6 +65,10 @@ export const moverEstimateRequestListQuerySchema = z.object({
   isServiceArea: booleanSchema.optional(), //서비스 가능 지역 일치하는지 확인
   sort: z.enum(["moveDate", "requestedAt"]).default("requestedAt"),
 });
+
+// =============================================================================
+// 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
+// =============================================================================
 
 // 받은 견적 목록 path parameter 검증
 export const receivedEstimateRequestIdParamSchema = z.object({
