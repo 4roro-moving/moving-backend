@@ -21,6 +21,9 @@ const passwordSchema = z
   })
   .max(100, {
     error: "비밀번호는 100자 이하여야 합니다.",
+  })
+  .refine((password) => Buffer.byteLength(password, "utf8") <= 72, {
+    error: "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다.",
   });
 
 const nicknameSchema = z
