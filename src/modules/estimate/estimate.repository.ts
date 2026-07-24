@@ -1,4 +1,5 @@
 ﻿import type { MoveType, Prisma } from "@prisma/client";
+import { EstimateStatus } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
@@ -61,6 +62,7 @@ function buildMoverEstimateRequestWhere(params: FindManyParams): Prisma.Estimate
 // 고객: 기사에게 받은 견적 목록·상세 조회 필드
 // =============================================================================
 
+// 2026.07.24 정슬기 - [수정] 목록에 찜 여부·찜 수를 포함해 하트 버튼 연동
 function getReceivedEstimateSelect(customerId: string) {
   return {
     id: true,
@@ -90,6 +92,11 @@ function getReceivedEstimateSelect(customerId: string) {
             averageRating: true,
             reviewCount: true,
             confirmedCount: true,
+          },
+        },
+        _count: {
+          select: {
+            favoritesReceived: true,
           },
         },
       },
@@ -304,6 +311,8 @@ export const receivedEstimateRepository = {
         fromAddress: true,
         toAddress: true,
         status: true,
+        createdAt: true,
+        confirmedEstimateId: true,
       },
     });
   },
@@ -318,12 +327,61 @@ export const receivedEstimateRepository = {
     });
   },
 
+  // 2026.07.24 정슬기 - [수정] 받은 견적이 있는 요청을 패널 단위로 조회
+  findReceivedEstimatePanels(customerId: string) {
+    return prisma.estimateRequest.findMany({
+      where: {
+        customerId,
+        estimates: {
+          some: {
+            status: {
+              in: [EstimateStatus.SENT, EstimateStatus.CONFIRMED],
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        moveType: true,
+        moveDate: true,
+        fromAddress: true,
+        toAddress: true,
+        status: true,
+        createdAt: true,
+        confirmedEstimateId: true,
+        estimates: {
+          where: {
+            status: {
+              in: [EstimateStatus.SENT, EstimateStatus.CONFIRMED],
+            },
+          },
+          select: getReceivedEstimateSelect(customerId),
+          orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+  },
+
   // 견적 요청에 속한 받은 견적 상세 조회
   findReceivedEstimateDetail(estimateRequestId: number, estimateId: number, customerId: string) {
     return prisma.estimate.findFirst({
       where: {
         id: estimateId,
         estimateRequestId,
+      },
+      select: getReceivedEstimateDetailSelect(customerId),
+    });
+  },
+
+  // 2026.07.24 정슬기 - [추가] estimateId만으로 고객 소유 견적 상세 조회 (FE /estimates/[estimateId] 대응)
+  findReceivedEstimateDetailById(estimateId: number, customerId: string) {
+    return prisma.estimate.findFirst({
+      where: {
+        id: estimateId,
+        estimateRequest: {
+          customerId,
+        },
       },
       select: getReceivedEstimateDetailSelect(customerId),
     });
@@ -365,6 +423,22 @@ export const receivedEstimateRepository = {
             },
           },
         },
+      },
+    });
+  },
+
+  // 2026.07.24 정슬기 - [추가] estimateId만으로 확정에 필요한 requestId를 해석
+  findEstimateRequestIdByEstimateId(estimateId: number, customerId: string) {
+    return prisma.estimate.findFirst({
+      where: {
+        id: estimateId,
+        estimateRequest: {
+          customerId,
+        },
+      },
+      select: {
+        id: true,
+        estimateRequestId: true,
       },
     });
   },

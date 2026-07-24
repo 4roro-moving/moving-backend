@@ -89,6 +89,25 @@ export const ERROR_CODES = {
     code: "DESIGNATION_LIMIT_EXCEEDED",
     message: "지정 견적은 최대 3명까지 요청할 수 있습니다.",
   },
+
+  // 2026.07.24 정슬기 - [추가] 받은 견적 상세·확정 API용 에러 코드
+  ESTIMATE_NOT_FOUND: {
+    status: 404,
+    code: "ESTIMATE_NOT_FOUND",
+    message: "견적을 찾을 수 없습니다.",
+  },
+
+  ESTIMATE_ALREADY_CONFIRMED: {
+    status: 409,
+    code: "ESTIMATE_ALREADY_CONFIRMED",
+    message: "이미 확정된 견적이 있어 추가로 확정할 수 없습니다.",
+  },
+
+  ESTIMATE_NOT_CONFIRMABLE: {
+    status: 409,
+    code: "ESTIMATE_NOT_CONFIRMABLE",
+    message: "확정할 수 없는 견적입니다.",
+  },
 } as const;
 
 // ErrorCode의 key 타입
