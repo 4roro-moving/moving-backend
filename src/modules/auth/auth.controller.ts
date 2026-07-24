@@ -2,7 +2,13 @@ import type { NextFunction, Request, Response } from "express";
 
 import { authService } from "./auth.service";
 
-import type { LoginInput, LogoutInput, RefreshInput, SignUpInput } from "./auth.type";
+import type {
+  GoogleOAuthInput,
+  LoginInput,
+  LogoutInput,
+  RefreshInput,
+  SignUpInput,
+} from "./auth.validator";
 
 /*
  * 일반 고객 회원가입
@@ -71,6 +77,29 @@ const login = async (
 };
 
 /*
+ * Google OAuth 로그인
+ *
+ * POST /auth/oauth/google
+ */
+const loginWithGoogle = async (
+  req: Request<Record<string, never>, unknown, GoogleOAuthInput>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const result = await authService.loginWithGoogle(req.body);
+
+    res.status(200).json({
+      success: true,
+      message: "Google 로그인에 성공했습니다.",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/*
  * Access Token 및 Refresh Token 재발급
  *
  * POST /auth/refresh
@@ -121,6 +150,7 @@ export const authController = {
   signUpCustomer,
   signUpMover,
   login,
+  loginWithGoogle,
   refresh,
   logout,
 };

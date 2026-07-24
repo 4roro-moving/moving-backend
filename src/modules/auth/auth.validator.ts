@@ -1,3 +1,4 @@
+import { UserRole } from "@prisma/client";
 import { z } from "zod";
 
 const BCRYPT_PASSWORD_MAX_BYTES = 72;
@@ -65,6 +66,19 @@ const phoneSchema = z
   })
   .transform((phone) => phone.replaceAll("-", ""));
 
+const authorizationCodeSchema = z
+  .string({
+    error: "구글 인증 코드를 입력해주세요.",
+  })
+  .trim()
+  .min(1, {
+    error: "구글 인증 코드를 입력해주세요.",
+  });
+
+const oauthRoleSchema = z.enum([UserRole.CUSTOMER, UserRole.MOVER], {
+  error: "회원 역할은 CUSTOMER 또는 MOVER여야 합니다.",
+});
+
 const refreshTokenSchema = z
   .string({
     error: "리프레시 토큰을 입력해주세요.",
@@ -86,6 +100,20 @@ export const loginSchema = z.strictObject({
   password: loginPasswordSchema,
 });
 
+/*
+ * Google OAuth Authorization Code 로그인 요청
+ *
+ * role은 신규 OAuth 회원 생성 시에만 사용한다.
+ * 기존 회원은 DB에 저장된 역할을 사용한다.
+ *
+ * ADMIN 계정이 일반 OAuth 요청을 통해 생성되지 않도록
+ * CUSTOMER와 MOVER만 허용한다.
+ */
+export const googleOAuthSchema = z.strictObject({
+  code: authorizationCodeSchema,
+  role: oauthRoleSchema,
+});
+
 export const refreshSchema = z.strictObject({
   refreshToken: refreshTokenSchema,
 });
@@ -97,11 +125,13 @@ export const logoutSchema = z.strictObject({
 export const authValidator = {
   signUp: signUpSchema,
   login: loginSchema,
+  googleOAuth: googleOAuthSchema,
   refresh: refreshSchema,
   logout: logoutSchema,
 };
 
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type GoogleOAuthInput = z.infer<typeof googleOAuthSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type LogoutInput = z.infer<typeof logoutSchema>;

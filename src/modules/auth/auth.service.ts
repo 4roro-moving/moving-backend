@@ -2,15 +2,17 @@ import bcrypt from "bcrypt";
 import { AuthProvider, Prisma, UserRole } from "@prisma/client";
 
 import { authRepository } from "./auth.repository";
+import { googleOAuth } from "./google.oauth";
+
+import type { AuthResponse, AuthTokens, OAuthProfile } from "./auth.type";
 
 import type {
-  AuthResponse,
-  AuthTokens,
+  GoogleOAuthInput,
   LoginInput,
   LogoutInput,
   RefreshInput,
   SignUpInput,
-} from "./auth.type";
+} from "./auth.validator";
 
 import { AppError } from "../../lib/app-error";
 
@@ -281,6 +283,145 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
 };
 
 /*
+ * OAuth 로그인 공통 처리
+ *
+ * provider와 providerUserId가 일치하는 사용자가 있으면 로그인하고,
+ * 없으면 이메일 중복 여부를 확인한 뒤 신규 OAuth 사용자를 생성한다.
+ */
+const loginWithOAuth = async (
+  profile: OAuthProfile,
+  requestedRole: SignUpRole,
+): Promise<AuthResponse> => {
+  const existingOAuthUser = await authRepository.findByProviderAndProviderId(
+    profile.provider,
+    profile.providerUserId,
+  );
+
+  /*
+   * 이미 OAuth 계정이 존재하는 경우
+   * 요청으로 전달받은 role은 무시하고 DB에 저장된 role을 사용한다.
+   */
+  if (existingOAuthUser) {
+    if (!existingOAuthUser.isActive || existingOAuthUser.deletedAt !== null) {
+      throw new AppError("FORBIDDEN", {
+        message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
+      });
+    }
+
+    const { accessToken, refreshToken, refreshTokenExpiresAt } = createAuthTokens(
+      existingOAuthUser.id,
+      existingOAuthUser.role,
+    );
+
+    await authRepository.saveRefreshToken({
+      userId: existingOAuthUser.id,
+      tokenHash: tokenHash(refreshToken),
+      expiresAt: refreshTokenExpiresAt,
+    });
+
+    return {
+      user: {
+        id: existingOAuthUser.id,
+        email: existingOAuthUser.email,
+        name: existingOAuthUser.name,
+        phone: existingOAuthUser.phone,
+        role: existingOAuthUser.role,
+      },
+      tokens: {
+        accessToken,
+        refreshToken,
+      },
+    };
+  }
+
+  const email = profile.email.trim().toLowerCase();
+
+  /*
+   * 같은 이메일의 LOCAL 계정 또는 다른 OAuth 계정이 이미 존재하면
+   * 자동으로 계정을 합치지 않고 충돌로 처리한다.
+   */
+  const existingUserByEmail = await authRepository.findByEmail(email);
+
+  if (existingUserByEmail) {
+    throw new AppError("OAUTH_EMAIL_ALREADY_EXISTS", {
+      message: "동일한 이메일로 가입된 계정이 이미 존재합니다.",
+    });
+  }
+
+  try {
+    return await runTransaction(async (tx) => {
+      const user = await authRepository.create(
+        {
+          email,
+          password: null,
+          name: profile.name.trim(),
+          phone: null,
+          role: requestedRole,
+          authProvider: profile.provider,
+          providerUserId: profile.providerUserId,
+        },
+        tx,
+      );
+
+      const { accessToken, refreshToken, refreshTokenExpiresAt } = createAuthTokens(
+        user.id,
+        user.role,
+      );
+
+      await authRepository.saveRefreshToken(
+        {
+          userId: user.id,
+          tokenHash: tokenHash(refreshToken),
+          expiresAt: refreshTokenExpiresAt,
+        },
+        tx,
+      );
+
+      return {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          phone: user.phone,
+          role: user.role,
+        },
+        tokens: {
+          accessToken,
+          refreshToken,
+        },
+      };
+    });
+  } catch (error) {
+    /*
+     * 이메일 또는 provider 복합 UNIQUE 충돌을
+     * 동시 가입 요청에서도 안전하게 처리한다.
+     */
+    if (
+      isUniqueConstraintError(error, "email") ||
+      isUniqueConstraintError(error, "providerUserId")
+    ) {
+      throw new AppError("CONFLICT", {
+        message: "이미 가입된 OAuth 계정입니다.",
+      });
+    }
+
+    throw error;
+  }
+};
+
+/*
+ * Google OAuth 로그인
+ *
+ * Authorization Code를 Google 프로필로 변환한 뒤
+ * 공통 OAuth 로그인 로직을 실행한다.
+ */
+const loginWithGoogle = async (input: GoogleOAuthInput): Promise<AuthResponse> => {
+  const profile = await googleOAuth.getGoogleOAuthProfile(input.code);
+
+  return loginWithOAuth(profile, input.role);
+};
+
+/*
  * Access Token 및 Refresh Token 재발급
  *
  * Refresh Token Rotation을 적용한다.
@@ -434,6 +575,7 @@ export const authService = {
   signUpCustomer,
   signUpMover,
   login,
+  loginWithGoogle,
   refresh,
   logout,
 };

@@ -32,6 +32,14 @@ authRouter.post(
 );
 
 authRouter.post(
+  "/oauth/google",
+  validate({
+    body: authValidator.googleOAuth,
+  }),
+  authController.loginWithGoogle,
+);
+
+authRouter.post(
   "/refresh",
   validate({
     body: authValidator.refresh,
