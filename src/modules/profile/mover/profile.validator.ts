@@ -12,7 +12,8 @@ const phoneSchema = z
   .trim()
   .regex(/^01[016789]-?\d{3,4}-?\d{4}$/, {
     error: "올바른 휴대전화 번호 형식이 아닙니다.",
-  });
+  })
+  .transform((phone) => phone.replaceAll("-", ""));
 
 const passwordSchema = z
   .string()
@@ -21,6 +22,9 @@ const passwordSchema = z
   })
   .max(100, {
     error: "비밀번호는 100자 이하여야 합니다.",
+  })
+  .refine((password) => Buffer.byteLength(password, "utf8") <= 72, {
+    error: "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다.",
   });
 
 const nicknameSchema = z
