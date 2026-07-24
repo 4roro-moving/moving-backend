@@ -1,4 +1,5 @@
 ﻿import type { MoveType, Prisma } from "@prisma/client";
+import { EstimateStatus } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
@@ -326,13 +327,17 @@ export const receivedEstimateRepository = {
     });
   },
 
-  // 2026.07.24 정슬기 - [추가] 받은 견적이 있는 요청을 패널 단위로 조회
+  // 2026.07.24 정슬기 - [수정] 받은 견적이 있는 요청을 패널 단위로 조회
   findReceivedEstimatePanels(customerId: string) {
     return prisma.estimateRequest.findMany({
       where: {
         customerId,
         estimates: {
-          some: {},
+          some: {
+            status: {
+              in: [EstimateStatus.SENT, EstimateStatus.CONFIRMED],
+            },
+          },
         },
       },
       select: {
@@ -345,13 +350,16 @@ export const receivedEstimateRepository = {
         createdAt: true,
         confirmedEstimateId: true,
         estimates: {
+          where: {
+            status: {
+              in: [EstimateStatus.SENT, EstimateStatus.CONFIRMED],
+            },
+          },
           select: getReceivedEstimateSelect(customerId),
           orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         },
       },
-      orderBy: {
-        createdAt: "desc",
-      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     });
   },
 
