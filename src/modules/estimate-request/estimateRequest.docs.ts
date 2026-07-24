@@ -69,6 +69,23 @@ registerRouterDocs(estimateRequestRouter, {
       },
     },
 
+    "PATCH /:estimateRequestId/estimates/:estimateId/confirm": {
+      summary: "받은 견적 확정",
+      description: [
+        "고객이 본인의 견적 요청에 도착한 특정 견적을 확정합니다.",
+        "",
+        "- 선택한 견적은 `CONFIRMED` 상태가 됩니다.",
+        "- 같은 견적 요청의 다른 `SENT` 견적은 `EXPIRED` 상태가 됩니다.",
+        "- 견적 요청은 `CONFIRMED` 상태가 되며 `confirmedEstimateId`가 저장됩니다.",
+      ].join("\n"),
+      responses: {
+        200: "확정 성공",
+        403: "본인의 견적 요청에 도착한 견적이 아닙니다.",
+        404: "견적을 찾을 수 없습니다.",
+        409: "이미 확정되었거나 확정할 수 없는 상태입니다.",
+      },
+    },
+
     "PATCH /:estimateRequestId": {
       summary: "견적 요청 수정",
       description: "견적이 1건이라도 도착하면 수정할 수 없습니다.",
