@@ -46,5 +46,6 @@ export type MoverEstimateRequestListResult = {
   pagination: {
     nextCursor: string | null;
     hasNextPage: boolean;
+    totalCount: number;
   };
 };

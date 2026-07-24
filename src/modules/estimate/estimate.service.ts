@@ -71,13 +71,17 @@ export const moverEstimateRequestService = {
     const cursorId = getCursorId(query.cursor);
 
     //목록 조회 요청
-    const rows = await moverEstimateRequestRepository.findMany({
+    const repositoryParams = {
       moverId,
       moverMoveTypes,
       moverRegionIds,
       query,
       cursorId,
-    });
+    };
+    const [rows, totalCount] = await Promise.all([
+      moverEstimateRequestRepository.findMany(repositoryParams),
+      moverEstimateRequestRepository.count(repositoryParams),
+    ]);
 
     const hasNextPage = rows.length > query.limit;
     const pageRows = rows.slice(0, query.limit);
@@ -112,6 +116,7 @@ export const moverEstimateRequestService = {
       pagination: {
         nextCursor,
         hasNextPage,
+        totalCount,
       },
     };
   },

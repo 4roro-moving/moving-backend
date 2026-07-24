@@ -11,6 +11,40 @@ type FindManyParams = {
   cursorId: number | undefined;
 };
 
+function buildMoverEstimateRequestWhere(params: FindManyParams): Prisma.EstimateRequestWhereInput {
+  const where: Prisma.EstimateRequestWhereInput = {
+    status: "OPEN",
+    isActive: true,
+    expiresAt: { gt: new Date() },
+    moveType: { in: params.moverMoveTypes },
+    estimates: { none: { moverId: params.moverId } },
+    rejections: { none: { moverId: params.moverId } },
+  };
+
+  if (params.query.keyword) {
+    where.customer = {
+      name: { contains: params.query.keyword, mode: "insensitive" },
+    };
+  }
+
+  if (params.query.isDesignated === true) {
+    where.designatedMovers = { some: { moverId: params.moverId } };
+  }
+
+  if (params.query.isDesignated === false) {
+    where.designatedMovers = { none: { moverId: params.moverId } };
+  }
+
+  if (params.query.isServiceArea === true) {
+    where.OR = [
+      { fromRegionId: { in: params.moverRegionIds } },
+      { toRegionId: { in: params.moverRegionIds } },
+    ];
+  }
+
+  return where;
+}
+
 /* 
 2026.07.23 add 김성현
 받은 견적 목록 조회 필드 정의
@@ -67,66 +101,7 @@ export const moverEstimateRequestRepository = {
   },
 
   findMany(params: FindManyParams) {
-    const where: Prisma.EstimateRequestWhereInput = {
-      status: "OPEN",
-      isActive: true,
-      expiresAt: {
-        gt: new Date(),
-      },
-      moveType: {
-        in: params.moverMoveTypes,
-      },
-      estimates: {
-        none: {
-          moverId: params.moverId,
-        },
-      },
-      rejections: {
-        none: {
-          moverId: params.moverId,
-        },
-      },
-    };
-
-    if (params.query.keyword) {
-      where.customer = {
-        name: {
-          contains: params.query.keyword,
-          mode: "insensitive",
-        },
-      };
-    }
-
-    if (params.query.isDesignated === true) {
-      where.designatedMovers = {
-        some: {
-          moverId: params.moverId,
-        },
-      };
-    }
-
-    if (params.query.isDesignated === false) {
-      where.designatedMovers = {
-        none: {
-          moverId: params.moverId,
-        },
-      };
-    }
-
-    if (params.query.isServiceArea === true) {
-      where.OR = [
-        {
-          fromRegionId: {
-            in: params.moverRegionIds,
-          },
-        },
-        {
-          toRegionId: {
-            in: params.moverRegionIds,
-          },
-        },
-      ];
-    }
+    const where = buildMoverEstimateRequestWhere(params);
 
     let orderBy: Prisma.EstimateRequestOrderByWithRelationInput[] = [
       { createdAt: "desc" },
@@ -185,6 +160,12 @@ export const moverEstimateRequestRepository = {
       select,
       orderBy,
       take: params.query.limit + 1,
+    });
+  },
+
+  count(params: FindManyParams) {
+    return prisma.estimateRequest.count({
+      where: buildMoverEstimateRequestWhere(params),
     });
   },
 };
