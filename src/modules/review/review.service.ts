@@ -10,6 +10,12 @@ type GetMyReviewListParams = {
   limit: number;
 };
 
+type GetMoverReviewListParams = {
+  moverId: string;
+  page: number;
+  limit: number;
+};
+
 type GetReviewableEstimateListParams = {
   // 현재 로그인한 고객 기준으로 고객 ID를 전달받아 리뷰 작성 가능한 견적 리스트를 조회
   customerId: string;
@@ -34,7 +40,63 @@ function buildPagination(totalCount: number, page: number, limit: number): Pagin
   };
 }
 
+// 리뷰 작성자 이메일 로컬 파트 마스킹
+function maskEmailLocalPart(email: string) {
+  const localPart = email.split("@")[0] ?? "";
+
+  if (localPart.length <= 1) {
+    return `${localPart}*`;
+  }
+
+  if (localPart.length === 2) {
+    return `${localPart[0]}*`;
+  }
+
+  return `${localPart.slice(0, 2)}${"*".repeat(localPart.length - 2)}`;
+}
+
 export const reviewService = {
+  async getMoverReviewList({ moverId, page, limit }: GetMoverReviewListParams) {
+    // 기사님 리뷰 조회 전 기사님 존재 여부 확인
+    const mover = await reviewRepository.findMoverForReviewList(moverId);
+
+    if (!mover) {
+      throw new AppError("MOVER_NOT_FOUND");
+    }
+
+    const skip = (page - 1) * limit;
+
+    // 리뷰 목록과 전체 개수를 함께 조회
+    const [reviews, totalCount] = await Promise.all([
+      reviewRepository.findReviewsByMoverId(moverId, skip, limit),
+      reviewRepository.countReviewsByMoverId(moverId),
+    ]);
+
+    return {
+      reviews: reviews.map((review) => {
+        const estimateRequest = review.estimate.estimateRequest;
+
+        return {
+          id: review.id,
+          rating: review.rating,
+          content: review.content,
+          createdAt: review.createdAt,
+          customer: {
+            id: review.customer.id,
+            displayName: maskEmailLocalPart(review.customer.email),
+            imageUrl: review.customer.customerProfile?.imageUrl ?? null,
+          },
+          estimateRequest: {
+            id: estimateRequest.id,
+            moveType: estimateRequest.moveType,
+            moveDate: estimateRequest.moveDate,
+          },
+        };
+      }),
+      pagination: buildPagination(totalCount, page, limit),
+    };
+  },
+
   async getMyReviewList({ customerId, page, limit }: GetMyReviewListParams) {
     const skip = (page - 1) * limit;
 
