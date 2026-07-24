@@ -1,7 +1,11 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
-import type { FavoriteMoverParams, FindFavoriteMoverListParams } from "./favorite.type";
+import type {
+  FavoriteMoverParams,
+  FindFavoriteMoverListParams,
+  FindFavoriteMoversByCustomerIdParams,
+} from "./favorite.type";
 
 // 찜한 기사 목록 조회 시 DB에서 가져올 필드 목록
 const FAVORITE_MOVER_LIST_SELECT = {
@@ -30,6 +34,19 @@ const FAVORITE_MOVER_LIST_SELECT = {
     },
   },
 } satisfies Prisma.MoverProfileSelect;
+
+// 찜 목록 조회와 전체 개수 조회에 동일하게 적용할 조건
+function buildFavoriteMoverListWhere(customerId: string): Prisma.FavoriteMoverWhereInput {
+  return {
+    customerId,
+    mover: {
+      role: "MOVER",
+      isActive: true,
+      isProfileCompleted: true,
+      deletedAt: null,
+    },
+  };
+}
 
 export const favoriteRepository = {
   findMoverById(moverId: string) {
@@ -80,13 +97,7 @@ export const favoriteRepository = {
     });
   },
 
-  findFavoriteMoversByCustomerId({
-    customerId,
-    moverIds,
-  }: {
-    customerId: string;
-    moverIds: string[];
-  }) {
+  findFavoriteMoversByCustomerId({ customerId, moverIds }: FindFavoriteMoversByCustomerIdParams) {
     return prisma.favoriteMover.findMany({
       where: {
         customerId,
@@ -98,15 +109,7 @@ export const favoriteRepository = {
 
   findFavoriteMoverList({ customerId, skip, take }: FindFavoriteMoverListParams) {
     return prisma.favoriteMover.findMany({
-      where: {
-        customerId,
-        mover: {
-          role: "MOVER",
-          isActive: true,
-          isProfileCompleted: true,
-          deletedAt: null,
-        },
-      },
+      where: buildFavoriteMoverListWhere(customerId),
       select: {
         createdAt: true,
         mover: {
@@ -127,15 +130,7 @@ export const favoriteRepository = {
 
   countFavoriteMoversByCustomerId(customerId: string) {
     return prisma.favoriteMover.count({
-      where: {
-        customerId,
-        mover: {
-          role: "MOVER",
-          isActive: true,
-          isProfileCompleted: true,
-          deletedAt: null,
-        },
-      },
+      where: buildFavoriteMoverListWhere(customerId),
     });
   },
 };

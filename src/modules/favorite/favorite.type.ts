@@ -16,3 +16,9 @@ export type FindFavoriteMoverListParams = {
   skip: number;
   take: number;
 };
+
+// 찜한 기사 ID 조회 시 필요한 파라미터
+export type FindFavoriteMoversByCustomerIdParams = {
+  customerId: string;
+  moverIds: string[];
+};
