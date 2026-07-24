@@ -54,6 +54,8 @@ const errorHandler: ErrorRequestHandler = (
   logger.error(isError ? error.message : "Unhandled error", {
     stack: isError ? error.stack : undefined,
     error: isError ? undefined : typeof error === "object" ? JSON.stringify(error) : String(error),
+    path: req.path,
+    method: req.method,
   });
 
   const internalError = ERROR_CODES.INTERNAL_SERVER_ERROR;
