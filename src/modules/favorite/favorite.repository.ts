@@ -1,5 +1,35 @@
+import type { Prisma } from "@prisma/client";
+
 import { prisma } from "../../lib/prisma";
-import type { FavoriteMoverParams } from "./favorite.type";
+import type { FavoriteMoverParams, FindFavoriteMoverListParams } from "./favorite.type";
+
+// 찜한 기사 목록 조회 시 DB에서 가져올 필드 목록
+const FAVORITE_MOVER_LIST_SELECT = {
+  id: true,
+  userId: true,
+  nickname: true,
+  imageUrl: true,
+  career: true,
+  shortIntro: true,
+  description: true,
+  confirmedCount: true,
+  averageRating: true,
+  reviewCount: true,
+  serviceTypes: {
+    select: {
+      moveType: true,
+    },
+  },
+  user: {
+    select: {
+      _count: {
+        select: {
+          favoritesReceived: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.MoverProfileSelect;
 
 export const favoriteRepository = {
   findMoverById(moverId: string) {
@@ -63,6 +93,49 @@ export const favoriteRepository = {
         moverId: { in: moverIds },
       },
       select: { moverId: true },
+    });
+  },
+
+  findFavoriteMoverList({ customerId, skip, take }: FindFavoriteMoverListParams) {
+    return prisma.favoriteMover.findMany({
+      where: {
+        customerId,
+        mover: {
+          role: "MOVER",
+          isActive: true,
+          isProfileCompleted: true,
+          deletedAt: null,
+        },
+      },
+      select: {
+        createdAt: true,
+        mover: {
+          select: {
+            moverProfile: {
+              select: FAVORITE_MOVER_LIST_SELECT,
+            },
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+      skip,
+      take,
+    });
+  },
+
+  countFavoriteMoversByCustomerId(customerId: string) {
+    return prisma.favoriteMover.count({
+      where: {
+        customerId,
+        mover: {
+          role: "MOVER",
+          isActive: true,
+          isProfileCompleted: true,
+          deletedAt: null,
+        },
+      },
     });
   },
 };

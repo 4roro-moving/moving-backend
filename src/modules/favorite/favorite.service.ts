@@ -1,8 +1,10 @@
 import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
+import { buildPagination } from "../../utils/pagination.util";
+
 import { favoriteRepository } from "./favorite.repository";
-import type { FavoriteMoverParams } from "./favorite.type";
+import type { FavoriteMoverParams, ListFavoriteMoverQuery } from "./favorite.type";
 
 function isFavoriteMoverUniqueError(error: unknown) {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
@@ -57,6 +59,55 @@ export const favoriteService = {
     return {
       moverId: params.moverId,
       isFavorite: false,
+    };
+  },
+
+  async getFavoriteMoverList({
+    customerId,
+    page,
+    limit,
+  }: ListFavoriteMoverQuery & { customerId: string }) {
+    const skip = (page - 1) * limit;
+
+    const [favorites, totalCount] = await Promise.all([
+      favoriteRepository.findFavoriteMoverList({
+        customerId,
+        skip,
+        take: limit,
+      }),
+      favoriteRepository.countFavoriteMoversByCustomerId(customerId),
+    ]);
+
+    return {
+      movers: favorites
+        .map((favorite) => {
+          const mover = favorite.mover.moverProfile;
+
+          if (!mover) {
+            throw new AppError("INTERNAL_SERVER_ERROR", {
+              message: "기사님 프로필 정보를 찾을 수 없습니다.",
+            });
+          }
+
+          return {
+            id: mover.userId,
+            moverProfileId: mover.id,
+            nickname: mover.nickname,
+            profileImageUrl: mover.imageUrl,
+            shortIntro: mover.shortIntro,
+            description: mover.description,
+            career: mover.career,
+            rating: Number(mover.averageRating),
+            reviewCount: mover.reviewCount,
+            confirmedEstimateCount: mover.confirmedCount,
+            favoriteCount: mover.user._count.favoritesReceived,
+            moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
+            isFavorite: true,
+            favoritedAt: favorite.createdAt,
+          };
+        })
+        .filter((mover) => mover !== null),
+      pagination: buildPagination(totalCount, page, limit),
     };
   },
 };
