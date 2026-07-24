@@ -6,19 +6,29 @@ import { estimateController } from "./estimate.controller";
 import {
   moverEstimateRequestListQuerySchema,
   sendEstimateBodySchema,
+  receivedEstimateIdParamSchema,
   sendEstimateParamSchema,
 } from "./estimate.validator";
 
-const moverEstimateRequestRouter = Router();
+const estimateRouter = Router();
 
-moverEstimateRequestRouter.use(authenticate, authorize("MOVER"));
-moverEstimateRequestRouter.get(
+/* 
+2026.07.21 add 윤소정
+기사 견적 요청 목록
+*/
+
+estimateRouter.get(
   "/requests",
+  authenticate,
+  authorize("MOVER"),
   validate({ query: moverEstimateRequestListQuerySchema }),
   estimateController.getList,
 );
-moverEstimateRequestRouter.post(
+
+estimateRouter.post(
   "/requests/:estimateRequestId",
+  authenticate,
+  authorize("MOVER"),
   validate({
     params: sendEstimateParamSchema,
     body: sendEstimateBodySchema,
@@ -26,4 +36,31 @@ moverEstimateRequestRouter.post(
   estimateController.sendEstimate,
 );
 
-export default moverEstimateRequestRouter;
+// 2026.07.24 정슬기 - [추가] 고객 받은 견적 패널 목록 API (요청 단위)
+estimateRouter.get(
+  "/received",
+  authenticate,
+  authorize("CUSTOMER"),
+  estimateController.getReceivedEstimatePanels,
+);
+
+// 2026.07.24 정슬기 - [추가] estimateId만으로 받은 견적 상세 조회 (query 없이 FE 라우트와 맞춤)
+estimateRouter.get(
+  "/:estimateId",
+  authenticate,
+  authorize("CUSTOMER"),
+  validate({ params: receivedEstimateIdParamSchema }),
+  estimateController.getReceivedEstimateDetailById,
+);
+
+// 2026.07.24 정슬기 - [수정] 원격 변경사항과 견적 API 작업 충돌 병합
+// estimateId 기준 확정 API (원격 PATCH confirm 로직 재사용)
+estimateRouter.post(
+  "/:estimateId/confirm",
+  authenticate,
+  authorize("CUSTOMER"),
+  validate({ params: receivedEstimateIdParamSchema }),
+  estimateController.confirmReceivedEstimateById,
+);
+
+export default estimateRouter;

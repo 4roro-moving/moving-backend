@@ -1,4 +1,4 @@
-﻿import compression from "compression";
+import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
@@ -19,7 +19,7 @@ import moverRouter from "./modules/mover/mover.route";
 // 스웨거용
 // import type { RequestHandler } from "express";
 // import swaggerUi from "swagger-ui-express";
-import moverEstimateRequestRouter from "./modules/estimate/estimate.route";
+import estimateRouter from "./modules/estimate/estimate.route";
 import reviewRouter from "./modules/review/review.route";
 import favoriteRouter from "./modules/favorite/favorite.route";
 
@@ -97,7 +97,7 @@ app.use("/api/profiles", profileRouter);
 
 app.use("/api/estimate-requests", estimateRequestRouter);
 app.use("/api/movers", moverRouter);
-app.use("/api/estimates", moverEstimateRequestRouter);
+app.use("/api/estimates", estimateRouter);
 app.use("/api/reviews", reviewRouter);
 app.use("/api/favorites", favoriteRouter);
 

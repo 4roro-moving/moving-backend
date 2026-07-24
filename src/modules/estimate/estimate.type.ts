@@ -1,10 +1,11 @@
-﻿import type { MoveType } from "@prisma/client";
+import type { MoveType } from "@prisma/client";
 import type { z } from "zod";
 
 import type {
   confirmReceivedEstimateParamSchema,
   moverEstimateRequestListQuerySchema,
   receivedEstimateDetailParamSchema,
+  receivedEstimateIdParamSchema,
   receivedEstimateRequestIdParamSchema,
   sendEstimateBodySchema,
   sendEstimateParamSchema,
@@ -34,6 +35,8 @@ export type MoverEstimateRequestListQuery = z.infer<typeof moverEstimateRequestL
 export type ReceivedEstimateRequestIdParam = z.infer<typeof receivedEstimateRequestIdParamSchema>;
 export type ReceivedEstimateDetailParam = z.infer<typeof receivedEstimateDetailParamSchema>;
 export type ConfirmReceivedEstimateParam = z.infer<typeof confirmReceivedEstimateParamSchema>;
+// 2026.07.24 정슬기 - [수정] 원격 변경사항과 견적 API 작업 충돌 병합
+export type ReceivedEstimateIdParam = z.infer<typeof receivedEstimateIdParamSchema>;
 
 // =============================================================================
 // 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
