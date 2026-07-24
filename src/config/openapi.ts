@@ -17,6 +17,8 @@ export const registry = new OpenAPIRegistry();
  */
 async function registerModuleDocs(): Promise<void> {
   await import("../modules/estimate-request/estimateRequest.docs");
+  // 2026.07.24 정슬기 - [추가] 받은 견적·확정 API 문서를 OpenAPI에 등록
+  await import("../modules/estimate/estimate.docs");
 }
 
 export async function generateOpenApiDocument(): Promise<OpenAPIObject> {

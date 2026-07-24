@@ -1,4 +1,4 @@
-﻿import type { MoveType } from "@prisma/client";
+﻿import type { EstimateRequestStatus, EstimateStatus, MoveType, Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import { runTransaction } from "../../utils/transaction";
@@ -122,30 +122,182 @@ export const moverEstimateRequestService = {
   },
 };
 
+// 2026.07.24 정슬기 - [추가] 확정 불가 사유를 FE disabled 안내에 전달
+function getConfirmDisabledReason(
+  estimateStatus: EstimateStatus,
+  requestStatus: EstimateRequestStatus,
+  isConfirmed: boolean,
+): string | null {
+  if (isConfirmed) {
+    return null;
+  }
+
+  if (estimateStatus === "SENT" && requestStatus === "OPEN") {
+    return null;
+  }
+
+  // 2026.07.24 정슬기 - [예외 처리] 같은 요청에 확정 견적이 있으면 추가 확정 차단 안내
+  if (
+    estimateStatus === "SENT" &&
+    (requestStatus === "CONFIRMED" || requestStatus === "COMPLETED")
+  ) {
+    return "이미 확정된 견적이 있어 추가로 확정할 수 없습니다.";
+  }
+
+  if (estimateStatus === "CONFIRMED") {
+    return null;
+  }
+
+  return "확정할 수 없는 견적입니다.";
+}
+
+function mapListEstimate(estimate: {
+  id: number;
+  price: number;
+  status: EstimateStatus;
+  isDesignated: boolean;
+  createdAt: Date;
+  mover: {
+    id: string;
+    name: string;
+    moverProfile: {
+      nickname: string | null;
+      imageUrl: string | null;
+      career: number;
+      shortIntro: string | null;
+      averageRating: Prisma.Decimal | number;
+      reviewCount: number;
+      confirmedCount: number;
+    } | null;
+    favoritesReceived: { id: number }[];
+    _count: { favoritesReceived: number };
+  };
+}) {
+  return {
+    id: estimate.id,
+    price: estimate.price,
+    status: estimate.status,
+    isDesignated: estimate.isDesignated,
+    createdAt: estimate.createdAt,
+    mover: {
+      id: estimate.mover.id,
+      name: estimate.mover.name,
+      nickname: estimate.mover.moverProfile?.nickname ?? null,
+      imageUrl: estimate.mover.moverProfile?.imageUrl ?? null,
+      career: estimate.mover.moverProfile?.career ?? 0,
+      shortIntro: estimate.mover.moverProfile?.shortIntro ?? null,
+      averageRating: Number(estimate.mover.moverProfile?.averageRating ?? 0),
+      reviewCount: estimate.mover.moverProfile?.reviewCount ?? 0,
+      confirmedCount: estimate.mover.moverProfile?.confirmedCount ?? 0,
+      favoriteCount: estimate.mover._count.favoritesReceived,
+      isFavorite: estimate.mover.favoritesReceived.length > 0,
+    },
+  };
+}
+
+function mapDetailEstimate(
+  estimate: NonNullable<
+    Awaited<ReturnType<typeof receivedEstimateRepository.findReceivedEstimateDetailById>>
+  >,
+) {
+  const moverProfile = estimate.mover.moverProfile;
+  // 2026.07.24 정슬기 - [추가] 상세 응답에 확정 여부·추가 확정 가능 여부 포함
+  const isConfirmed = estimate.estimateRequest.confirmedEstimateId === estimate.id;
+  const canConfirm = estimate.status === "SENT" && estimate.estimateRequest.status === "OPEN";
+
+  return {
+    id: estimate.id,
+    price: estimate.price,
+    comment: estimate.comment,
+    status: estimate.status,
+    isDesignated: estimate.isDesignated,
+    isConfirmed,
+    canConfirm,
+    confirmDisabledReason: getConfirmDisabledReason(
+      estimate.status,
+      estimate.estimateRequest.status,
+      isConfirmed,
+    ),
+    createdAt: estimate.createdAt,
+    updatedAt: estimate.updatedAt,
+    confirmedAt: estimate.confirmedAt,
+    estimateRequest: {
+      id: estimate.estimateRequest.id,
+      moveType: estimate.estimateRequest.moveType,
+      moveDate: estimate.estimateRequest.moveDate,
+      fromZipCode: estimate.estimateRequest.fromZipCode,
+      fromAddress: estimate.estimateRequest.fromAddress,
+      fromDetailAddress: estimate.estimateRequest.fromDetailAddress,
+      fromRegion: estimate.estimateRequest.fromRegion,
+      toZipCode: estimate.estimateRequest.toZipCode,
+      toAddress: estimate.estimateRequest.toAddress,
+      toDetailAddress: estimate.estimateRequest.toDetailAddress,
+      toRegion: estimate.estimateRequest.toRegion,
+      status: estimate.estimateRequest.status,
+      confirmedEstimateId: estimate.estimateRequest.confirmedEstimateId,
+    },
+    mover: {
+      id: estimate.mover.id,
+      name: estimate.mover.name,
+      nickname: moverProfile?.nickname ?? null,
+      imageUrl: moverProfile?.imageUrl ?? null,
+      career: moverProfile?.career ?? 0,
+      shortIntro: moverProfile?.shortIntro ?? null,
+      description: moverProfile?.description ?? null,
+      averageRating: Number(moverProfile?.averageRating ?? 0),
+      reviewCount: moverProfile?.reviewCount ?? 0,
+      confirmedCount: moverProfile?.confirmedCount ?? 0,
+      favoriteCount: estimate.mover._count.favoritesReceived,
+      isFavorite: estimate.mover.favoritesReceived.length > 0,
+      serviceTypes: moverProfile?.serviceTypes.map((serviceType) => serviceType.moveType) ?? [],
+      serviceAreas:
+        moverProfile?.serviceAreas.map((serviceArea) => ({
+          id: serviceArea.region.id,
+          name: serviceArea.region.name,
+        })) ?? [],
+    },
+  };
+}
+
 export const receivedEstimateService = {
+  // 2026.07.24 정슬기 - [추가] 받은 견적이 있는 요청을 패널 단위로 조회
+  async getReceivedEstimatePanels(customerId: string) {
+    const panels = await receivedEstimateRepository.findReceivedEstimatePanels(customerId);
+
+    return panels.map((panel) => ({
+      estimateRequest: {
+        id: panel.id,
+        moveType: panel.moveType,
+        moveDate: panel.moveDate,
+        fromAddress: panel.fromAddress,
+        toAddress: panel.toAddress,
+        status: panel.status,
+        createdAt: panel.createdAt,
+        confirmedEstimateId: panel.confirmedEstimateId,
+      },
+      estimates: panel.estimates.map(mapListEstimate),
+    }));
+  },
+
   async getReceivedEstimateList({ estimateRequestId, customerId }: GetReceivedEstimateListParams) {
-    //견적 요청 조회
     const estimateRequest =
       await receivedEstimateRepository.findEstimateRequestById(estimateRequestId);
 
     if (!estimateRequest) {
-      throw new AppError("NOT_FOUND", {
-        message: "견적 요청을 찾을 수 없습니다.",
-      });
+      throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
     }
 
-    //견적 요청 소유자 확인
     if (estimateRequest.customerId !== customerId) {
       throw new AppError("FORBIDDEN", {
         message: "본인의 견적 요청만 조회할 수 있습니다.",
       });
     }
 
-    //받은 견적 목록 조회
-    const estimates =
-      await receivedEstimateRepository.findReceivedEstimatesByEstimateRequestId(estimateRequestId);
+    const estimates = await receivedEstimateRepository.findReceivedEstimatesByEstimateRequestId(
+      estimateRequestId,
+      customerId,
+    );
 
-    //목록 응답 형태 가공
     return {
       estimateRequest: {
         id: estimateRequest.id,
@@ -154,25 +306,10 @@ export const receivedEstimateService = {
         fromAddress: estimateRequest.fromAddress,
         toAddress: estimateRequest.toAddress,
         status: estimateRequest.status,
+        createdAt: estimateRequest.createdAt,
+        confirmedEstimateId: estimateRequest.confirmedEstimateId,
       },
-      estimates: estimates.map((estimate) => ({
-        id: estimate.id,
-        price: estimate.price,
-        status: estimate.status,
-        isDesignated: estimate.isDesignated,
-        createdAt: estimate.createdAt,
-        mover: {
-          id: estimate.mover.id,
-          name: estimate.mover.name,
-          nickname: estimate.mover.moverProfile?.nickname ?? null,
-          imageUrl: estimate.mover.moverProfile?.imageUrl ?? null,
-          career: estimate.mover.moverProfile?.career ?? 0,
-          shortIntro: estimate.mover.moverProfile?.shortIntro ?? null,
-          averageRating: Number(estimate.mover.moverProfile?.averageRating ?? 0),
-          reviewCount: estimate.mover.moverProfile?.reviewCount ?? 0,
-          confirmedCount: estimate.mover.moverProfile?.confirmedCount ?? 0,
-        },
-      })),
+      estimates: estimates.map(mapListEstimate),
     };
   },
 
@@ -181,7 +318,6 @@ export const receivedEstimateService = {
     estimateId,
     customerId,
   }: GetReceivedEstimateDetailParams) {
-    //받은 견적 상세 조회
     const estimate = await receivedEstimateRepository.findReceivedEstimateDetail(
       estimateRequestId,
       estimateId,
@@ -189,68 +325,51 @@ export const receivedEstimateService = {
     );
 
     if (!estimate) {
-      throw new AppError("NOT_FOUND", {
-        message: "견적을 찾을 수 없습니다.",
-      });
+      throw new AppError("ESTIMATE_NOT_FOUND");
     }
 
-    //견적 요청 소유자 확인
     if (estimate.estimateRequest.customerId !== customerId) {
       throw new AppError("FORBIDDEN", {
         message: "본인의 견적 요청에 도착한 견적만 조회할 수 있습니다.",
       });
     }
 
-    //기사 프로필 정보 분리
-    const moverProfile = estimate.mover.moverProfile;
+    return mapDetailEstimate(estimate);
+  },
 
-    //상세 응답 형태 가공
-    return {
-      id: estimate.id,
-      price: estimate.price,
-      comment: estimate.comment,
-      status: estimate.status,
-      isDesignated: estimate.isDesignated,
-      isConfirmed: estimate.estimateRequest.confirmedEstimateId === estimate.id,
-      canConfirm: estimate.status === "SENT" && estimate.estimateRequest.status === "OPEN",
-      createdAt: estimate.createdAt,
-      updatedAt: estimate.updatedAt,
-      confirmedAt: estimate.confirmedAt,
-      estimateRequest: {
-        id: estimate.estimateRequest.id,
-        moveType: estimate.estimateRequest.moveType,
-        moveDate: estimate.estimateRequest.moveDate,
-        fromZipCode: estimate.estimateRequest.fromZipCode,
-        fromAddress: estimate.estimateRequest.fromAddress,
-        fromDetailAddress: estimate.estimateRequest.fromDetailAddress,
-        fromRegion: estimate.estimateRequest.fromRegion,
-        toZipCode: estimate.estimateRequest.toZipCode,
-        toAddress: estimate.estimateRequest.toAddress,
-        toDetailAddress: estimate.estimateRequest.toDetailAddress,
-        toRegion: estimate.estimateRequest.toRegion,
-        status: estimate.estimateRequest.status,
-      },
-      mover: {
-        id: estimate.mover.id,
-        name: estimate.mover.name,
-        nickname: moverProfile?.nickname ?? null,
-        imageUrl: moverProfile?.imageUrl ?? null,
-        career: moverProfile?.career ?? 0,
-        shortIntro: moverProfile?.shortIntro ?? null,
-        description: moverProfile?.description ?? null,
-        averageRating: Number(moverProfile?.averageRating ?? 0),
-        reviewCount: moverProfile?.reviewCount ?? 0,
-        confirmedCount: moverProfile?.confirmedCount ?? 0,
-        favoriteCount: estimate.mover._count.favoritesReceived,
-        isFavorite: estimate.mover.favoritesReceived.length > 0,
-        serviceTypes: moverProfile?.serviceTypes.map((serviceType) => serviceType.moveType) ?? [],
-        serviceAreas:
-          moverProfile?.serviceAreas.map((serviceArea) => ({
-            id: serviceArea.region.id,
-            name: serviceArea.region.name,
-          })) ?? [],
-      },
-    };
+  // 2026.07.24 정슬기 - [추가] estimateId만으로 소유 견적 상세 조회
+  async getReceivedEstimateDetailById(estimateId: number, customerId: string) {
+    const estimate = await receivedEstimateRepository.findReceivedEstimateDetailById(
+      estimateId,
+      customerId,
+    );
+
+    if (!estimate) {
+      throw new AppError("ESTIMATE_NOT_FOUND");
+    }
+
+    return mapDetailEstimate(estimate);
+  },
+
+  // 2026.07.24 정슬기 - [수정] 원격 변경사항과 견적 API 작업 충돌 병합
+  // estimateId만으로 확정한 뒤 FE용 상세 응답을 반환 (원격 확정 로직 재사용)
+  async confirmReceivedEstimateById(estimateId: number, customerId: string) {
+    const estimate = await receivedEstimateRepository.findEstimateRequestIdByEstimateId(
+      estimateId,
+      customerId,
+    );
+
+    if (!estimate) {
+      throw new AppError("ESTIMATE_NOT_FOUND");
+    }
+
+    await this.confirmReceivedEstimate({
+      estimateRequestId: estimate.estimateRequestId,
+      estimateId: estimate.id,
+      customerId,
+    });
+
+    return this.getReceivedEstimateDetailById(estimateId, customerId);
   },
 
   async confirmReceivedEstimate({

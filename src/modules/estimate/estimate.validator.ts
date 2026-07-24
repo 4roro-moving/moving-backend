@@ -74,3 +74,9 @@ export const receivedEstimateDetailParamSchema = receivedEstimateRequestIdParamS
 
 // 받은 견적 확정 path parameter 검증
 export const confirmReceivedEstimateParamSchema = receivedEstimateDetailParamSchema;
+
+// 2026.07.24 정슬기 - [수정] 원격 변경사항과 견적 API 작업 충돌 병합
+// estimateId 기준 상세·확정 path parameter 검증
+export const receivedEstimateIdParamSchema = z.object({
+  estimateId: z.coerce.number().int().positive(),
+});

@@ -18,30 +18,47 @@ type FindManyParams = {
 - 받은 견적 상세 조회 필드 정의
 */
 
-const receivedEstimateSelect = {
-  id: true,
-  price: true,
-  status: true,
-  isDesignated: true,
-  createdAt: true,
-  mover: {
-    select: {
-      id: true,
-      name: true,
-      moverProfile: {
-        select: {
-          nickname: true,
-          imageUrl: true,
-          career: true,
-          shortIntro: true,
-          averageRating: true,
-          reviewCount: true,
-          confirmedCount: true,
+// 2026.07.24 정슬기 - [수정] 목록에 찜 여부·찜 수를 포함해 하트 버튼 연동
+function getReceivedEstimateListSelect(customerId: string) {
+  return {
+    id: true,
+    price: true,
+    status: true,
+    isDesignated: true,
+    createdAt: true,
+    mover: {
+      select: {
+        id: true,
+        name: true,
+        moverProfile: {
+          select: {
+            nickname: true,
+            imageUrl: true,
+            career: true,
+            shortIntro: true,
+            averageRating: true,
+            reviewCount: true,
+            confirmedCount: true,
+          },
+        },
+        favoritesReceived: {
+          where: {
+            customerId,
+          },
+          select: {
+            id: true,
+          },
+          take: 1,
+        },
+        _count: {
+          select: {
+            favoritesReceived: true,
+          },
         },
       },
     },
-  },
-} satisfies Prisma.EstimateSelect;
+  } satisfies Prisma.EstimateSelect;
+}
 
 // 상세 응답에 필요한 견적, 요청, 기사 필드 선택
 function getReceivedEstimateDetailSelect(customerId: string) {
@@ -295,16 +312,49 @@ export const receivedEstimateRepository = {
         fromAddress: true,
         toAddress: true,
         status: true,
+        createdAt: true,
+        confirmedEstimateId: true,
       },
     });
   },
 
-  findReceivedEstimatesByEstimateRequestId(estimateRequestId: number) {
+  findReceivedEstimatesByEstimateRequestId(estimateRequestId: number, customerId: string) {
     return prisma.estimate.findMany({
       where: {
         estimateRequestId,
       },
-      select: receivedEstimateSelect,
+      select: getReceivedEstimateListSelect(customerId),
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+  },
+
+  // 2026.07.24 정슬기 - [추가] 받은 견적이 있는 요청을 패널 단위로 조회
+  findReceivedEstimatePanels(customerId: string) {
+    return prisma.estimateRequest.findMany({
+      where: {
+        customerId,
+        estimates: {
+          some: {},
+        },
+      },
+      select: {
+        id: true,
+        moveType: true,
+        moveDate: true,
+        fromAddress: true,
+        toAddress: true,
+        status: true,
+        createdAt: true,
+        confirmedEstimateId: true,
+        estimates: {
+          select: getReceivedEstimateListSelect(customerId),
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+      },
       orderBy: {
         createdAt: "desc",
       },
@@ -317,6 +367,20 @@ export const receivedEstimateRepository = {
       where: {
         id: estimateId,
         estimateRequestId,
+      },
+      select: getReceivedEstimateDetailSelect(customerId),
+    });
+  },
+
+  // 2026.07.24 정슬기 - [수정] 원격 변경사항과 견적 API 작업 충돌 병합
+  // estimateId만으로 고객 소유 견적 상세 조회 (FE /estimates/[estimateId] 대응)
+  findReceivedEstimateDetailById(estimateId: number, customerId: string) {
+    return prisma.estimate.findFirst({
+      where: {
+        id: estimateId,
+        estimateRequest: {
+          customerId,
+        },
       },
       select: getReceivedEstimateDetailSelect(customerId),
     });
@@ -358,6 +422,23 @@ export const receivedEstimateRepository = {
             },
           },
         },
+      },
+    });
+  },
+
+  // 2026.07.24 정슬기 - [수정] 원격 변경사항과 견적 API 작업 충돌 병합
+  // estimateId만으로 확정에 필요한 requestId를 해석
+  findEstimateRequestIdByEstimateId(estimateId: number, customerId: string) {
+    return prisma.estimate.findFirst({
+      where: {
+        id: estimateId,
+        estimateRequest: {
+          customerId,
+        },
+      },
+      select: {
+        id: true,
+        estimateRequestId: true,
       },
     });
   },
