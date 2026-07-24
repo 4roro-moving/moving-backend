@@ -27,6 +27,10 @@ import type {
 - 받은 견적 확정 비즈니스 로직
 */
 
+// =============================================================================
+// 기사: 고객의 견적 요청 목록 조회
+// =============================================================================
+
 function getCursorId(cursor: string | undefined) {
   if (!cursor) {
     return undefined;
@@ -128,6 +132,10 @@ export const moverEstimateRequestService = {
     };
   },
 };
+
+// =============================================================================
+// 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
+// =============================================================================
 
 export const receivedEstimateService = {
   async getReceivedEstimateList({ estimateRequestId, customerId }: GetReceivedEstimateListParams) {

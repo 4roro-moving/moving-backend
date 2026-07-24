@@ -24,10 +24,18 @@ API에서 사용하는 데이터 형태 정의
 - 받은 견적 확정 API 데이터 형태 정의
 */
 
+// =============================================================================
+// 요청 검증 결과 타입
+// =============================================================================
+
 export type MoverEstimateRequestListQuery = z.infer<typeof moverEstimateRequestListQuerySchema>;
 export type ReceivedEstimateRequestIdParam = z.infer<typeof receivedEstimateRequestIdParamSchema>;
 export type ReceivedEstimateDetailParam = z.infer<typeof receivedEstimateDetailParamSchema>;
 export type ConfirmReceivedEstimateParam = z.infer<typeof confirmReceivedEstimateParamSchema>;
+
+// =============================================================================
+// 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
+// =============================================================================
 
 export type GetReceivedEstimateListParams = {
   estimateRequestId: number;
@@ -41,6 +49,10 @@ export type GetReceivedEstimateDetailParams = GetReceivedEstimateListParams & {
 export type ConfirmReceivedEstimateParams = GetReceivedEstimateListParams & {
   estimateId: number;
 };
+
+// =============================================================================
+// 기사: 고객의 견적 요청 목록 조회
+// =============================================================================
 
 export type MoverEstimateRequestListItem = {
   id: number;
