@@ -12,7 +12,8 @@ const phoneSchema = z
   .trim()
   .regex(/^01[016789]-?\d{3,4}-?\d{4}$/, {
     error: "올바른 휴대전화 번호 형식이 아닙니다.",
-  });
+  })
+  .transform((phone) => phone.replaceAll("-", ""));
 
 const passwordSchema = z
   .string()
