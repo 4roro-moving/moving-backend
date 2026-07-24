@@ -99,6 +99,38 @@ const myReviewSelect = {
   },
 } satisfies PrismaType.ReviewSelect;
 
+// 기사님 상세 화면의 리뷰 목록에 필요한 필드만 선택
+const moverReviewSelect = {
+  id: true,
+  rating: true,
+  content: true,
+  createdAt: true,
+  customer: {
+    select: {
+      id: true,
+      name: true,
+      customerProfile: {
+        select: {
+          imageUrl: true,
+        },
+      },
+    },
+  },
+  estimate: {
+    select: {
+      estimateRequest: {
+        select: {
+          id: true,
+          moveType: true,
+          moveDate: true,
+          fromAddress: true,
+          toAddress: true,
+        },
+      },
+    },
+  },
+} satisfies PrismaType.ReviewSelect;
+
 type CreateReviewData = {
   customerId: string;
   moverId: string;
@@ -108,6 +140,22 @@ type CreateReviewData = {
 };
 
 export const reviewRepository = {
+  // 리뷰 목록 조회 전 기사님 존재 여부 확인
+  findMoverForReviewList(moverId: string) {
+    return prisma.user.findFirst({
+      where: {
+        id: moverId,
+        role: "MOVER",
+        isActive: true,
+        isProfileCompleted: true,
+        deletedAt: null,
+      },
+      select: {
+        id: true,
+      },
+    });
+  },
+
   findMyReviewsByCustomerId(customerId: string, skip: number, take: number) {
     return prisma.review.findMany({
       where: {
@@ -126,6 +174,30 @@ export const reviewRepository = {
     return prisma.review.count({
       where: {
         customerId,
+      },
+    });
+  },
+
+  // 특정 기사님에게 작성된 리뷰 목록 조회
+  findReviewsByMoverId(moverId: string, skip: number, take: number) {
+    return prisma.review.findMany({
+      where: {
+        moverId,
+      },
+      select: moverReviewSelect,
+      orderBy: {
+        createdAt: "desc",
+      },
+      skip,
+      take,
+    });
+  },
+
+  // 특정 기사님에게 작성된 전체 리뷰 수 조회
+  countReviewsByMoverId(moverId: string) {
+    return prisma.review.count({
+      where: {
+        moverId,
       },
     });
   },
