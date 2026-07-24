@@ -27,6 +27,10 @@ import type {
 - 받은 견적 확정 비즈니스 로직
 */
 
+// =============================================================================
+// 기사: 고객의 견적 요청 목록 조회
+// =============================================================================
+
 function getCursorId(cursor: string | undefined) {
   if (!cursor) {
     return undefined;
@@ -74,15 +78,21 @@ export const moverEstimateRequestService = {
     });
 
     const cursorId = getCursorId(query.cursor);
+    const referenceDate = new Date();
 
     //목록 조회 요청
-    const rows = await moverEstimateRequestRepository.findMany({
+    const repositoryParams = {
       moverId,
       moverMoveTypes,
       moverRegionIds,
       query,
       cursorId,
-    });
+      referenceDate,
+    };
+    const [rows, totalCount] = await Promise.all([
+      moverEstimateRequestRepository.findMany(repositoryParams),
+      moverEstimateRequestRepository.count(repositoryParams),
+    ]);
 
     const hasNextPage = rows.length > query.limit;
     const pageRows = rows.slice(0, query.limit);
@@ -117,10 +127,15 @@ export const moverEstimateRequestService = {
       pagination: {
         nextCursor,
         hasNextPage,
+        totalCount,
       },
     };
   },
 };
+
+// =============================================================================
+// 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
+// =============================================================================
 
 // 2026.07.24 정슬기 - [추가] 확정 불가 사유를 FE disabled 안내에 전달
 function getConfirmDisabledReason(
@@ -151,6 +166,7 @@ function getConfirmDisabledReason(
   return "확정할 수 없는 견적입니다.";
 }
 
+// 2026.07.24 정슬기 - [수정] 목록 응답에 찜 여부·찜 수를 포함
 function mapListEstimate(estimate: {
   id: number;
   price: number;
@@ -280,6 +296,7 @@ export const receivedEstimateService = {
   },
 
   async getReceivedEstimateList({ estimateRequestId, customerId }: GetReceivedEstimateListParams) {
+    //견적 요청 조회
     const estimateRequest =
       await receivedEstimateRepository.findEstimateRequestById(estimateRequestId);
 
@@ -287,17 +304,20 @@ export const receivedEstimateService = {
       throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
     }
 
+    //견적 요청 소유자 확인
     if (estimateRequest.customerId !== customerId) {
       throw new AppError("FORBIDDEN", {
         message: "본인의 견적 요청만 조회할 수 있습니다.",
       });
     }
 
+    //받은 견적 목록 조회
     const estimates = await receivedEstimateRepository.findReceivedEstimatesByEstimateRequestId(
       estimateRequestId,
       customerId,
     );
 
+    //목록 응답 형태 가공
     return {
       estimateRequest: {
         id: estimateRequest.id,
@@ -318,6 +338,7 @@ export const receivedEstimateService = {
     estimateId,
     customerId,
   }: GetReceivedEstimateDetailParams) {
+    //받은 견적 상세 조회
     const estimate = await receivedEstimateRepository.findReceivedEstimateDetail(
       estimateRequestId,
       estimateId,
@@ -328,6 +349,7 @@ export const receivedEstimateService = {
       throw new AppError("ESTIMATE_NOT_FOUND");
     }
 
+    //견적 요청 소유자 확인
     if (estimate.estimateRequest.customerId !== customerId) {
       throw new AppError("FORBIDDEN", {
         message: "본인의 견적 요청에 도착한 견적만 조회할 수 있습니다.",
@@ -351,8 +373,7 @@ export const receivedEstimateService = {
     return mapDetailEstimate(estimate);
   },
 
-  // 2026.07.24 정슬기 - [수정] 원격 변경사항과 견적 API 작업 충돌 병합
-  // estimateId만으로 확정한 뒤 FE용 상세 응답을 반환 (원격 확정 로직 재사용)
+  // 2026.07.24 정슬기 - [추가] estimateId만으로 확정한 뒤 FE용 상세 응답을 반환 (원격 확정 로직 재사용)
   async confirmReceivedEstimateById(estimateId: number, customerId: string) {
     const estimate = await receivedEstimateRepository.findEstimateRequestIdByEstimateId(
       estimateId,

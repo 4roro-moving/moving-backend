@@ -1,42 +1,50 @@
 import { Router } from "express";
 
+import { validate } from "../../middlewares/validate";
+
 import { authController } from "./auth.controller";
+import { authValidator } from "./auth.validator";
 
 const authRouter = Router();
 
-/*
- * 일반 고객 회원가입
- *
- * POST /auth/signup/customer
- */
-authRouter.post("/signup/customer", authController.signUpCustomer);
+authRouter.post(
+  "/signup/customer",
+  validate({
+    body: authValidator.signUp,
+  }),
+  authController.signUpCustomer,
+);
 
-/*
- * 기사 회원가입
- *
- * POST /auth/signup/mover
- */
-authRouter.post("/signup/mover", authController.signUpMover);
+authRouter.post(
+  "/signup/mover",
+  validate({
+    body: authValidator.signUp,
+  }),
+  authController.signUpMover,
+);
 
-/*
- * 로컬 로그인
- *
- * POST /auth/login
- */
-authRouter.post("/login", authController.login);
+authRouter.post(
+  "/login",
+  validate({
+    body: authValidator.login,
+  }),
+  authController.login,
+);
 
-/*
- * Access Token 및 Refresh Token 재발급
- *
- * POST /auth/refresh
- */
-authRouter.post("/refresh", authController.refresh);
+authRouter.post(
+  "/refresh",
+  validate({
+    body: authValidator.refresh,
+  }),
+  authController.refresh,
+);
 
-/*
- * 현재 로그인 세션 로그아웃
- *
- * POST /auth/logout
- */
-authRouter.post("/logout", authController.logout);
+authRouter.post(
+  "/logout",
+  validate({
+    body: authValidator.logout,
+  }),
+  authController.logout,
+);
 
 export { authRouter };
