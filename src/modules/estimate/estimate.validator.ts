@@ -11,6 +11,7 @@ ex. GET /api/estimates/requests?limit=10&isDesignated=true&moveType=SMALL
 2026.07.23 add 김성현
 - 받은 견적 목록 요청값 검증
 - 받은 견적 상세 요청값 검증
+- 받은 견적 확정 요청값 검증
 */
 
 //Boolean 문자열 변환
@@ -70,3 +71,6 @@ export const receivedEstimateRequestIdParamSchema = z.object({
 export const receivedEstimateDetailParamSchema = receivedEstimateRequestIdParamSchema.extend({
   estimateId: z.coerce.number().int().positive(),
 });
+
+// 받은 견적 확정 path parameter 검증
+export const confirmReceivedEstimateParamSchema = receivedEstimateDetailParamSchema;

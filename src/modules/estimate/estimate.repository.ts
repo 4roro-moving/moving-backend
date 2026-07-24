@@ -1,6 +1,7 @@
 ﻿import type { MoveType, Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
+import type { DbClient } from "../../utils/transaction";
 import type { MoverEstimateRequestListQuery } from "./estimate.type";
 
 type FindManyParams = {
@@ -318,6 +319,142 @@ export const receivedEstimateRepository = {
         estimateRequestId,
       },
       select: getReceivedEstimateDetailSelect(customerId),
+    });
+  },
+
+  // 확정할 받은 견적 조회
+  findReceivedEstimateForConfirm(
+    estimateRequestId: number,
+    estimateId: number,
+    db: DbClient = prisma,
+  ) {
+    return db.estimate.findFirst({
+      where: {
+        id: estimateId,
+        estimateRequestId,
+      },
+      select: {
+        id: true,
+        price: true,
+        status: true,
+        confirmedAt: true,
+        estimateRequest: {
+          select: {
+            id: true,
+            customerId: true,
+            status: true,
+            confirmedEstimateId: true,
+          },
+        },
+        mover: {
+          select: {
+            id: true,
+            name: true,
+            moverProfile: {
+              select: {
+                nickname: true,
+                imageUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  },
+
+  // 선택 견적 확정
+  confirmEstimate(estimateId: number, confirmedAt: Date, db: DbClient = prisma) {
+    return db.estimate.update({
+      where: {
+        id: estimateId,
+      },
+      data: {
+        status: "CONFIRMED",
+        confirmedAt,
+      },
+      select: {
+        id: true,
+        price: true,
+        status: true,
+        confirmedAt: true,
+        mover: {
+          select: {
+            id: true,
+            name: true,
+            moverProfile: {
+              select: {
+                nickname: true,
+                imageUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+  },
+
+  // 미선택 견적 만료 처리
+  expireOtherSentEstimates(
+    estimateRequestId: number,
+    estimateId: number,
+    expiredAt: Date,
+    db: DbClient = prisma,
+  ) {
+    return db.estimate.updateMany({
+      where: {
+        estimateRequestId,
+        id: {
+          not: estimateId,
+        },
+        status: "SENT",
+      },
+      data: {
+        status: "EXPIRED",
+        expiredAt,
+      },
+    });
+  },
+
+  // 견적 요청 확정 가능 상태 선점
+  claimEstimateRequestForConfirm(
+    estimateRequestId: number,
+    estimateId: number,
+    db: DbClient = prisma,
+  ) {
+    return db.estimateRequest.updateMany({
+      where: {
+        id: estimateRequestId,
+        status: "OPEN",
+        confirmedEstimateId: null,
+      },
+      data: {
+        status: "CONFIRMED",
+        confirmedEstimateId: estimateId,
+      },
+    });
+  },
+
+  // 확정된 견적 요청 조회
+  findConfirmedEstimateRequestById(estimateRequestId: number, db: DbClient = prisma) {
+    return db.estimateRequest.findUnique({
+      where: {
+        id: estimateRequestId,
+      },
+      select: {
+        id: true,
+        status: true,
+        confirmedEstimateId: true,
+      },
+    });
+  },
+
+  // 견적 요청 이력 생성
+  createEstimateRequestHistory(
+    data: Prisma.EstimateRequestHistoryUncheckedCreateInput,
+    db: DbClient = prisma,
+  ) {
+    return db.estimateRequestHistory.create({
+      data,
     });
   },
 };
