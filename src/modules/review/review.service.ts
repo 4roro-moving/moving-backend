@@ -1,7 +1,8 @@
-import { EstimateRequestStatus, EstimateStatus } from "@prisma/client";
+import { EstimateRequestStatus, EstimateStatus, Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import type { Pagination } from "../../types/response.type";
+import { runTransaction } from "../../utils/transaction";
 import { reviewRepository } from "./review.repository";
 
 type GetMyReviewListParams = {
@@ -215,13 +216,39 @@ export const reviewService = {
       });
     }
 
-    const review = await reviewRepository.createReviewAndUpdateMoverStats({
-      customerId,
-      moverId: estimate.moverId,
-      estimateId: estimate.id,
-      rating,
-      content,
-    });
+    const review = await runTransaction(
+      async (tx) => {
+        const createdReview = await reviewRepository.createReview(
+          {
+            customerId,
+            moverId: estimate.moverId,
+            estimateId: estimate.id,
+            rating,
+            content,
+          },
+          tx,
+        );
+
+        const reviewStats = await reviewRepository.aggregateMoverReviewStats(estimate.moverId, tx);
+        const averageRating = reviewStats._avg.rating ?? 0;
+        const roundedAverageRating = Math.round(averageRating * 10) / 10;
+
+        await reviewRepository.updateMoverReviewStats(
+          {
+            moverId: estimate.moverId,
+            averageRating: roundedAverageRating,
+            reviewCount: reviewStats._count._all,
+          },
+          tx,
+        );
+
+        return createdReview;
+      },
+      {
+        // 같은 기사님에게 여러 리뷰가 동시에 등록될 때 통계 재계산 결과가 덮어써지는 것을 방지
+        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+      },
+    );
 
     return {
       review,
