@@ -216,6 +216,7 @@ export const reviewService = {
       });
     }
 
+    // 리뷰 생성과 기사님 리뷰 통계 갱신은 하나의 작성 유스케이스이므로 Service에서 트랜잭션 경계를 관리
     const review = await runTransaction(
       async (tx) => {
         const createdReview = await reviewRepository.createReview(
