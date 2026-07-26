@@ -32,15 +32,17 @@ export const runTransaction = async <T>(
     try {
       return await prisma.$transaction(async (tx) => callback(tx), options);
     } catch (error) {
-      if (!isTransactionConflict(error) || attempt === MAX_TRANSACTION_RETRIES - 1) {
+      if (!isTransactionConflict(error)) {
         throw error;
+      }
+
+      if (attempt === MAX_TRANSACTION_RETRIES - 1) {
+        throw new AppError("INTERNAL_SERVER_ERROR", {
+          message: "트랜잭션 재시도 횟수를 초과했습니다.",
+        });
       }
 
       await wait(TRANSACTION_RETRY_DELAY_MS * (attempt + 1));
     }
   }
-
-  throw new AppError("INTERNAL_SERVER_ERROR", {
-    message: "트랜잭션 재시도 횟수를 초과했습니다.",
-  });
 };
