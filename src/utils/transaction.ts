@@ -1,5 +1,6 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 
+import { AppError } from "../lib/app-error";
 import { prisma } from "../lib/prisma";
 
 export type DbClient = PrismaClient | Prisma.TransactionClient;
@@ -39,5 +40,7 @@ export const runTransaction = async <T>(
     }
   }
 
-  throw new Error("Transaction retry exhausted");
+  throw new AppError("INTERNAL_SERVER_ERROR", {
+    message: "트랜잭션 재시도 횟수를 초과했습니다.",
+  });
 };
