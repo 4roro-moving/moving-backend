@@ -1,8 +1,11 @@
-import type { Prisma, PrismaClient } from "@prisma/client";
+import { Prisma, type PrismaClient } from "@prisma/client";
 
 import { prisma } from "../lib/prisma";
 
 export type DbClient = PrismaClient | Prisma.TransactionClient;
+
+const MAX_TRANSACTION_RETRIES = 3;
+const TRANSACTION_RETRY_DELAY_MS = 50;
 
 type TransactionOptions = {
   isolationLevel?: Prisma.TransactionIsolationLevel;
@@ -10,9 +13,31 @@ type TransactionOptions = {
   timeout?: number;
 };
 
+function isTransactionConflict(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2034";
+}
+
+function wait(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
 export const runTransaction = async <T>(
   callback: (db: Prisma.TransactionClient) => Promise<T>,
   options?: TransactionOptions,
 ): Promise<T> => {
-  return prisma.$transaction(async (tx) => callback(tx), options);
+  for (let attempt = 0; attempt < MAX_TRANSACTION_RETRIES; attempt += 1) {
+    try {
+      return await prisma.$transaction(async (tx) => callback(tx), options);
+    } catch (error) {
+      if (!isTransactionConflict(error) || attempt === MAX_TRANSACTION_RETRIES - 1) {
+        throw error;
+      }
+
+      await wait(TRANSACTION_RETRY_DELAY_MS * (attempt + 1));
+    }
+  }
+
+  throw new Error("Transaction retry exhausted");
 };

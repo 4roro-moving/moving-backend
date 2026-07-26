@@ -56,6 +56,23 @@ function maskEmailLocalPart(email: string) {
   return `${localPart.slice(0, 2)}${"*".repeat(localPart.length - 2)}`;
 }
 
+function isReviewEstimateUniqueConstraintError(
+  error: unknown,
+): error is Prisma.PrismaClientKnownRequestError {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+    return false;
+  }
+
+  const target = error.meta?.target;
+  const reviewEstimateFields = ["estimateid", "estimate_id"];
+
+  if (Array.isArray(target)) {
+    return target.some((field) => reviewEstimateFields.includes(String(field).toLowerCase()));
+  }
+
+  return reviewEstimateFields.some((field) => String(target).toLowerCase().includes(field));
+}
+
 export const reviewService = {
   async getMoverReviewList({ moverId, page, limit }: GetMoverReviewListParams) {
     // 기사님 리뷰 조회 전 기사님 존재 여부 확인
@@ -216,43 +233,56 @@ export const reviewService = {
       });
     }
 
-    // 리뷰 생성과 기사님 리뷰 통계 갱신은 하나의 작성 유스케이스이므로 Service에서 트랜잭션 경계를 관리
-    const review = await runTransaction(
-      async (tx) => {
-        const createdReview = await reviewRepository.createReview(
-          {
-            customerId,
-            moverId: estimate.moverId,
-            estimateId: estimate.id,
-            rating,
-            content,
-          },
-          tx,
-        );
+    try {
+      // 리뷰 생성과 기사님 리뷰 통계 갱신은 하나의 작성 유스케이스이므로 Service에서 트랜잭션 경계를 관리
+      const review = await runTransaction(
+        async (tx) => {
+          const createdReview = await reviewRepository.createReview(
+            {
+              customerId,
+              moverId: estimate.moverId,
+              estimateId: estimate.id,
+              rating,
+              content,
+            },
+            tx,
+          );
 
-        const reviewStats = await reviewRepository.aggregateMoverReviewStats(estimate.moverId, tx);
-        const averageRating = reviewStats._avg.rating ?? 0;
-        const roundedAverageRating = Math.round(averageRating * 10) / 10;
+          const reviewStats = await reviewRepository.aggregateMoverReviewStats(
+            estimate.moverId,
+            tx,
+          );
+          const averageRating = reviewStats._avg.rating ?? 0;
+          const roundedAverageRating = Math.round(averageRating * 10) / 10;
 
-        await reviewRepository.updateMoverReviewStats(
-          {
-            moverId: estimate.moverId,
-            averageRating: roundedAverageRating,
-            reviewCount: reviewStats._count._all,
-          },
-          tx,
-        );
+          await reviewRepository.updateMoverReviewStats(
+            {
+              moverId: estimate.moverId,
+              averageRating: roundedAverageRating,
+              reviewCount: reviewStats._count._all,
+            },
+            tx,
+          );
 
-        return createdReview;
-      },
-      {
-        // 같은 기사님에게 여러 리뷰가 동시에 등록될 때 통계 재계산 결과가 덮어써지는 것을 방지
-        isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
-      },
-    );
+          return createdReview;
+        },
+        {
+          // 같은 기사님에게 여러 리뷰가 동시에 등록될 때 통계 재계산 결과가 덮어써지는 것을 방지
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        },
+      );
 
-    return {
-      review,
-    };
+      return {
+        review,
+      };
+    } catch (error) {
+      if (isReviewEstimateUniqueConstraintError(error)) {
+        throw new AppError("CONFLICT", {
+          message: "이미 리뷰를 작성한 견적입니다.",
+        });
+      }
+
+      throw error;
+    }
   },
 };
