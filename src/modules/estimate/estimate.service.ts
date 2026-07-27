@@ -237,13 +237,12 @@ export const moverEstimateRequestService = {
         throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
       }
 
-      //견적 요청이 OPEN이고, 활성 상태인지 확인
+      //요청이 open인지, 활성 상태인지, 확정된 견적 없는지 확인
       if (
         estimateRequest.status !== "OPEN" ||
         !estimateRequest.isActive ||
         estimateRequest.confirmedEstimateId !== null
       ) {
-        //이미 확정된 요청인지 확인
         throw new AppError("CONFLICT", {
           message: "현재 반려할 수 없는 견적 요청입니다.",
         });
