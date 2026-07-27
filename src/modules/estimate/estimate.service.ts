@@ -10,6 +10,7 @@ import type {
   MoverEstimateRequestListItem,
   MoverEstimateRequestListQuery,
   MoverEstimateRequestListResult,
+  SendEstimateParams,
 } from "./estimate.type";
 
 /* 
@@ -130,6 +131,86 @@ export const moverEstimateRequestService = {
         totalCount,
       },
     };
+  },
+
+  //견적 제안
+  async sendEstimate({ estimateRequestId, moverId, input }: SendEstimateParams) {
+    return runTransaction(async (tx) => {
+      const profile = await moverEstimateRequestRepository.findMoverProfile(moverId, tx);
+
+      //기사 프로필 존재 확인
+      if (!profile) {
+        throw new AppError("MOVER_NOT_FOUND");
+      }
+
+      //견적 요청 존재 확인
+      const estimateRequest = await moverEstimateRequestRepository.findEstimateRequestForSend(
+        estimateRequestId,
+        moverId,
+        tx,
+      );
+
+      if (!estimateRequest) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+      }
+
+      //요청이 open인지, 활성 상태인지, 확정된 견적 없는지 확인
+      if (
+        estimateRequest.status !== "OPEN" ||
+        !estimateRequest.isActive ||
+        estimateRequest.confirmedEstimateId !== null
+      ) {
+        throw new AppError("CONFLICT", {
+          message: "현재 견적을 보낼 수 없는 요청입니다.",
+        });
+      }
+
+      //만료되지 않았는지 확인
+      if (estimateRequest.expiresAt.getTime() <= Date.now()) {
+        throw new AppError("CONFLICT", {
+          message: "만료된 견적 요청입니다.",
+        });
+      }
+
+      //기사가 해당 이사 유형 서비스할 수 있는지 확인
+      const canHandleMoveType = profile.serviceTypes.some(
+        (serviceType) => serviceType.moveType === estimateRequest.moveType,
+      );
+
+      if (!canHandleMoveType) {
+        throw new AppError("FORBIDDEN", {
+          message: "서비스할 수 없는 이사 유형입니다.",
+        });
+      }
+
+      //이미 견적 보내지 않았는지 확인
+      if (estimateRequest.estimates.length > 0) {
+        throw new AppError("CONFLICT", {
+          message: "이미 견적을 보낸 요청입니다.",
+        });
+      }
+
+      //이미 반려하지 않았는지 확인
+      if (estimateRequest.rejections.length > 0) {
+        throw new AppError("CONFLICT", {
+          message: "이미 반려한 견적 요청입니다.",
+        });
+      }
+
+      const isDesignated = estimateRequest.designatedMovers.length > 0;
+
+      //견적 셍성
+      return moverEstimateRequestRepository.createEstimate(
+        {
+          estimateRequestId,
+          moverId,
+          price: input.price,
+          comment: input.comment,
+          isDesignated,
+        },
+        tx,
+      );
+    });
   },
 };
 

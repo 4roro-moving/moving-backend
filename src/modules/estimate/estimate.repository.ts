@@ -14,6 +14,15 @@ type FindManyParams = {
   referenceDate: Date;
 };
 
+//기사 - 견적 생성
+type CreateEstimateData = {
+  estimateRequestId: number;
+  moverId: string;
+  price: number;
+  comment: string;
+  isDesignated: boolean;
+};
+
 // =============================================================================
 // 기사: 고객의 견적 요청 목록 조회 조건
 // =============================================================================
@@ -197,9 +206,13 @@ function getReceivedEstimateDetailSelect(customerId: string) {
 // 기사: 고객의 견적 요청 목록 조회
 // =============================================================================
 
+/*
+기존 목록 조회 : findMoverProfile(moverId);
+견적 제안 : findMoverProfile(moverId, tx);
+ */
 export const moverEstimateRequestRepository = {
-  findMoverProfile(moverId: string) {
-    return prisma.moverProfile.findFirst({
+  findMoverProfile(moverId: string, db: DbClient = prisma) {
+    return db.moverProfile.findFirst({
       where: {
         userId: moverId,
         user: {
@@ -288,6 +301,74 @@ export const moverEstimateRequestRepository = {
   count(params: FindManyParams) {
     return prisma.estimateRequest.count({
       where: buildMoverEstimateRequestWhere(params),
+    });
+  },
+
+  //요청 상태, 지정 여부, 기존 견적, 반려 여부 조회
+  findEstimateRequestForSend(estimateRequestId: number, moverId: string, db: DbClient = prisma) {
+    return db.estimateRequest.findUnique({
+      where: {
+        id: estimateRequestId,
+      },
+      select: {
+        id: true,
+        customerId: true,
+        moveType: true,
+        status: true,
+        isActive: true,
+        expiresAt: true,
+        confirmedEstimateId: true,
+        //현재 기사 지정 됐는지
+        designatedMovers: {
+          where: {
+            moverId,
+          },
+          select: {
+            id: true,
+          },
+        },
+        //현재 기사가 이미 보낸 견적이 있는지
+        estimates: {
+          where: {
+            moverId,
+          },
+          select: {
+            id: true,
+          },
+        },
+        //현재 기사가 이미 반려했는지
+        rejections: {
+          where: {
+            moverId,
+          },
+          select: {
+            id: true,
+          },
+        },
+      },
+    });
+  },
+
+  createEstimate(data: CreateEstimateData, db: DbClient = prisma) {
+    return db.estimate.create({
+      data: {
+        estimateRequestId: data.estimateRequestId,
+        moverId: data.moverId,
+        price: data.price,
+        comment: data.comment,
+        isDesignated: data.isDesignated,
+        status: "SENT",
+      },
+      select: {
+        id: true,
+        estimateRequestId: true,
+        moverId: true,
+        price: true,
+        comment: true,
+        status: true,
+        isDesignated: true,
+        createdAt: true,
+      },
     });
   },
 };

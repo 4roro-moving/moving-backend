@@ -5,7 +5,9 @@ import { validate } from "../../middlewares/validate";
 import { estimateController } from "./estimate.controller";
 import {
   moverEstimateRequestListQuerySchema,
+  sendEstimateBodySchema,
   receivedEstimateIdParamSchema,
+  sendEstimateParamSchema,
 } from "./estimate.validator";
 
 const estimateRouter = Router();
@@ -15,20 +17,31 @@ const estimateRouter = Router();
 기사 견적 요청 목록
 */
 
-// 2026.07.24 정슬기 - [추가] 고객 받은 견적 패널 목록 API (요청 단위)
-estimateRouter.get(
-  "/received",
-  authenticate,
-  authorize("CUSTOMER"),
-  estimateController.getReceivedEstimatePanels,
-);
-
 estimateRouter.get(
   "/requests",
   authenticate,
   authorize("MOVER"),
   validate({ query: moverEstimateRequestListQuerySchema }),
   estimateController.getList,
+);
+
+estimateRouter.post(
+  "/requests/:estimateRequestId",
+  authenticate,
+  authorize("MOVER"),
+  validate({
+    params: sendEstimateParamSchema,
+    body: sendEstimateBodySchema,
+  }),
+  estimateController.sendEstimate,
+);
+
+// 2026.07.24 정슬기 - [추가] 고객 받은 견적 패널 목록 API (요청 단위)
+estimateRouter.get(
+  "/received",
+  authenticate,
+  authorize("CUSTOMER"),
+  estimateController.getReceivedEstimatePanels,
 );
 
 // 2026.07.24 정슬기 - [추가] estimateId만으로 받은 견적 상세 조회 (query 없이 FE 라우트와 맞춤)
