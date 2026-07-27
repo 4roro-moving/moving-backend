@@ -1,6 +1,7 @@
 ﻿import type { EstimateRequestStatus, EstimateStatus, MoveType, Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
+import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
 import { moverEstimateRequestRepository, receivedEstimateRepository } from "./estimate.repository";
 import type {
@@ -10,6 +11,7 @@ import type {
   MoverEstimateRequestListItem,
   MoverEstimateRequestListQuery,
   MoverEstimateRequestListResult,
+  PendingEstimateQuery,
   RejectEstimateParams,
   SendEstimateParams,
 } from "./estimate.type";
@@ -437,6 +439,46 @@ function mapDetailEstimate(
 }
 
 export const receivedEstimateService = {
+  // 2026.07.27 add 김성현
+  // FE 대기 견적 화면에 맞춘 section 응답 조립
+  async getPendingEstimateRequests(customerId: string, query: PendingEstimateQuery) {
+    const referenceDate = new Date();
+    const [estimateRequests, totalCount] =
+      await receivedEstimateRepository.findPendingEstimateRequests(
+        customerId,
+        query,
+        referenceDate,
+      );
+
+    return {
+      sections: estimateRequests.map((estimateRequest) => ({
+        request: {
+          id: estimateRequest.id,
+          customerId: estimateRequest.customerId,
+          moveType: estimateRequest.moveType,
+          moveDate: estimateRequest.moveDate,
+          fromZipCode: estimateRequest.fromZipCode,
+          fromAddress: estimateRequest.fromAddress,
+          fromDetailAddress: estimateRequest.fromDetailAddress,
+          fromRegion: estimateRequest.fromRegion,
+          toZipCode: estimateRequest.toZipCode,
+          toAddress: estimateRequest.toAddress,
+          toDetailAddress: estimateRequest.toDetailAddress,
+          toRegion: estimateRequest.toRegion,
+          status: estimateRequest.status,
+          isActive: estimateRequest.isActive,
+          expiresAt: estimateRequest.expiresAt,
+          createdAt: estimateRequest.createdAt,
+          canceledAt: estimateRequest.canceledAt,
+          designatedMovers: estimateRequest.designatedMovers,
+          _count: estimateRequest._count,
+        },
+        estimates: estimateRequest.estimates.map(mapListEstimate),
+      })),
+      pagination: buildPagination(totalCount, query.page, query.limit),
+    };
+  },
+
   // 2026.07.24 정슬기 - [추가] 받은 견적이 있는 요청을 패널 단위로 조회
   async getReceivedEstimatePanels(customerId: string) {
     const panels = await receivedEstimateRepository.findReceivedEstimatePanels(customerId);

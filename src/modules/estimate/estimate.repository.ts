@@ -3,7 +3,7 @@ import { EstimateStatus } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
-import type { MoverEstimateRequestListQuery } from "./estimate.type";
+import type { MoverEstimateRequestListQuery, PendingEstimateQuery } from "./estimate.type";
 
 type FindManyParams = {
   moverId: string;
@@ -407,6 +407,90 @@ export const moverEstimateRequestRepository = {
 
 // 고객 견적 요청 기준 받은 견적 조회
 export const receivedEstimateRepository = {
+  // 고객의 확정 전 견적 요청과 받은 견적 목록 조회
+  findPendingEstimateRequests(
+    customerId: string,
+    query: PendingEstimateQuery,
+    referenceDate: Date,
+    db: DbClient = prisma,
+  ) {
+    const where: Prisma.EstimateRequestWhereInput = {
+      customerId,
+      isActive: true,
+      status: {
+        in: ["PENDING", "OPEN"],
+      },
+      confirmedEstimateId: null,
+      expiresAt: {
+        gt: referenceDate,
+      },
+    };
+
+    return Promise.all([
+      db.estimateRequest.findMany({
+        where,
+        select: {
+          id: true,
+          customerId: true,
+          moveType: true,
+          moveDate: true,
+          fromZipCode: true,
+          fromAddress: true,
+          fromDetailAddress: true,
+          fromRegion: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          toZipCode: true,
+          toAddress: true,
+          toDetailAddress: true,
+          toRegion: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          status: true,
+          isActive: true,
+          createdAt: true,
+          expiresAt: true,
+          canceledAt: true,
+          confirmedEstimateId: true,
+          designatedMovers: {
+            select: {
+              moverId: true,
+            },
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          },
+          estimates: {
+            where: {
+              status: EstimateStatus.SENT,
+            },
+            select: getReceivedEstimateSelect(customerId),
+            orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+          },
+          _count: {
+            select: {
+              estimates: {
+                where: {
+                  status: EstimateStatus.SENT,
+                },
+              },
+            },
+          },
+        },
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      db.estimateRequest.count({
+        where,
+      }),
+    ]);
+  },
+
   findEstimateRequestById(estimateRequestId: number) {
     return prisma.estimateRequest.findUnique({
       where: {
