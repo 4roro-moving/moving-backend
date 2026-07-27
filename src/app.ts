@@ -6,6 +6,7 @@ import helmet from "helmet";
 
 import { apiReference } from "@scalar/express-api-reference";
 
+import { env } from "./config/env";
 import morganMiddleware from "./config/morgan";
 
 import { authRouter } from "./modules/auth/auth.route";
@@ -47,7 +48,12 @@ app.use(
 );
 
 app.use(compression());
-app.use(cookieParser());
+
+/**
+ * OAuth state 검증을 위해 서명된 쿠키를 사용한다.
+ */
+app.use(cookieParser(env.OAUTH_STATE_SECRET));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(morganMiddleware);

@@ -2,15 +2,21 @@ import bcrypt from "bcrypt";
 import { AuthProvider, Prisma, UserRole } from "@prisma/client";
 
 import { authRepository } from "./auth.repository";
+import { googleOAuth } from "./oauth/google.oauth";
+import { kakaoOAuth } from "./oauth/kakao.oauth";
+import { naverOAuth } from "./oauth/naver.oauth";
+
+import type { AuthResponse, AuthTokens, OAuthProfile } from "./auth.type";
 
 import type {
-  AuthResponse,
-  AuthTokens,
+  GoogleOAuthInput,
+  KakaoOAuthInput,
+  NaverOAuthInput,
   LoginInput,
   LogoutInput,
   RefreshInput,
   SignUpInput,
-} from "./auth.type";
+} from "./auth.validator";
 
 import { AppError } from "../../lib/app-error";
 
@@ -20,6 +26,17 @@ import { tokenHash } from "../../utils/tokenHash";
 import { runTransaction } from "../../utils/transaction";
 
 const PASSWORD_SALT_ROUNDS = 10;
+
+const getAuthProviderName = (provider: AuthProvider): string => {
+  const providerNames: Record<AuthProvider, string> = {
+    [AuthProvider.LOCAL]: "이메일",
+    [AuthProvider.GOOGLE]: "구글",
+    [AuthProvider.KAKAO]: "카카오",
+    [AuthProvider.NAVER]: "네이버",
+  };
+
+  return providerNames[provider];
+};
 
 type SignUpRole = typeof UserRole.CUSTOMER | typeof UserRole.MOVER;
 
@@ -281,6 +298,207 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
 };
 
 /*
+ * OAuth 계정 로그인 응답을 생성한다.
+ *
+ * 이미 가입된 OAuth 사용자와 동시 가입 충돌 후 다시 조회한 사용자가
+ * 동일한 로그인 흐름을 사용하도록 공통 처리한다.
+ */
+type OAuthUser = NonNullable<
+  Awaited<ReturnType<typeof authRepository.findByProviderAndProviderId>>
+>;
+
+const createOAuthLoginResponse = async (user: OAuthUser): Promise<AuthResponse> => {
+  if (!user.isActive || user.deletedAt !== null) {
+    throw new AppError("FORBIDDEN", {
+      message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
+    });
+  }
+
+  const { accessToken, refreshToken, refreshTokenExpiresAt } = createAuthTokens(user.id, user.role);
+
+  await authRepository.saveRefreshToken({
+    userId: user.id,
+    tokenHash: tokenHash(refreshToken),
+    expiresAt: refreshTokenExpiresAt,
+  });
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      phone: user.phone,
+      role: user.role,
+    },
+    tokens: {
+      accessToken,
+      refreshToken,
+    },
+  };
+};
+
+/*
+ * OAuth 로그인 공통 처리
+ *
+ * provider와 providerUserId가 일치하는 사용자가 있으면 로그인하고,
+ * 없으면 이메일 중복 여부를 확인한 뒤 신규 OAuth 사용자를 생성한다.
+ *
+ * 동일한 OAuth 계정으로 요청이 동시에 들어와 신규 생성이 충돌한 경우에는
+ * 충돌 후 해당 계정을 다시 조회하여 기존 사용자 로그인 흐름으로 이어간다.
+ */
+const loginWithOAuth = async (
+  profile: OAuthProfile,
+  requestedRole: SignUpRole,
+): Promise<AuthResponse> => {
+  const existingOAuthUser = await authRepository.findByProviderAndProviderId(
+    profile.provider,
+    profile.providerUserId,
+  );
+
+  /*
+   * 이미 OAuth 계정이 존재하는 경우
+   * 요청으로 전달받은 role은 무시하고 DB에 저장된 role을 사용한다.
+   */
+  if (existingOAuthUser) {
+    return createOAuthLoginResponse(existingOAuthUser);
+  }
+
+  const email = profile.email.trim().toLowerCase();
+
+  /*
+   * 같은 이메일의 LOCAL 계정 또는 다른 OAuth 계정이 이미 존재하면
+   * 자동으로 계정을 합치지 않고 충돌로 처리한다.
+   */
+  const existingUserByEmail = await authRepository.findByEmail(email);
+
+  if (existingUserByEmail) {
+    const providerName = getAuthProviderName(existingUserByEmail.authProvider);
+
+    throw new AppError("OAUTH_EMAIL_ALREADY_EXISTS", {
+      message: `이미 ${providerName} 계정으로 가입된 이메일입니다. ${providerName} 로그인을 이용해주세요.`,
+    });
+  }
+
+  try {
+    return await runTransaction(async (tx) => {
+      const user = await authRepository.create(
+        {
+          email,
+          password: null,
+          name: profile.name.trim(),
+          phone: null,
+          role: requestedRole,
+          authProvider: profile.provider,
+          providerUserId: profile.providerUserId,
+        },
+        tx,
+      );
+
+      const { accessToken, refreshToken, refreshTokenExpiresAt } = createAuthTokens(
+        user.id,
+        user.role,
+      );
+
+      await authRepository.saveRefreshToken(
+        {
+          userId: user.id,
+          tokenHash: tokenHash(refreshToken),
+          expiresAt: refreshTokenExpiresAt,
+        },
+        tx,
+      );
+
+      return {
+        user: {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          phone: user.phone,
+          role: user.role,
+        },
+        tokens: {
+          accessToken,
+          refreshToken,
+        },
+      };
+    });
+  } catch (error) {
+    /*
+     * 동일한 OAuth 계정의 동시 최초 로그인에서는 두 요청이 모두
+     * 사전 조회를 통과한 뒤 한 요청만 사용자 생성에 성공할 수 있다.
+     *
+     * P2002 발생 시 어떤 UNIQUE 인덱스가 먼저 충돌했는지와 관계없이
+     * provider + providerUserId로 다시 조회한다.
+     *
+     * 조회에 성공하면 다른 요청이 이미 생성한 동일 OAuth 계정이므로
+     * CONFLICT로 종료하지 않고 정상 로그인 흐름으로 이어간다.
+     */
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const concurrentOAuthUser = await authRepository.findByProviderAndProviderId(
+        profile.provider,
+        profile.providerUserId,
+      );
+
+      if (concurrentOAuthUser) {
+        return createOAuthLoginResponse(concurrentOAuthUser);
+      }
+
+      /*
+       * 동일 OAuth 계정이 조회되지 않는다면 이메일 UNIQUE 충돌 등
+       * 실제로 다른 계정과 충돌한 상황인지 다시 확인한다.
+       */
+      const existingUser = await authRepository.findByEmail(email);
+
+      if (existingUser) {
+        const providerName = getAuthProviderName(existingUser.authProvider);
+
+        throw new AppError("OAUTH_EMAIL_ALREADY_EXISTS", {
+          message: `이미 ${providerName} 계정으로 가입된 이메일입니다. ${providerName} 로그인을 이용해주세요.`,
+        });
+      }
+    }
+
+    throw error;
+  }
+};
+
+/*
+ * Google OAuth 로그인
+ *
+ * Authorization Code를 Google 프로필로 변환한 뒤
+ * 공통 OAuth 로그인 로직을 실행한다.
+ */
+const loginWithGoogle = async (input: GoogleOAuthInput): Promise<AuthResponse> => {
+  const profile = await googleOAuth.getGoogleOAuthProfile(input.code);
+
+  return loginWithOAuth(profile, input.role);
+};
+
+/*
+ * Kakao OAuth 로그인
+ *
+ * Authorization Code를 Kakao 프로필로 변환한 뒤
+ * 공통 OAuth 로그인 로직을 실행한다.
+ */
+const loginWithKakao = async (input: KakaoOAuthInput): Promise<AuthResponse> => {
+  const profile = await kakaoOAuth.getKakaoOAuthProfile(input.code);
+
+  return loginWithOAuth(profile, input.role);
+};
+
+/*
+ * Naver OAuth 로그인
+ *
+ * Authorization Code와 state를 Naver 프로필로 변환한 뒤
+ * 공통 OAuth 로그인 로직을 실행한다.
+ */
+const loginWithNaver = async (input: NaverOAuthInput): Promise<AuthResponse> => {
+  const profile = await naverOAuth.getNaverOAuthProfile(input.code, input.state);
+
+  return loginWithOAuth(profile, input.role);
+};
+
+/*
  * Access Token 및 Refresh Token 재발급
  *
  * Refresh Token Rotation을 적용한다.
@@ -434,6 +652,9 @@ export const authService = {
   signUpCustomer,
   signUpMover,
   login,
+  loginWithGoogle,
+  loginWithKakao,
+  loginWithNaver,
   refresh,
   logout,
 };

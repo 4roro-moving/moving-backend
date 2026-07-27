@@ -1,4 +1,5 @@
 import "dotenv/config";
+
 import { z } from "zod";
 
 const envSchema = z.object({
@@ -6,9 +7,51 @@ const envSchema = z.object({
 
   PORT: z.coerce.number().default(5000),
 
-  DATABASE_URL: z.string().min(1, "DATABASE_URL is required"),
+  DATABASE_URL: z.string().min(1, {
+    error: "DATABASE_URL is required",
+  }),
 
   LOG_LEVEL: z.enum(["error", "warn", "info", "http", "verbose", "debug", "silly"]).default("info"),
+
+  GOOGLE_CLIENT_ID: z.string().min(1, {
+    error: "GOOGLE_CLIENT_ID is required",
+  }),
+
+  GOOGLE_CLIENT_SECRET: z.string().min(1, {
+    error: "GOOGLE_CLIENT_SECRET is required",
+  }),
+
+  GOOGLE_REDIRECT_URI: z.url({
+    error: "GOOGLE_REDIRECT_URI must be a valid URL",
+  }),
+
+  KAKAO_CLIENT_ID: z.string().min(1, {
+    error: "KAKAO_CLIENT_ID is required",
+  }),
+
+  KAKAO_CLIENT_SECRET: z.string().min(1, {
+    error: "KAKAO_CLIENT_SECRET is required",
+  }),
+
+  KAKAO_REDIRECT_URI: z.url({
+    error: "KAKAO_REDIRECT_URI must be a valid URL",
+  }),
+
+  NAVER_CLIENT_ID: z.string().min(1, {
+    error: "NAVER_CLIENT_ID is required",
+  }),
+
+  NAVER_CLIENT_SECRET: z.string().min(1, {
+    error: "NAVER_CLIENT_SECRET is required",
+  }),
+
+  NAVER_REDIRECT_URI: z.url({
+    error: "NAVER_REDIRECT_URI must be a valid URL",
+  }),
+
+  OAUTH_STATE_SECRET: z.string().min(32, {
+    error: "OAUTH_STATE_SECRET must be at least 32 characters",
+  }),
 });
 
 const parsed = envSchema.safeParse(process.env);
