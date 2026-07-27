@@ -5,8 +5,9 @@ import { validate } from "../../middlewares/validate";
 import { estimateController } from "./estimate.controller";
 import {
   moverEstimateRequestListQuerySchema,
-  sendEstimateBodySchema,
+  pendingEstimateQuerySchema,
   receivedEstimateIdParamSchema,
+  sendEstimateBodySchema,
   sendEstimateParamSchema,
 } from "./estimate.validator";
 
@@ -34,6 +35,16 @@ estimateRouter.post(
     body: sendEstimateBodySchema,
   }),
   estimateController.sendEstimate,
+);
+
+// 2026.07.27 add 김성현
+// 고객 대기 중인 견적 목록 조회
+estimateRouter.get(
+  "/pending",
+  authenticate,
+  authorize("CUSTOMER"),
+  validate({ query: pendingEstimateQuerySchema }),
+  estimateController.getPendingEstimateRequests,
 );
 
 // 2026.07.24 정슬기 - [추가] 고객 받은 견적 패널 목록 API (요청 단위)

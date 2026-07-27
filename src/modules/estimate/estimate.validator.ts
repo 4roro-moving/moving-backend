@@ -89,6 +89,13 @@ export const sendEstimateBodySchema = z.object({
 // 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
 // =============================================================================
 
+// 2026.07.27 add 김성현
+// 대기 중인 견적 요청 목록 쿼리 검증
+export const pendingEstimateQuerySchema = z.object({
+  page: z.coerce.number().int().positive().max(1000).default(1),
+  limit: z.coerce.number().int().positive().max(50).default(10),
+});
+
 // 받은 견적 목록 path parameter 검증
 export const receivedEstimateRequestIdParamSchema = z.object({
   estimateRequestId: z.coerce.number().int().positive(),

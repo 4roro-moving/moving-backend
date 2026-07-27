@@ -4,6 +4,7 @@ import type { z } from "zod";
 import type {
   confirmReceivedEstimateParamSchema,
   moverEstimateRequestListQuerySchema,
+  pendingEstimateQuerySchema,
   receivedEstimateDetailParamSchema,
   receivedEstimateIdParamSchema,
   receivedEstimateRequestIdParamSchema,
@@ -32,6 +33,7 @@ API에서 사용하는 데이터 형태 정의
 // =============================================================================
 
 export type MoverEstimateRequestListQuery = z.infer<typeof moverEstimateRequestListQuerySchema>;
+export type PendingEstimateQuery = z.infer<typeof pendingEstimateQuerySchema>;
 export type ReceivedEstimateRequestIdParam = z.infer<typeof receivedEstimateRequestIdParamSchema>;
 export type ReceivedEstimateDetailParam = z.infer<typeof receivedEstimateDetailParamSchema>;
 export type ConfirmReceivedEstimateParam = z.infer<typeof confirmReceivedEstimateParamSchema>;
