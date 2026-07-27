@@ -433,19 +433,6 @@ export const receivedEstimateRepository = {
           designatedMovers: {
             select: {
               moverId: true,
-              createdAt: true,
-              mover: {
-                select: {
-                  id: true,
-                  name: true,
-                  moverProfile: {
-                    select: {
-                      nickname: true,
-                      imageUrl: true,
-                    },
-                  },
-                },
-              },
             },
             orderBy: [{ createdAt: "desc" }, { id: "desc" }],
           },
@@ -458,7 +445,11 @@ export const receivedEstimateRepository = {
           },
           _count: {
             select: {
-              estimates: true,
+              estimates: {
+                where: {
+                  status: EstimateStatus.SENT,
+                },
+              },
             },
           },
         },
