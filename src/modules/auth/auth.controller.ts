@@ -7,6 +7,7 @@ import type {
   KakaoOAuthInput,
   LoginInput,
   LogoutInput,
+  NaverOAuthInput,
   RefreshInput,
   SignUpInput,
 } from "./auth.validator";
@@ -124,6 +125,29 @@ const loginWithKakao = async (
 };
 
 /*
+ * Naver OAuth 로그인
+ *
+ * POST /auth/oauth/naver
+ */
+const loginWithNaver = async (
+  req: Request<Record<string, never>, unknown, NaverOAuthInput>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const result = await authService.loginWithNaver(req.body);
+
+    res.status(200).json({
+      success: true,
+      message: "Naver 로그인에 성공했습니다.",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/*
  * Access Token 및 Refresh Token 재발급
  *
  * POST /auth/refresh
@@ -176,6 +200,7 @@ export const authController = {
   login,
   loginWithGoogle,
   loginWithKakao,
+  loginWithNaver,
   refresh,
   logout,
 };

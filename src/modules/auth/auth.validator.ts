@@ -75,6 +75,15 @@ const authorizationCodeSchema = z
     error: "OAuth 인증 코드를 입력해주세요.",
   });
 
+const stateSchema = z
+  .string({
+    error: "OAuth state를 입력해주세요.",
+  })
+  .trim()
+  .min(1, {
+    error: "OAuth state를 입력해주세요.",
+  });
+
 const oauthRoleSchema = z.enum([UserRole.CUSTOMER, UserRole.MOVER], {
   error: "회원 역할은 CUSTOMER 또는 MOVER여야 합니다.",
 });
@@ -128,6 +137,21 @@ export const kakaoOAuthSchema = z.strictObject({
   role: oauthRoleSchema,
 });
 
+/*
+ * Naver OAuth Authorization Code 로그인 요청
+ *
+ * 네이버는 Authorization Code와 함께
+ * state 값을 반드시 전달해야 한다.
+ *
+ * role은 신규 OAuth 회원 생성 시에만 사용한다.
+ * 기존 회원은 DB에 저장된 역할을 사용한다.
+ */
+export const naverOAuthSchema = z.strictObject({
+  code: authorizationCodeSchema,
+  state: stateSchema,
+  role: oauthRoleSchema,
+});
+
 export const refreshSchema = z.strictObject({
   refreshToken: refreshTokenSchema,
 });
@@ -141,6 +165,7 @@ export const authValidator = {
   login: loginSchema,
   googleOAuth: googleOAuthSchema,
   kakaoOAuth: kakaoOAuthSchema,
+  naverOAuth: naverOAuthSchema,
   refresh: refreshSchema,
   logout: logoutSchema,
 };
@@ -149,5 +174,6 @@ export type SignUpInput = z.infer<typeof signUpSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type GoogleOAuthInput = z.infer<typeof googleOAuthSchema>;
 export type KakaoOAuthInput = z.infer<typeof kakaoOAuthSchema>;
+export type NaverOAuthInput = z.infer<typeof naverOAuthSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type LogoutInput = z.infer<typeof logoutSchema>;

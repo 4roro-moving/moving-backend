@@ -4,12 +4,14 @@ import { AuthProvider, Prisma, UserRole } from "@prisma/client";
 import { authRepository } from "./auth.repository";
 import { googleOAuth } from "./oauth/google.oauth";
 import { kakaoOAuth } from "./oauth/kakao.oauth";
+import { naverOAuth } from "./oauth/naver.oauth";
 
 import type { AuthResponse, AuthTokens, OAuthProfile } from "./auth.type";
 
 import type {
   GoogleOAuthInput,
   KakaoOAuthInput,
+  NaverOAuthInput,
   LoginInput,
   LogoutInput,
   RefreshInput,
@@ -436,6 +438,18 @@ const loginWithKakao = async (input: KakaoOAuthInput): Promise<AuthResponse> => 
 };
 
 /*
+ * Naver OAuth 로그인
+ *
+ * Authorization Code와 state를 Naver 프로필로 변환한 뒤
+ * 공통 OAuth 로그인 로직을 실행한다.
+ */
+const loginWithNaver = async (input: NaverOAuthInput): Promise<AuthResponse> => {
+  const profile = await naverOAuth.getNaverOAuthProfile(input.code, input.state);
+
+  return loginWithOAuth(profile, input.role);
+};
+
+/*
  * Access Token 및 Refresh Token 재발급
  *
  * Refresh Token Rotation을 적용한다.
@@ -591,6 +605,7 @@ export const authService = {
   login,
   loginWithGoogle,
   loginWithKakao,
+  loginWithNaver,
   refresh,
   logout,
 };

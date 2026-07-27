@@ -48,6 +48,14 @@ authRouter.post(
 );
 
 authRouter.post(
+  "/oauth/naver",
+  validate({
+    body: authValidator.naverOAuth,
+  }),
+  authController.loginWithNaver,
+);
+
+authRouter.post(
   "/refresh",
   validate({
     body: authValidator.refresh,
