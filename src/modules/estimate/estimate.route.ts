@@ -5,6 +5,7 @@ import { validate } from "../../middlewares/validate";
 import { estimateController } from "./estimate.controller";
 import {
   moverEstimateRequestListQuerySchema,
+  pendingEstimateQuerySchema,
   rejectEstimateBodySchema,
   sendEstimateBodySchema,
   receivedEstimateIdParamSchema,
@@ -38,6 +39,16 @@ estimateRouter.post(
     body: sendEstimateBodySchema,
   }),
   estimateController.sendEstimate,
+);
+
+// 2026.07.27 add 김성현
+// 고객 대기 중인 견적 목록 조회
+estimateRouter.get(
+  "/pending",
+  authenticate,
+  authorize("CUSTOMER"),
+  validate({ query: pendingEstimateQuerySchema }),
+  estimateController.getPendingEstimateRequests,
 );
 
 /* 

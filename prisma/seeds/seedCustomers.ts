@@ -3,7 +3,7 @@ import type { PrismaClient } from "@prisma/client";
 import { CUSTOMERS } from "./customers.js";
 
 export async function seedCustomers(prisma: PrismaClient, passwordHash: string): Promise<void> {
-  console.log("👤 고객 계정을 생성합니다.");
+  console.log("고객 계정을 생성합니다.");
 
   for (const customer of CUSTOMERS) {
     const user = await prisma.user.upsert({
@@ -42,13 +42,11 @@ export async function seedCustomers(prisma: PrismaClient, passwordHash: string):
       },
 
       update: {
-        nickname: customer.nickname,
         imageUrl: `https://picsum.photos/seed/customer-${customer.email}/300/300`,
       },
 
       create: {
         userId: user.id,
-        nickname: customer.nickname,
         imageUrl: `https://picsum.photos/seed/customer-${customer.email}/300/300`,
       },
     });

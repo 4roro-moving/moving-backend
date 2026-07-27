@@ -13,6 +13,9 @@ export const MOVERS = [
     reviewCount: 12,
     regions: ["서울", "경기", "인천"],
     moveTypes: ["SMALL", "HOME"],
+    businessNumber: "101-45-67891",
+    businessName: "테스트이사1",
+    approvalStatus: "APPROVED",
   },
   {
     email: "mover2@test.com",
@@ -27,6 +30,9 @@ export const MOVERS = [
     reviewCount: 31,
     regions: ["서울", "경기"],
     moveTypes: ["HOME", "OFFICE"],
+    businessNumber: "102-45-67892",
+    businessName: "테스트이사2",
+    approvalStatus: "APPROVED",
   },
   {
     email: "mover3@test.com",
@@ -41,6 +47,9 @@ export const MOVERS = [
     reviewCount: 68,
     regions: ["부산", "울산", "경남"],
     moveTypes: ["SMALL", "HOME", "OFFICE"],
+    businessNumber: "103-45-67893",
+    businessName: "테스트이사3",
+    approvalStatus: "APPROVED",
   },
   {
     email: "mover4@test.com",
@@ -55,6 +64,9 @@ export const MOVERS = [
     reviewCount: 21,
     regions: ["대전", "세종", "충남", "충북"],
     moveTypes: ["SMALL", "HOME"],
+    businessNumber: "104-45-67894",
+    businessName: "테스트이사4",
+    approvalStatus: "APPROVED",
   },
   {
     email: "mover5@test.com",
@@ -69,6 +81,9 @@ export const MOVERS = [
     reviewCount: 127,
     regions: ["대구", "경북", "경남"],
     moveTypes: ["HOME", "OFFICE"],
+    businessNumber: "105-45-67895",
+    businessName: "테스트이사5",
+    approvalStatus: "APPROVED",
   },
   {
     email: "mover6@test.com",
@@ -83,6 +98,9 @@ export const MOVERS = [
     reviewCount: 49,
     regions: ["광주", "전남", "전북"],
     moveTypes: ["SMALL", "HOME", "OFFICE"],
+    businessNumber: "106-45-67896",
+    businessName: "테스트이사6",
+    approvalStatus: "APPROVED",
   },
   {
     email: "mover7@test.com",
@@ -97,6 +115,10 @@ export const MOVERS = [
     reviewCount: 17,
     regions: ["강원", "경기", "서울"],
     moveTypes: ["SMALL", "HOME"],
+    businessNumber: "107-45-67897",
+    businessName: "테스트이사7",
+    approvalStatus: "REJECTED",
+    rejectReason: "사업자등록증 이미지가 흐릿하여 확인이 어렵습니다. 재제출 부탁드립니다.",
   },
   {
     email: "mover8@test.com",
@@ -111,5 +133,8 @@ export const MOVERS = [
     reviewCount: 56,
     regions: ["제주"],
     moveTypes: ["SMALL", "HOME"],
+    businessNumber: "108-45-67898",
+    businessName: "테스트이사8",
+    approvalStatus: "PENDING",
   },
 ] as const;
