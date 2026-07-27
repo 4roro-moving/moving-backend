@@ -47,6 +47,11 @@ authRouter.post(
   authController.loginWithKakao,
 );
 
+/**
+ * Naver OAuth state 발급
+ */
+authRouter.get("/oauth/naver/state", authController.createNaverOAuthState);
+
 authRouter.post(
   "/oauth/naver",
   validate({
