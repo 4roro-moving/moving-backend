@@ -92,8 +92,18 @@ export const sendEstimateBodySchema = z.object({
 // 2026.07.27 add 김성현
 // 대기 중인 견적 요청 목록 쿼리 검증
 export const pendingEstimateQuerySchema = z.object({
-  page: z.coerce.number().int().positive().max(1000).default(1),
-  limit: z.coerce.number().int().positive().max(50).default(10),
+  page: z.coerce
+    .number("페이지는 숫자여야 합니다.")
+    .int("페이지는 정수여야 합니다.")
+    .positive("페이지는 1 이상이어야 합니다.")
+    .max(1000, "페이지는 최대 1000까지 조회할 수 있습니다.")
+    .default(1),
+  limit: z.coerce
+    .number("조회 개수는 숫자여야 합니다.")
+    .int("조회 개수는 정수여야 합니다.")
+    .positive("조회 개수는 1 이상이어야 합니다.")
+    .max(50, "조회 개수는 최대 50개까지 가능합니다.")
+    .default(10),
 });
 
 // 받은 견적 목록 path parameter 검증
