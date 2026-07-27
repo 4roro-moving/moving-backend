@@ -384,6 +384,7 @@ export const receivedEstimateRepository = {
     customerId: string,
     query: PendingEstimateQuery,
     referenceDate: Date,
+    db: DbClient = prisma,
   ) {
     const where: Prisma.EstimateRequestWhereInput = {
       customerId,
@@ -397,8 +398,8 @@ export const receivedEstimateRepository = {
       },
     };
 
-    return prisma.$transaction([
-      prisma.estimateRequest.findMany({
+    return Promise.all([
+      db.estimateRequest.findMany({
         where,
         select: {
           id: true,
@@ -465,7 +466,7 @@ export const receivedEstimateRepository = {
         skip: (query.page - 1) * query.limit,
         take: query.limit,
       }),
-      prisma.estimateRequest.count({
+      db.estimateRequest.count({
         where,
       }),
     ]);
