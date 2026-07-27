@@ -9,6 +9,7 @@ import type {
   ReceivedEstimateDetailParam,
   ReceivedEstimateIdParam,
   ReceivedEstimateRequestIdParam,
+  RejectEstimateInput,
   SendEstimateInput,
   SendEstimateParam,
 } from "./estimate.type";
@@ -76,6 +77,27 @@ const sendEstimate: RequestHandler = async (req, res, next) => {
     res.status(201).json({
       success: true,
       data: estimate,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 기사가 고객의 견적 요청을 반려
+const rejectEstimate: RequestHandler = async (req, res, next) => {
+  try {
+    const { estimateRequestId } = res.locals.params as SendEstimateParam;
+    const input = req.body as RejectEstimateInput;
+
+    const rejection = await moverEstimateRequestService.rejectEstimate({
+      estimateRequestId,
+      moverId: getMoverId(req),
+      input,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: rejection,
     });
   } catch (error) {
     next(error);
@@ -228,6 +250,7 @@ export const estimateController = {
   getPendingEstimateRequests,
   getReceivedEstimatePanels,
   sendEstimate,
+  rejectEstimate,
   getReceivedEstimateList,
   getReceivedEstimateDetail,
   getReceivedEstimateDetailById,

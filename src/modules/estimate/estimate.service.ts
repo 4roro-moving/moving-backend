@@ -12,6 +12,7 @@ import type {
   MoverEstimateRequestListQuery,
   MoverEstimateRequestListResult,
   PendingEstimateQuery,
+  RejectEstimateParams,
   SendEstimateParams,
 } from "./estimate.type";
 
@@ -146,11 +147,12 @@ export const moverEstimateRequestService = {
       }
 
       //견적 요청 존재 확인
-      const estimateRequest = await moverEstimateRequestRepository.findEstimateRequestForSend(
-        estimateRequestId,
-        moverId,
-        tx,
-      );
+      const estimateRequest =
+        await moverEstimateRequestRepository.findEstimateRequestForMoverAction(
+          estimateRequestId,
+          moverId,
+          tx,
+        );
 
       if (!estimateRequest) {
         throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
@@ -209,6 +211,84 @@ export const moverEstimateRequestService = {
           price: input.price,
           comment: input.comment,
           isDesignated,
+        },
+        tx,
+      );
+    });
+  },
+
+  // 견적 요청 반려
+  async rejectEstimate({ estimateRequestId, moverId, input }: RejectEstimateParams) {
+    return runTransaction(async (tx) => {
+      //기사 프로필
+      const profile = await moverEstimateRequestRepository.findMoverProfile(moverId, tx);
+
+      if (!profile) {
+        throw new AppError("MOVER_NOT_FOUND");
+      }
+
+      //견적 요청 조회
+      const estimateRequest =
+        await moverEstimateRequestRepository.findEstimateRequestForMoverAction(
+          estimateRequestId,
+          moverId,
+          tx,
+        );
+
+      if (!estimateRequest) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+      }
+
+      //견적 요청이 OPEN이고, 활성 상태인지 확인
+      if (
+        estimateRequest.status !== "OPEN" ||
+        !estimateRequest.isActive ||
+        estimateRequest.confirmedEstimateId !== null
+      ) {
+        //이미 확정된 요청인지 확인
+        throw new AppError("CONFLICT", {
+          message: "현재 반려할 수 없는 견적 요청입니다.",
+        });
+      }
+
+      //만료 여부 확인
+      if (estimateRequest.expiresAt.getTime() <= Date.now()) {
+        throw new AppError("CONFLICT", {
+          message: "만료된 견적 요청입니다.",
+        });
+      }
+
+      //기사가 해당 이사 유형을 서비스하는지 확인
+      const canHandleMoveType = profile.serviceTypes.some(
+        (serviceType) => serviceType.moveType === estimateRequest.moveType,
+      );
+
+      if (!canHandleMoveType) {
+        throw new AppError("FORBIDDEN", {
+          message: "서비스할 수 없는 이사 유형입니다.",
+        });
+      }
+
+      //이미 견적 보냈는지 확인
+      if (estimateRequest.estimates.length > 0) {
+        throw new AppError("CONFLICT", {
+          message: "이미 견적을 보낸 요청입니다.",
+        });
+      }
+
+      //이미 반려했는지 확인
+      if (estimateRequest.rejections.length > 0) {
+        throw new AppError("CONFLICT", {
+          message: "이미 반려한 견적 요청입니다.",
+        });
+      }
+
+      //데이터 생성
+      return moverEstimateRequestRepository.createEstimateRejection(
+        {
+          estimateRequestId,
+          moverId,
+          reason: input.reason,
         },
         tx,
       );
