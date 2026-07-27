@@ -24,6 +24,14 @@ const errorHandler: ErrorRequestHandler = (
   _next,
 ) => {
   if (error instanceof AppError) {
+    // AppError도 5xx는 message/stack을 남겨 원인 추적이 가능하도록 한다.
+    logger.error(error.message, {
+      stack: error.stack,
+      code: error.code,
+      path: req.path,
+      method: req.method,
+    });
+
     res.status(error.status).json({
       success: false,
       error: {
@@ -41,9 +49,22 @@ const errorHandler: ErrorRequestHandler = (
     return;
   }
 
-  logger.error("Unhandled error", {
-    error,
-    path: req.originalUrl,
+  const isError = error instanceof Error;
+
+  let serializedError: string | undefined;
+
+  if (!isError) {
+    try {
+      serializedError = typeof error === "object" ? JSON.stringify(error) : String(error);
+    } catch {
+      serializedError = "[Unserializable error]";
+    }
+  }
+
+  logger.error(isError ? error.message : "Unhandled error", {
+    stack: isError ? error.stack : undefined,
+    error: serializedError,
+    path: req.path,
     method: req.method,
   });
 

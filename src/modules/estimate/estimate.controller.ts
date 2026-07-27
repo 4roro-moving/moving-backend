@@ -5,8 +5,13 @@ import { moverEstimateRequestService, receivedEstimateService } from "./estimate
 import type {
   ConfirmReceivedEstimateParam,
   MoverEstimateRequestListQuery,
+  PendingEstimateQuery,
   ReceivedEstimateDetailParam,
+  ReceivedEstimateIdParam,
   ReceivedEstimateRequestIdParam,
+  RejectEstimateInput,
+  SendEstimateInput,
+  SendEstimateParam,
 } from "./estimate.type";
 
 /* 
@@ -18,7 +23,11 @@ import type {
 받은 견적 목록 요청 처리, 상세 요청 처리, 받은 견적 확정 요청 처리
 */
 
-//로그인한 기사 ID
+// 2026.07.24 정슬기 - [수정] dev pull 충돌 병합 (섹션 주석·패널/estimateId API 모두 유지)
+
+// =============================================================================
+// 인증 사용자 ID 조회
+// =============================================================================
 function getMoverId(req: Request) {
   if (!req.user) {
     throw new AppError("UNAUTHORIZED");
@@ -35,12 +44,94 @@ function getCustomerId(req: Request) {
   return req.user.id;
 }
 
-//받은 견적 요청 목록 조회 함수
+// =============================================================================
+// 기사: 고객의 견적 요청 목록 조회
+// =============================================================================
 const getList: RequestHandler = async (req, res, next) => {
   try {
     const moverId = getMoverId(req);
     const query = res.locals.query as MoverEstimateRequestListQuery;
     const result = await moverEstimateRequestService.getList(moverId, query);
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 기사가 고객의 견적 요청에 견적을 전송
+const sendEstimate: RequestHandler = async (req, res, next) => {
+  try {
+    const { estimateRequestId } = res.locals.params as SendEstimateParam;
+    const input = req.body as SendEstimateInput;
+
+    const estimate = await moverEstimateRequestService.sendEstimate({
+      estimateRequestId,
+      moverId: getMoverId(req),
+      input,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: estimate,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 기사가 고객의 견적 요청을 반려
+const rejectEstimate: RequestHandler = async (req, res, next) => {
+  try {
+    const { estimateRequestId } = res.locals.params as SendEstimateParam;
+    const input = req.body as RejectEstimateInput;
+
+    const rejection = await moverEstimateRequestService.rejectEstimate({
+      estimateRequestId,
+      moverId: getMoverId(req),
+      input,
+    });
+
+    res.status(201).json({
+      success: true,
+      data: rejection,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// =============================================================================
+// 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
+// =============================================================================
+
+// 2026.07.27 add 김성현
+// 대기 중인 견적 목록 요청 처리
+const getPendingEstimateRequests: RequestHandler = async (req, res, next) => {
+  try {
+    const query = res.locals.query as PendingEstimateQuery;
+    const result = await receivedEstimateService.getPendingEstimateRequests(
+      getCustomerId(req),
+      query,
+    );
+
+    res.status(200).json({
+      success: true,
+      data: result.sections,
+      pagination: result.pagination,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// 2026.07.24 정슬기 - [추가] 받은 견적 패널 목록 요청 처리
+const getReceivedEstimatePanels: RequestHandler = async (req, res, next) => {
+  try {
+    const result = await receivedEstimateService.getReceivedEstimatePanels(getCustomerId(req));
 
     res.status(200).json({
       success: true,
@@ -94,6 +185,25 @@ const getReceivedEstimateDetail: RequestHandler = async (req, res, next) => {
   }
 };
 
+// 2026.07.24 정슬기 - [추가] estimateId 기준 받은 견적 상세 요청 처리
+const getReceivedEstimateDetailById: RequestHandler = async (req, res, next) => {
+  try {
+    const { estimateId } = res.locals.params as ReceivedEstimateIdParam;
+
+    const result = await receivedEstimateService.getReceivedEstimateDetailById(
+      estimateId,
+      getCustomerId(req),
+    );
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 /**
  * 견적 요청 단위의 받은 견적 확정
  */
@@ -116,9 +226,34 @@ const confirmReceivedEstimate: RequestHandler = async (req, res, next) => {
   }
 };
 
+// 2026.07.24 정슬기 - [추가] estimateId 기준 확정 요청 처리 (원격 확정 서비스 재사용)
+const confirmReceivedEstimateById: RequestHandler = async (req, res, next) => {
+  try {
+    const { estimateId } = res.locals.params as ReceivedEstimateIdParam;
+
+    const result = await receivedEstimateService.confirmReceivedEstimateById(
+      estimateId,
+      getCustomerId(req),
+    );
+
+    res.status(200).json({
+      success: true,
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 export const estimateController = {
   getList,
+  getPendingEstimateRequests,
+  getReceivedEstimatePanels,
+  sendEstimate,
+  rejectEstimate,
   getReceivedEstimateList,
   getReceivedEstimateDetail,
+  getReceivedEstimateDetailById,
   confirmReceivedEstimate,
+  confirmReceivedEstimateById,
 };

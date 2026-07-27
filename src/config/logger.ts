@@ -26,8 +26,10 @@ const logger = createLogger({
         format.timestamp({
           format: "YYYY-MM-DD HH:mm:ss",
         }),
-        format.printf(({ timestamp, level, message }) => {
-          return `${timestamp} [${level}] ${message}`;
+        format.printf(({ timestamp, level, message, stack }) => {
+          const line = `${timestamp} [${level}] ${message}`;
+
+          return typeof stack === "string" ? `${line}\n${stack}` : line;
         }),
       ),
     }),

@@ -1,16 +1,25 @@
-﻿import type { MoveType } from "@prisma/client";
+import type { MoveType } from "@prisma/client";
 import type { z } from "zod";
 
 import type {
   confirmReceivedEstimateParamSchema,
   moverEstimateRequestListQuerySchema,
+  pendingEstimateQuerySchema,
+  rejectEstimateBodySchema,
   receivedEstimateDetailParamSchema,
+  receivedEstimateIdParamSchema,
   receivedEstimateRequestIdParamSchema,
+  sendEstimateBodySchema,
+  sendEstimateParamSchema,
 } from "./estimate.validator";
 
 /* 
-2026.07.21 add 윤소정
+- 2026.07.21 add 윤소정
 API에서 사용하는 데이터 형태 정의
+- 2026.07.24 add 윤소정
+기사 견적 제안 추가
+2026.07.27 add 윤소정
+기사 견적 반려 추가
 */
 
 /* 
@@ -24,10 +33,21 @@ API에서 사용하는 데이터 형태 정의
 - 받은 견적 확정 API 데이터 형태 정의
 */
 
+// =============================================================================
+// 요청 검증 결과 타입
+// =============================================================================
+
 export type MoverEstimateRequestListQuery = z.infer<typeof moverEstimateRequestListQuerySchema>;
+export type PendingEstimateQuery = z.infer<typeof pendingEstimateQuerySchema>;
 export type ReceivedEstimateRequestIdParam = z.infer<typeof receivedEstimateRequestIdParamSchema>;
 export type ReceivedEstimateDetailParam = z.infer<typeof receivedEstimateDetailParamSchema>;
 export type ConfirmReceivedEstimateParam = z.infer<typeof confirmReceivedEstimateParamSchema>;
+// 2026.07.24 정슬기 - [수정] 원격 변경사항과 견적 API 작업 충돌 병합
+export type ReceivedEstimateIdParam = z.infer<typeof receivedEstimateIdParamSchema>;
+
+// =============================================================================
+// 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
+// =============================================================================
 
 export type GetReceivedEstimateListParams = {
   estimateRequestId: number;
@@ -42,6 +62,32 @@ export type ConfirmReceivedEstimateParams = GetReceivedEstimateListParams & {
   estimateId: number;
 };
 
+// =============================================================================
+// 기사: 고객의 견적 요청 목록 조회
+// =============================================================================
+
+//견적 제안 API URL 경로 파라미터 -- POST /api/estimates/requests/:estimateRequestId
+export type SendEstimateParam = z.infer<typeof sendEstimateParamSchema>;
+//기사가 견적 보낼 때 전달하는 요청 본문
+export type SendEstimateInput = z.infer<typeof sendEstimateBodySchema>;
+// 견적 요청 반려 요청 본문 -- POST /api/estimates/requests/:estimateRequestId/reject
+export type RejectEstimateInput = z.infer<typeof rejectEstimateBodySchema>;
+
+//견적 제안 인자
+export type SendEstimateParams = {
+  estimateRequestId: number;
+  moverId: string;
+  input: SendEstimateInput;
+};
+
+// 견적 요청 반려 인자
+export type RejectEstimateParams = {
+  estimateRequestId: number;
+  moverId: string;
+  input: RejectEstimateInput;
+};
+
+//기사에게 노출되는 견적 요청 목록의 단일 항목
 export type MoverEstimateRequestListItem = {
   id: number;
   customer: {
@@ -58,7 +104,7 @@ export type MoverEstimateRequestListItem = {
   createdAt: string;
 };
 
-//Service -> Controller
+//견적 요청 목록 조회 Service의 반환값
 export type MoverEstimateRequestListResult = {
   items: MoverEstimateRequestListItem[];
   pagination: {

@@ -1,8 +1,13 @@
 import type { Request, RequestHandler } from "express";
 
 import { AppError } from "../../lib/app-error";
+import type { MoverIdParam } from "../mover/mover.type";
 import { reviewService } from "./review.service";
-import type { CreateReviewInput, ListMyReviewQuery } from "./review.validator";
+import type {
+  CreateReviewInput,
+  ListMoverReviewQuery,
+  ListMyReviewQuery,
+} from "./review.validator";
 
 function getCustomerId(req: Request): string {
   if (!req.user) {
@@ -13,6 +18,32 @@ function getCustomerId(req: Request): string {
 }
 
 export const reviewController = {
+  /**
+   * GET /api/movers/:moverId/reviews
+   *
+   * 특정 기사님에게 작성된 리뷰 목록을 페이지네이션으로 조회
+   */
+  getMoverReviewList: (async (req, res, next) => {
+    try {
+      const { moverId } = res.locals.params as MoverIdParam;
+      const query = res.locals.query as ListMoverReviewQuery;
+
+      const result = await reviewService.getMoverReviewList({
+        moverId,
+        page: query.page,
+        limit: query.limit,
+      });
+
+      res.status(200).json({
+        success: true,
+        data: result.reviews,
+        pagination: result.pagination,
+      });
+    } catch (error) {
+      next(error);
+    }
+  }) satisfies RequestHandler,
+
   /**
    * GET /api/reviews/me
    *
