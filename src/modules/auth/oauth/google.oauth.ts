@@ -1,10 +1,10 @@
 import { AuthProvider } from "@prisma/client";
 import { z } from "zod";
 
-import { env } from "../../config/env";
-import { AppError } from "../../lib/app-error";
+import { env } from "../../../config/env";
+import { AppError } from "../../../lib/app-error";
 
-import type { OAuthProfile } from "./auth.type";
+import type { OAuthProfile } from "../auth.type";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USER_INFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
@@ -66,6 +66,12 @@ const exchangeCodeForAccessToken = async (code: string): Promise<string> => {
   }
 
   if (!response.ok) {
+    const errorBody = await response.text();
+
+    console.log("===== Google Token Error =====");
+    console.log("status:", response.status);
+    console.log("body:", errorBody);
+
     throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않거나 만료된 Google 인증 코드입니다.",
     });

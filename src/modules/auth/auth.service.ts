@@ -2,7 +2,7 @@ import bcrypt from "bcrypt";
 import { AuthProvider, Prisma, UserRole } from "@prisma/client";
 
 import { authRepository } from "./auth.repository";
-import { googleOAuth } from "./google.oauth";
+import { googleOAuth } from "./oauth/google.oauth";
 
 import type { AuthResponse, AuthTokens, OAuthProfile } from "./auth.type";
 
