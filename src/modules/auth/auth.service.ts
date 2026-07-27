@@ -27,6 +27,17 @@ import { runTransaction } from "../../utils/transaction";
 
 const PASSWORD_SALT_ROUNDS = 10;
 
+const getAuthProviderName = (provider: AuthProvider): string => {
+  const providerNames: Record<AuthProvider, string> = {
+    [AuthProvider.LOCAL]: "이메일",
+    [AuthProvider.GOOGLE]: "구글",
+    [AuthProvider.KAKAO]: "카카오",
+    [AuthProvider.NAVER]: "네이버",
+  };
+
+  return providerNames[provider];
+};
+
 type SignUpRole = typeof UserRole.CUSTOMER | typeof UserRole.MOVER;
 
 /*
@@ -347,8 +358,10 @@ const loginWithOAuth = async (
   const existingUserByEmail = await authRepository.findByEmail(email);
 
   if (existingUserByEmail) {
+    const providerName = getAuthProviderName(existingUserByEmail.authProvider);
+
     throw new AppError("OAUTH_EMAIL_ALREADY_EXISTS", {
-      message: "동일한 이메일로 가입된 계정이 이미 존재합니다.",
+      message: `이미 ${providerName} 계정으로 가입된 이메일입니다. ${providerName} 로그인을 이용해주세요.`,
     });
   }
 
@@ -400,10 +413,23 @@ const loginWithOAuth = async (
      * 이메일 또는 provider 복합 UNIQUE 충돌을
      * 동시 가입 요청에서도 안전하게 처리한다.
      */
-    if (
-      isUniqueConstraintError(error, "email") ||
-      isUniqueConstraintError(error, "providerUserId")
-    ) {
+    if (isUniqueConstraintError(error, "email")) {
+      const existingUser = await authRepository.findByEmail(email);
+
+      if (existingUser) {
+        const providerName = getAuthProviderName(existingUser.authProvider);
+
+        throw new AppError("OAUTH_EMAIL_ALREADY_EXISTS", {
+          message: `이미 ${providerName} 계정으로 가입된 이메일입니다. ${providerName} 로그인을 이용해주세요.`,
+        });
+      }
+
+      throw new AppError("OAUTH_EMAIL_ALREADY_EXISTS", {
+        message: "동일한 이메일로 가입된 계정이 이미 존재합니다.",
+      });
+    }
+
+    if (isUniqueConstraintError(error, "providerUserId")) {
       throw new AppError("CONFLICT", {
         message: "이미 가입된 OAuth 계정입니다.",
       });

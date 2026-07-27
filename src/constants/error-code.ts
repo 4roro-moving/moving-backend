@@ -45,7 +45,7 @@ export const ERROR_CODES = {
   OAUTH_EMAIL_ALREADY_EXISTS: {
     status: 409,
     code: "OAUTH_EMAIL_ALREADY_EXISTS",
-    message: "동일한 이메일의 일반 회원이 이미 존재합니다.",
+    message: "동일한 이메일로 가입된 계정이 이미 존재합니다.",
   },
 
   VALIDATION_ERROR: {

@@ -45,4 +45,8 @@ export const runTransaction = async <T>(
       await wait(TRANSACTION_RETRY_DELAY_MS * (attempt + 1));
     }
   }
+
+  throw new AppError("INTERNAL_SERVER_ERROR", {
+    message: "트랜잭션 처리 중 알 수 없는 오류가 발생했습니다.",
+  });
 };
