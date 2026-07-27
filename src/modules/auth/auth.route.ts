@@ -40,6 +40,14 @@ authRouter.post(
 );
 
 authRouter.post(
+  "/oauth/kakao",
+  validate({
+    body: authValidator.kakaoOAuth,
+  }),
+  authController.loginWithKakao,
+);
+
+authRouter.post(
   "/refresh",
   validate({
     body: authValidator.refresh,

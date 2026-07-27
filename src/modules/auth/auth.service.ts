@@ -3,11 +3,13 @@ import { AuthProvider, Prisma, UserRole } from "@prisma/client";
 
 import { authRepository } from "./auth.repository";
 import { googleOAuth } from "./oauth/google.oauth";
+import { kakaoOAuth } from "./oauth/kakao.oauth";
 
 import type { AuthResponse, AuthTokens, OAuthProfile } from "./auth.type";
 
 import type {
   GoogleOAuthInput,
+  KakaoOAuthInput,
   LoginInput,
   LogoutInput,
   RefreshInput,
@@ -422,6 +424,18 @@ const loginWithGoogle = async (input: GoogleOAuthInput): Promise<AuthResponse> =
 };
 
 /*
+ * Kakao OAuth 로그인
+ *
+ * Authorization Code를 Kakao 프로필로 변환한 뒤
+ * 공통 OAuth 로그인 로직을 실행한다.
+ */
+const loginWithKakao = async (input: KakaoOAuthInput): Promise<AuthResponse> => {
+  const profile = await kakaoOAuth.getKakaoOAuthProfile(input.code);
+
+  return loginWithOAuth(profile, input.role);
+};
+
+/*
  * Access Token 및 Refresh Token 재발급
  *
  * Refresh Token Rotation을 적용한다.
@@ -576,6 +590,7 @@ export const authService = {
   signUpMover,
   login,
   loginWithGoogle,
+  loginWithKakao,
   refresh,
   logout,
 };

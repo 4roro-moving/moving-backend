@@ -66,12 +66,6 @@ const exchangeCodeForAccessToken = async (code: string): Promise<string> => {
   }
 
   if (!response.ok) {
-    const errorBody = await response.text();
-
-    console.log("===== Google Token Error =====");
-    console.log("status:", response.status);
-    console.log("body:", errorBody);
-
     throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않거나 만료된 Google 인증 코드입니다.",
     });

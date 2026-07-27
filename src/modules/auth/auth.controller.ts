@@ -4,6 +4,7 @@ import { authService } from "./auth.service";
 
 import type {
   GoogleOAuthInput,
+  KakaoOAuthInput,
   LoginInput,
   LogoutInput,
   RefreshInput,
@@ -100,6 +101,29 @@ const loginWithGoogle = async (
 };
 
 /*
+ * Kakao OAuth 로그인
+ *
+ * POST /auth/oauth/kakao
+ */
+const loginWithKakao = async (
+  req: Request<Record<string, never>, unknown, KakaoOAuthInput>,
+  res: Response,
+  next: NextFunction,
+): Promise<void> => {
+  try {
+    const result = await authService.loginWithKakao(req.body);
+
+    res.status(200).json({
+      success: true,
+      message: "Kakao 로그인에 성공했습니다.",
+      data: result,
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/*
  * Access Token 및 Refresh Token 재발급
  *
  * POST /auth/refresh
@@ -151,6 +175,7 @@ export const authController = {
   signUpMover,
   login,
   loginWithGoogle,
+  loginWithKakao,
   refresh,
   logout,
 };

@@ -68,11 +68,11 @@ const phoneSchema = z
 
 const authorizationCodeSchema = z
   .string({
-    error: "구글 인증 코드를 입력해주세요.",
+    error: "OAuth 인증 코드를 입력해주세요.",
   })
   .trim()
   .min(1, {
-    error: "구글 인증 코드를 입력해주세요.",
+    error: "OAuth 인증 코드를 입력해주세요.",
   });
 
 const oauthRoleSchema = z.enum([UserRole.CUSTOMER, UserRole.MOVER], {
@@ -114,6 +114,20 @@ export const googleOAuthSchema = z.strictObject({
   role: oauthRoleSchema,
 });
 
+/*
+ * Kakao OAuth Authorization Code 로그인 요청
+ *
+ * role은 신규 OAuth 회원 생성 시에만 사용한다.
+ * 기존 회원은 DB에 저장된 역할을 사용한다.
+ *
+ * ADMIN 계정이 일반 OAuth 요청을 통해 생성되지 않도록
+ * CUSTOMER와 MOVER만 허용한다.
+ */
+export const kakaoOAuthSchema = z.strictObject({
+  code: authorizationCodeSchema,
+  role: oauthRoleSchema,
+});
+
 export const refreshSchema = z.strictObject({
   refreshToken: refreshTokenSchema,
 });
@@ -126,6 +140,7 @@ export const authValidator = {
   signUp: signUpSchema,
   login: loginSchema,
   googleOAuth: googleOAuthSchema,
+  kakaoOAuth: kakaoOAuthSchema,
   refresh: refreshSchema,
   logout: logoutSchema,
 };
@@ -133,5 +148,6 @@ export const authValidator = {
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
 export type GoogleOAuthInput = z.infer<typeof googleOAuthSchema>;
+export type KakaoOAuthInput = z.infer<typeof kakaoOAuthSchema>;
 export type RefreshInput = z.infer<typeof refreshSchema>;
 export type LogoutInput = z.infer<typeof logoutSchema>;

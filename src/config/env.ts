@@ -10,11 +10,25 @@ const envSchema = z.object({
 
   LOG_LEVEL: z.enum(["error", "warn", "info", "http", "verbose", "debug", "silly"]).default("info"),
 
-  GOOGLE_CLIENT_ID: z.string().min(1, "GOOGLE_CLIENT_ID is required"),
+  GOOGLE_CLIENT_ID: z.string().min(1, { error: "GOOGLE_CLIENT_ID is required" }),
 
-  GOOGLE_CLIENT_SECRET: z.string().min(1, "GOOGLE_CLIENT_SECRET is required"),
+  GOOGLE_CLIENT_SECRET: z.string().min(1, { error: "GOOGLE_CLIENT_SECRET is required" }),
 
-  GOOGLE_REDIRECT_URI: z.string().url("GOOGLE_REDIRECT_URI must be a valid URL"),
+  GOOGLE_REDIRECT_URI: z.url({
+    error: "GOOGLE_REDIRECT_URI must be a valid URL",
+  }),
+
+  KAKAO_CLIENT_ID: z.string().min(1, { error: "KAKAO_CLIENT_ID is required" }),
+
+  KAKAO_CLIENT_SECRET: z.string().min(1, { error: "KAKAO_CLIENT_SECRET is required" }),
+
+  KAKAO_REDIRECT_URI: z.url({ error: "KAKAO_REDIRECT_URI must be a valid URL" }),
+
+  NAVER_CLIENT_ID: z.string().min(1, { error: "NAVER_CLIENT_ID is required" }),
+
+  NAVER_CLIENT_SECRET: z.string().min(1, { error: "NAVER_CLIENT_SECRET is required" }),
+
+  NAVER_REDIRECT_URI: z.url({ error: "NAVER_REDIRECT_URI must be a valid URL" }),
 });
 
 const parsed = envSchema.safeParse(process.env);
