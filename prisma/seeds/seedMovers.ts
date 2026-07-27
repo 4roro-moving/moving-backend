@@ -6,8 +6,9 @@ export async function seedMovers(
   prisma: PrismaClient,
   passwordHash: string,
   regionIdMap: Map<string, number>,
+  adminId: string | null,
 ): Promise<void> {
-  console.log("🚚 기사님 계정을 생성합니다.");
+  console.log("기사님 계정을 생성합니다.");
 
   for (const mover of MOVERS) {
     const user = await prisma.user.upsert({
@@ -54,6 +55,13 @@ export async function seedMovers(
         confirmedCount: mover.confirmedCount,
         averageRating: mover.averageRating,
         reviewCount: mover.reviewCount,
+        businessNumber: mover.businessNumber,
+        businessName: mover.businessName,
+        licenseFileKey: `mover-licenses/${mover.email}.jpg`,
+        approvalStatus: mover.approvalStatus,
+        approvedBy: mover.approvalStatus === "PENDING" ? null : adminId,
+        approvedAt: mover.approvalStatus === "PENDING" ? null : new Date(),
+        rejectReason: "rejectReason" in mover ? mover.rejectReason : null,
       },
 
       create: {
@@ -66,13 +74,16 @@ export async function seedMovers(
         confirmedCount: mover.confirmedCount,
         averageRating: mover.averageRating,
         reviewCount: mover.reviewCount,
+        businessNumber: mover.businessNumber,
+        businessName: mover.businessName,
+        licenseFileKey: `mover-licenses/${mover.email}.jpg`,
+        approvalStatus: mover.approvalStatus,
+        approvedBy: mover.approvalStatus === "PENDING" ? null : adminId,
+        approvedAt: mover.approvalStatus === "PENDING" ? null : new Date(),
+        rejectReason: "rejectReason" in mover ? mover.rejectReason : null,
       },
     });
 
-    /*
-     * 시드를 다시 실행했을 때 서비스 지역과
-     * 서비스 종류가 중복되지 않도록 기존 관계를 삭제합니다.
-     */
     await prisma.moverServiceArea.deleteMany({
       where: {
         moverProfileId: moverProfile.id,
