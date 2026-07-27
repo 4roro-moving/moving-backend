@@ -23,6 +23,13 @@ type CreateEstimateData = {
   isDesignated: boolean;
 };
 
+// 기사 - 견적 요청 반려 생성
+type CreateEstimateRejectionData = {
+  estimateRequestId: number;
+  moverId: string;
+  reason: string;
+};
+
 // =============================================================================
 // 기사: 고객의 견적 요청 목록 조회 조건
 // =============================================================================
@@ -304,8 +311,12 @@ export const moverEstimateRequestRepository = {
     });
   },
 
-  //요청 상태, 지정 여부, 기존 견적, 반려 여부 조회
-  findEstimateRequestForSend(estimateRequestId: number, moverId: string, db: DbClient = prisma) {
+  // 기사 작업 전 요청 상태, 지정 여부, 기존 견적, 반려 여부 조회
+  findEstimateRequestForMoverAction(
+    estimateRequestId: number,
+    moverId: string,
+    db: DbClient = prisma,
+  ) {
     return db.estimateRequest.findUnique({
       where: {
         id: estimateRequestId,
@@ -367,6 +378,23 @@ export const moverEstimateRequestRepository = {
         comment: true,
         status: true,
         isDesignated: true,
+        createdAt: true,
+      },
+    });
+  },
+
+  createEstimateRejection(data: CreateEstimateRejectionData, db: DbClient = prisma) {
+    return db.estimateRequestRejection.create({
+      data: {
+        estimateRequestId: data.estimateRequestId,
+        moverId: data.moverId,
+        reason: data.reason,
+      },
+      select: {
+        id: true,
+        estimateRequestId: true,
+        moverId: true,
+        reason: true,
         createdAt: true,
       },
     });

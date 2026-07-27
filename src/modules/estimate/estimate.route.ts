@@ -5,6 +5,7 @@ import { validate } from "../../middlewares/validate";
 import { estimateController } from "./estimate.controller";
 import {
   moverEstimateRequestListQuerySchema,
+  rejectEstimateBodySchema,
   sendEstimateBodySchema,
   receivedEstimateIdParamSchema,
   sendEstimateParamSchema,
@@ -13,10 +14,9 @@ import {
 const estimateRouter = Router();
 
 /* 
-2026.07.21 add 윤소정
+- 2026.07.21 add 윤소정
 기사 견적 요청 목록
 */
-
 estimateRouter.get(
   "/requests",
   authenticate,
@@ -25,6 +25,10 @@ estimateRouter.get(
   estimateController.getList,
 );
 
+/* 
+- 2026.07.24 add 윤소정
+기사 견적 제안
+*/
 estimateRouter.post(
   "/requests/:estimateRequestId",
   authenticate,
@@ -34,6 +38,21 @@ estimateRouter.post(
     body: sendEstimateBodySchema,
   }),
   estimateController.sendEstimate,
+);
+
+/* 
+- 2026.07.27 add 윤소정
+기사 견적 반려
+*/
+estimateRouter.post(
+  "/requests/:estimateRequestId/reject",
+  authenticate,
+  authorize("MOVER"),
+  validate({
+    params: sendEstimateParamSchema,
+    body: rejectEstimateBodySchema,
+  }),
+  estimateController.rejectEstimate,
 );
 
 // 2026.07.24 정슬기 - [추가] 고객 받은 견적 패널 목록 API (요청 단위)

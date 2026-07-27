@@ -4,6 +4,7 @@ import type { z } from "zod";
 import type {
   confirmReceivedEstimateParamSchema,
   moverEstimateRequestListQuerySchema,
+  rejectEstimateBodySchema,
   receivedEstimateDetailParamSchema,
   receivedEstimateIdParamSchema,
   receivedEstimateRequestIdParamSchema,
@@ -12,8 +13,12 @@ import type {
 } from "./estimate.validator";
 
 /* 
-2026.07.21 add 윤소정
+- 2026.07.21 add 윤소정
 API에서 사용하는 데이터 형태 정의
+- 2026.07.24 add 윤소정
+기사 견적 제안 추가
+2026.07.27 add 윤소정
+기사 견적 반려 추가
 */
 
 /* 
@@ -63,12 +68,21 @@ export type ConfirmReceivedEstimateParams = GetReceivedEstimateListParams & {
 export type SendEstimateParam = z.infer<typeof sendEstimateParamSchema>;
 //기사가 견적 보낼 때 전달하는 요청 본문
 export type SendEstimateInput = z.infer<typeof sendEstimateBodySchema>;
+// 견적 요청 반려 요청 본문 -- POST /api/estimates/requests/:estimateRequestId/reject
+export type RejectEstimateInput = z.infer<typeof rejectEstimateBodySchema>;
 
-//견적 전송 인자
+//견적 제안 인자
 export type SendEstimateParams = {
   estimateRequestId: number;
   moverId: string;
   input: SendEstimateInput;
+};
+
+// 견적 요청 반려 인자
+export type RejectEstimateParams = {
+  estimateRequestId: number;
+  moverId: string;
+  input: RejectEstimateInput;
 };
 
 //기사에게 노출되는 견적 요청 목록의 단일 항목
