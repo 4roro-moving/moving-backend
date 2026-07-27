@@ -1,3 +1,16 @@
+// ===========================================================================
+// MOVING DATABASE
+// 고객(Customer)과 기사님(Mover)을 연결하는 이사 견적 비교 플랫폼
+//
+// Stack       : Express.js / Prisma ORM / PostgreSQL
+// Convention  :
+//   - DB 테이블/컬럼은 snake_case, Prisma 모델/필드는 camelCase
+//     (@map / @@map 으로 매핑합니다)
+//   - User 의 PK 는 UUID, 그 외 테이블의 PK 는 auto-increment Int
+//   - 생성/수정 시각은 createdAt / updatedAt 으로 통일
+//   - Soft Delete 가 필요한 테이블만 deletedAt 을 둡니다
+// ===========================================================================
+
 generator client {
   provider = "prisma-client-js"
 }
@@ -7,12 +20,27 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+// ===========================================================================
+// ENUM
+// ===========================================================================
+
+/// 사용자 권한
+///
+/// 한 계정은 하나의 역할만 가집니다. 역할에 따라 접근 가능한 API 와
+/// 등록하는 프로필(CustomerProfile / MoverProfile)이 달라집니다.
+/// CUSTOMER: 견적을 요청하는 일반 사용자
+/// MOVER   : 견적을 제출하는 기사님
+/// ADMIN   : 신고/정지/공지 등을 처리하는 관리자
 enum UserRole {
   CUSTOMER
   MOVER
   ADMIN
 }
 
+/// 로그인(가입) 방식
+///
+/// LOCAL 은 이메일+비밀번호, 나머지는 소셜 로그인입니다.
+/// 계정 하나당 방식 하나로 고정하며, 여러 방식을 한 계정에 묶지 않습니다.
 enum AuthProvider {
   LOCAL
   GOOGLE
@@ -20,12 +48,41 @@ enum AuthProvider {
   KAKAO
 }
 
+/// 이사 유형
+///
+/// 견적 요청과 기사님의 서비스 제공 범위를 나누는 기준입니다.
+/// SMALL : 소형/원룸 이사
+/// HOME  : 가정 이사
+/// OFFICE: 사무실 이사
 enum MoveType {
   SMALL
   HOME
   OFFICE
 }
 
+/// 기사님 승인 상태
+///
+/// 사업자등록증 제출 후 관리자가 검수해 승인/반려합니다.
+/// 승인된(APPROVED) 기사님만 견적 요청 알림 대상이 되고 지정 견적을 받을 수 있습니다.
+/// PENDING : 서류 제출 후 검수 대기
+/// APPROVED: 승인 완료. 정상 영업 가능
+/// REJECTED: 반려. rejectReason 에 사유를 남깁니다
+enum MoverApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+/// 견적 요청의 상태
+///
+/// 정상 흐름 : PENDING → OPEN → CONFIRMED → COMPLETED
+/// 이탈 흐름 : OPEN/CONFIRMED → EXPIRED(만료) 또는 CANCELED(취소)
+/// PENDING  : 작성 중(임시 저장). 아직 기사님에게 노출되지 않음
+/// OPEN     : 제출 완료. 기사님이 견적을 보낼 수 있는 공개 상태
+/// CONFIRMED: 고객이 특정 견적을 확정한 상태
+/// COMPLETED: 이사가 실제로 끝난 상태. 리뷰 작성이 가능해짐
+/// EXPIRED  : 이사일 하루 전 자동 만료된 상태
+/// CANCELED : 고객이 요청을 취소한 상태
 enum EstimateRequestStatus {
   PENDING
   OPEN
@@ -35,6 +92,11 @@ enum EstimateRequestStatus {
   CANCELED
 }
 
+/// 기사님이 제출한 개별 견적의 상태
+///
+/// SENT → CONFIRMED(확정) / EXPIRED(만료) / CANCELED(취소)
+/// 기사님이 요청 자체를 거절하는 "반려"는 이 상태가 아니라
+/// EstimateRequestRejection 테이블에서 따로 관리합니다.
 enum EstimateStatus {
   SENT
   CONFIRMED
@@ -42,6 +104,14 @@ enum EstimateStatus {
   CANCELED
 }
 
+/// 견적 요청 변경 이력의 종류
+///
+/// 채팅형 UI 로 견적 요청 정보를 입력받기 때문에, 각 단계에서
+/// 어떤 변화가 있었는지를 EstimateRequestHistory 에 이 타입으로 남깁니다.
+/// CREATED  : 요청 최초 생성
+/// UPDATED  : 이사 유형/날짜/출발지/도착지 등 내용 변경
+/// SUBMITTED: 최종 제출(OPEN 전환)
+/// CANCELED : 요청 취소
 enum EstimateRequestHistoryType {
   CREATED
   UPDATED
@@ -49,22 +119,30 @@ enum EstimateRequestHistoryType {
   CANCELED
 }
 
+/// 알림 유형
+///
+/// Notification.type 에 저장되어 프론트에서 아이콘/문구/이동 링크를 분기합니다.
+/// 상단 그룹은 기본 기능, CHAT_ 이하는 채팅/견적 수정(심화 기능) 알림입니다.
 enum NotificationType {
-  ESTIMATE_REQUEST_RECEIVED
-  DESIGNATED_REQUEST_RECEIVED
-  ESTIMATE_RECEIVED
-  ESTIMATE_CONFIRMED
-  ESTIMATE_REQUEST_REJECTED
-  MOVE_DAY_REMINDER
-  ESTIMATE_EXPIRATION_REMINDER
-  REVIEW_AVAILABLE
-  REVIEW_RECEIVED
-  CHAT_MESSAGE_RECEIVED
-  ESTIMATE_REVISION_REQUESTED
-  ESTIMATE_REVISION_APPROVED
-  ESTIMATE_REVISION_REJECTED
+  ESTIMATE_REQUEST_RECEIVED    // (기사) 일반 견적 요청이 도착함
+  DESIGNATED_REQUEST_RECEIVED  // (기사) 나를 지정한 견적 요청이 도착함
+  ESTIMATE_RECEIVED            // (고객) 기사님이 견적을 보냄
+  ESTIMATE_CONFIRMED           // (기사) 내 견적이 확정됨
+  ESTIMATE_REQUEST_REJECTED    // (고객) 기사님이 요청을 반려함
+  MOVE_DAY_REMINDER            // 이사 당일 리마인더
+  ESTIMATE_EXPIRATION_REMINDER // 견적 요청 만료 임박 리마인더
+  REVIEW_AVAILABLE             // (고객) 리뷰 작성 가능 안내
+  REVIEW_RECEIVED              // (기사) 리뷰를 받음
+  CHAT_MESSAGE_RECEIVED        // 채팅 메시지 수신
+  ESTIMATE_REVISION_REQUESTED  // 견적 수정 요청 도착
+  ESTIMATE_REVISION_APPROVED   // 견적 수정 요청 승인됨
+  ESTIMATE_REVISION_REJECTED   // 견적 수정 요청 거절됨
 }
 
+/// 채팅 메시지 유형
+///
+/// TEXT/IMAGE 는 일반 메시지, SYSTEM 은 입장/상태 변경 등 자동 안내,
+/// ESTIMATE_REVISION 은 "견적 수정 요청" 카드가 채팅에 표시되는 메시지입니다.
 enum ChatMessageType {
   TEXT
   IMAGE
@@ -72,6 +150,9 @@ enum ChatMessageType {
   ESTIMATE_REVISION
 }
 
+/// 견적 수정 요청의 상태 (심화 기능)
+///
+/// PENDING → APPROVED(상대가 승인) / REJECTED(상대가 거절) / CANCELED(요청자가 취소)
 enum EstimateRevisionStatus {
   PENDING
   APPROVED
@@ -79,403 +160,1253 @@ enum EstimateRevisionStatus {
   CANCELED
 }
 
+// ---------------------------------------------------------------------------
+// 관리자 기능 Enum
+// ---------------------------------------------------------------------------
+
+/// 신고 대상의 종류
+///
+/// 신고 대상이 리뷰일 수도, 기사님일 수도 있어 대상 타입을 구분합니다.
+/// (실제 대상 식별자는 Report.targetId 에 저장합니다)
+enum ReportTargetType {
+  REVIEW
+  MOVER
+}
+
+/// 신고 사유
+///
+/// 신고 접수 화면에서 고르는 사유 목록입니다. OTHER 선택 시
+/// Report.detail 에 자유 서술을 받도록 운영합니다.
+enum ReportReason {
+  SPAM          // 스팸/광고
+  ABUSE         // 욕설/비방
+  FALSE_INFO    // 허위 정보
+  INAPPROPRIATE // 부적절한 내용
+  PRIVACY       // 개인정보 노출
+  OTHER         // 기타
+}
+
+/// 신고 처리 상태
+///
+/// PENDING(접수) → RESOLVED(조치 완료) / REJECTED(반려)
+enum ReportStatus {
+  PENDING
+  RESOLVED
+  REJECTED
+}
+
+/// 회원 정지/해제 동작
+///
+/// UserSuspension 이력에 어떤 조치였는지 기록하는 값입니다.
+/// SUSPEND: 정지, RELEASE: 정지 해제
+enum SuspensionAction {
+  SUSPEND
+  RELEASE
+}
+
+/// 1:1 문의 분류
+///
+/// SUSPENSION_APPEAL 은 정지 이의 제기 창구로, 정지 회원도 접근할 수 있어야 합니다.
+enum InquiryCategory {
+  SUSPENSION_APPEAL // 정지 이의 제기
+  ACCOUNT           // 계정 관련
+  SERVICE           // 서비스 이용 관련
+  ETC               // 기타
+}
+
+/// 1:1 문의 상태
+///
+/// OPEN(접수) → ANSWERED(답변 완료) → CLOSED(종료)
+enum InquiryStatus {
+  OPEN
+  ANSWERED
+  CLOSED
+}
+
+/// 공지 노출 대상
+///
+/// 공지를 어떤 사용자 그룹에게 보여줄지 결정합니다.
+/// ALL: 전체, CUSTOMER: 일반 사용자만, MOVER: 기사님만
+enum NoticeAudience {
+  ALL
+  CUSTOMER
+  MOVER
+}
+
+/// 활동 로그의 동작 종류
+///
+/// ActivityLog.action 에 저장되며 targetType 과 조합해
+/// "리뷰 삭제", "공지 수정" 같은 표현을 만듭니다.
+enum LogAction {
+  CREATE
+  UPDATE
+  DELETE
+}
+
+/// 활동 로그 대상 테이블
+///
+/// 로그로 남길 가치가 있는 도메인만 열거합니다.
+/// 알림/채팅/토큰처럼 양이 많고 추적 가치가 낮은 테이블은 제외했습니다.
+enum LogTargetType {
+  USER
+  MOVER_PROFILE
+  REVIEW
+  ESTIMATE_REQUEST
+  ESTIMATE
+  NOTICE
+  FAQ
+  INQUIRY
+  REPORT
+}
+
+// ===========================================================================
+// USER / AUTHENTICATION
+// ===========================================================================
+
+/// 사용자 계정 (일반 사용자 / 기사님 / 관리자 공통)
+///
+/// 로그인·권한의 기준이 되는 중심 테이블입니다. 역할별 상세 정보는
+/// CustomerProfile / MoverProfile 로 분리하고, 여기에는 공통 정보만 둡니다.
+/// - LOCAL 가입자는 password 를 저장하고 providerUserId 는 null 입니다.
+/// - 소셜 가입자는 providerUserId 를 저장하고 password 는 null 입니다.
+/// - 같은 소셜 계정(provider + providerUserId)으로는 중복 가입할 수 없습니다.
 model User {
+  /// 사용자 PK. 외부로 노출돼도 순번이 추측되지 않도록 UUID 를 사용합니다.
   id                 String       @id @default(uuid()) @db.Uuid
+  /// 로그인 이메일. 가입 방식과 무관하게 계정당 하나이며 중복 불가입니다.
   email              String       @unique
+  /// LOCAL 로그인용 해싱된 비밀번호. 소셜 로그인 계정은 null 입니다.
   password           String?
+  /// 가입/로그인 방식. 기본값 LOCAL.
   authProvider       AuthProvider @default(LOCAL)
+  /// 소셜 Provider 가 발급한 사용자 식별자. LOCAL 계정은 null 입니다.
   providerUserId     String?
+  /// 사용자 실명(또는 표시 이름).
   name               String
+  /// 휴대폰 번호. 계정당 하나로 중복 불가입니다. 미입력 상태를 허용해 nullable.
   phone              String?      @unique
+  /// 사용자 권한(CUSTOMER/MOVER/ADMIN).
   role               UserRole
+  /// 계정 활성 여부. 정지 시 false 로 두어 로그인/이용을 막습니다.
   isActive           Boolean      @default(true)
+  /// 역할별 프로필 등록을 마쳤는지 여부. 온보딩 완료 판단에 사용합니다.
   isProfileCompleted Boolean      @default(false)
 
+  // --- 1:1 프로필 / 인증 관계 ---
+  /// 일반 사용자 프로필 (역할이 CUSTOMER 인 경우에만 존재).
   customerProfile CustomerProfile?
+  /// 기사님 프로필 (역할이 MOVER 인 경우에만 존재).
   moverProfile    MoverProfile?
+  /// 발급된 Refresh Token 목록. 다중 기기 로그인을 위해 1:N.
   refreshTokens   RefreshToken[]
 
+  // --- 견적 관련 관계 (한 User 가 고객/기사 양쪽 역할의 데이터를 참조) ---
+  /// (고객으로서) 내가 생성한 견적 요청들.
   estimateRequests          EstimateRequest[]          @relation("CustomerEstimateRequests")
+  /// (기사로서) 내가 제출한 견적들.
   moverEstimates            Estimate[]                 @relation("MoverEstimates")
+  /// (기사로서) 나를 지정한 지정 견적 요청들.
   designatedRequests        DesignatedMover[]          @relation("DesignatedMoverUser")
+  /// (기사로서) 내가 반려한 견적 요청 기록들.
   estimateRequestRejections EstimateRequestRejection[]
+  /// 내가 변경 주체(changedBy)로 남긴 견적 요청 변경 이력들.
   estimateRequestHistories  EstimateRequestHistory[]   @relation("EstimateRequestHistoryChangedBy")
 
+  // --- 찜 / 리뷰 / 알림 ---
+  /// (고객으로서) 내가 찜한 기사님 목록.
   favoritesGiven    FavoriteMover[] @relation("CustomerFavorites")
+  /// (기사로서) 나를 찜한 고객 목록.
   favoritesReceived FavoriteMover[] @relation("MoverFavorites")
+  /// (고객으로서) 내가 작성한 리뷰들.
   reviewsWritten    Review[]        @relation("CustomerReviews")
+  /// (기사로서) 내가 받은 리뷰들.
   reviewsReceived   Review[]        @relation("MoverReviews")
+  /// 내게 발송된 알림들.
   notifications     Notification[]
 
+  // --- 채팅 / 견적 수정 (심화 기능) ---
+  /// (고객으로서) 참여 중인 채팅방들.
   customerChatRooms          ChatRoom[]         @relation("CustomerChatRooms")
+  /// (기사로서) 참여 중인 채팅방들.
   moverChatRooms             ChatRoom[]         @relation("MoverChatRooms")
+  /// 내가 보낸 채팅 메시지들.
   sentMessages               ChatMessage[]
+  /// 내가 요청한 견적 수정 요청들.
   requestedEstimateRevisions EstimateRevision[] @relation("RevisionRequester")
+  /// 내가 응답(승인/거절)한 견적 수정 요청들.
   respondedEstimateRevisions EstimateRevision[] @relation("RevisionResponder")
 
+  // --- 관리자 기능 관계 ---
+  /// 내가 접수한 신고들.
+  reportsFiled       Report[]         @relation("ReportReporter")
+  /// (관리자로서) 내가 처리한 신고들.
+  reportsHandled     Report[]         @relation("ReportHandler")
+  /// 나를 대상으로 한 정지/해제 이력들.
+  suspensionsChanged UserSuspension[] @relation("SuspensionTarget")
+  /// (관리자로서) 내가 집행한 정지/해제 이력들.
+  suspensionsByAdmin UserSuspension[] @relation("SuspensionAdmin")
+  /// 내가 작성한 1:1 문의들.
+  inquiries          Inquiry[]        @relation("InquiryAuthor")
+  /// (관리자로서) 내가 처리한 1:1 문의들.
+  inquiriesHandled   Inquiry[]        @relation("InquiryHandler")
+  /// 내가 보낸 문의 메시지들.
+  inquiryMessages    InquiryMessage[] @relation("InquiryMessageSender")
+  /// (관리자로서) 내가 작성한 공지들.
+  noticesWritten     Notice[]         @relation("NoticeAuthor")
+  /// (관리자로서) 내가 작성한 FAQ 들.
+  faqsWritten        Faq[]            @relation("FaqAuthor")
+  /// 내가 행위 주체(actor)로 남긴 활동 로그들.
+  activityLogs       ActivityLog[]    @relation("ActivityLogActor")
+  /// (관리자로서) 내가 승인/반려한 기사님 프로필들.
+  moverApprovals     MoverProfile[]   @relation("MoverApprover")
+
+  /// 가입 시각.
   createdAt DateTime  @default(now())
+  /// 마지막 수정 시각.
   updatedAt DateTime  @updatedAt
+  /// Soft Delete 시각. 탈퇴 시 실제 삭제 대신 이 값을 채웁니다.
   deletedAt DateTime?
 
+  /// 같은 소셜 계정(provider + providerUserId)의 중복 가입을 막습니다.
   @@unique([authProvider, providerUserId])
+  /// 역할별 목록 조회 최적화.
   @@index([role])
+  /// 활성 계정 필터 조회 최적화.
   @@index([isActive])
 }
 
+/// Refresh Token
+///
+/// Access Token 재발급에 쓰는 Refresh Token 을 계정과 분리해 저장합니다.
+/// 원문 토큰은 저장하지 않고 해시값만 보관하며, 한 사용자가 여러 기기에서
+/// 로그인할 수 있도록 1:N 구조로 관리합니다.
 model RefreshToken {
+  /// PK.
   id        Int       @id @default(autoincrement())
+  /// 토큰 소유 사용자.
   userId    String    @db.Uuid
+  /// Refresh Token 의 해시값. 원문은 저장하지 않으며 중복 불가입니다.
   tokenHash String    @unique
+  /// 토큰 만료 시각.
   expiresAt DateTime
+  /// 폐기 시각. 로그아웃/강제 만료 시 채워지며, 값이 있으면 사용 불가입니다.
   revokedAt DateTime?
+  /// 소유 사용자 관계. 계정 삭제 시 함께 삭제(Cascade).
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 발급 시각.
   createdAt DateTime  @default(now())
+  /// 수정 시각.
   updatedAt DateTime  @updatedAt
 
+  /// 사용자별 토큰 조회 최적화.
   @@index([userId])
+  /// 만료 토큰 정리(스케줄러) 조회 최적화.
   @@index([expiresAt])
 }
 
+// ===========================================================================
+// PROFILE
+// ===========================================================================
+
+/// 일반 사용자 프로필
+///
+/// User(CUSTOMER)와 1:1 로 연결되는 공개 프로필입니다.
+/// 관심 지역/이사 유형을 함께 관리해 맞춤 추천·필터에 활용합니다.
 model CustomerProfile {
+  /// PK.
   id           Int                   @id @default(autoincrement())
+  /// 소유 사용자. 1:1 이므로 unique.
   userId       String                @unique @db.Uuid
+  /// 프로필 이미지 URL. 미설정 허용.
   imageUrl     String?
+  /// 소유 사용자 관계. 계정 삭제 시 함께 삭제(Cascade).
   user         User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 관심(활동) 지역 목록.
   serviceAreas CustomerServiceArea[]
+  /// 관심 이사 유형 목록.
   serviceTypes CustomerServiceType[]
+  /// 생성 시각.
   createdAt    DateTime              @default(now())
+  /// 수정 시각.
   updatedAt    DateTime              @updatedAt
 
   @@map("customer_profiles")
 }
 
+/// 기사님 프로필
+///
+/// 고객에게 노출되는 기사님 정보 + 사업자/승인 정보를 함께 관리합니다.
+/// 서비스 가능 지역/이사 유형은 별도 테이블로 분리했습니다.
+/// - averageRating / reviewCount 는 리뷰 생성·수정 시 갱신합니다.
+/// - confirmedCount 는 견적 확정 시 갱신합니다.
 model MoverProfile {
-  id             Int                @id @default(autoincrement())
-  userId         String             @unique @db.Uuid
-  nickname       String             @unique
+  /// PK.
+  id             Int                 @id @default(autoincrement())
+  /// 소유 사용자. 1:1 이므로 unique.
+  userId         String              @unique @db.Uuid
+  /// 화면에 표시되는 기사님 별명. 중복 불가입니다.
+  nickname       String              @unique
+  /// 프로필 이미지 URL. 미설정 허용.
   imageUrl       String?
-  career         Int                @default(0)
+  /// 경력 연수. 기본 0.
+  career         Int                 @default(0)
+  /// 한 줄 소개.
   shortIntro     String
-  description    String             @db.Text
-  confirmedCount Int                @default(0)
-  averageRating  Decimal            @default(0) @db.Decimal(2, 1)
-  reviewCount    Int                @default(0)
-  user           User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  serviceAreas   MoverServiceArea[]
-  serviceTypes   MoverServiceType[]
-  createdAt      DateTime           @default(now())
-  updatedAt      DateTime           @updatedAt
+  /// 상세 소개(긴 텍스트).
+  description    String              @db.Text
+  /// 고객에게 확정된 견적 수. 정렬/노출용 비정규화 필드.
+  confirmedCount Int                 @default(0)
+  /// 리뷰 평균 평점(소수점 1자리). 리뷰 변경 시 갱신하는 비정규화 필드.
+  averageRating  Decimal             @default(0) @db.Decimal(2, 1)
+  /// 리뷰 수. 리뷰 변경 시 갱신하는 비정규화 필드.
+  reviewCount    Int                 @default(0)
 
+  /// 사업자 등록번호. 가입 후 별도 신청 단계에서 입력하므로 nullable 이며 중복 불가.
+  businessNumber String?             @unique
+  /// 상호명. 사업자 신청 시 입력.
+  businessName   String?
+  /// 사업자등록증 파일의 S3 key.
+  /// 공개 URL 을 저장하지 않으며, 관리자 권한 확인 후
+  /// 만료 시간이 짧은 Presigned URL 을 발급해 조회합니다.
+  licenseFileKey String?
+
+  /// 관리자 승인 상태. 기본 PENDING(검수 대기).
+  approvalStatus MoverApprovalStatus @default(PENDING)
+  /// 승인/반려를 처리한 관리자 ID.
+  approvedBy     String?             @db.Uuid
+  /// 승인/반려 처리 시각.
+  approvedAt     DateTime?
+  /// 반려 사유. approvalStatus 가 REJECTED 일 때 사용합니다.
+  rejectReason   String?             @db.Text
+
+  /// 소유 사용자 관계. 계정 삭제 시 함께 삭제(Cascade).
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 승인 처리 관리자 관계. 관리자 계정 삭제 시 이 필드만 null 로(SetNull).
+  approver     User?              @relation("MoverApprover", fields: [approvedBy], references: [id], onDelete: SetNull)
+  /// 서비스 가능 지역 목록.
+  serviceAreas MoverServiceArea[]
+  /// 제공 가능 이사 유형 목록.
+  serviceTypes MoverServiceType[]
+  /// 생성 시각.
+  createdAt    DateTime           @default(now())
+  /// 수정 시각.
+  updatedAt    DateTime           @updatedAt
+
+  /// 평점순 정렬 최적화.
   @@index([averageRating])
+  /// 리뷰 많은 순 정렬 최적화.
   @@index([reviewCount])
+  /// 경력순 정렬 최적화.
   @@index([career])
+  /// 확정 많은 순 정렬 최적화.
   @@index([confirmedCount])
+  /// 관리자 승인 대기/상태별 조회 최적화.
+  @@index([approvalStatus])
   @@map("mover_profiles")
 }
 
+/// 기사님 서비스 가능 지역
+///
+/// 기사님이 어느 지역까지 서비스하는지를 Region 참조로 관리합니다.
+/// 받은 요청 목록·기사님 찾기의 지역 필터 기준이 됩니다.
 model MoverServiceArea {
+  /// PK.
   id             Int          @id @default(autoincrement())
+  /// 대상 기사님 프로필.
   moverProfileId Int
+  /// 서비스 지역(Region 참조).
   regionId       Int
+  /// 기사님 프로필 관계. 프로필 삭제 시 함께 삭제(Cascade).
   moverProfile   MoverProfile @relation(fields: [moverProfileId], references: [id], onDelete: Cascade)
+  /// 지역 관계. 지역은 시드 데이터라 삭제를 막음(Restrict).
   region         Region       @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  /// 생성 시각.
   createdAt      DateTime     @default(now())
 
+  /// 같은 기사님이 같은 지역을 중복 등록할 수 없습니다.
   @@unique([moverProfileId, regionId])
+  /// 지역 기준 역방향 조회(이 지역을 서비스하는 기사) 최적화.
   @@index([regionId])
   @@map("mover_service_areas")
 }
 
+/// 일반 사용자 관심(활동) 지역
+///
+/// 고객이 관심 있는 지역을 Region 참조로 관리합니다. 맞춤 추천/필터에 사용합니다.
 model CustomerServiceArea {
+  /// PK.
   id                Int             @id @default(autoincrement())
+  /// 대상 고객 프로필.
   customerProfileId Int
+  /// 관심 지역(Region 참조).
   regionId          Int
+  /// 고객 프로필 관계. 프로필 삭제 시 함께 삭제(Cascade).
   customerProfile   CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
+  /// 지역 관계. 지역은 시드 데이터라 삭제를 막음(Restrict).
   region            Region          @relation(fields: [regionId], references: [id], onDelete: Restrict)
+  /// 생성 시각.
   createdAt         DateTime        @default(now())
 
+  /// 같은 고객이 같은 지역을 중복 등록할 수 없습니다.
   @@unique([customerProfileId, regionId])
+  /// 지역 기준 역방향 조회 최적화.
   @@index([regionId])
   @@map("customer_service_areas")
 }
 
+/// 지역 마스터
+///
+/// 서비스에서 사용하는 시·도 정보입니다.
+/// 17개 시·도를 시드(seed)로 등록하고, 사용자는 이 목록에서만 선택합니다.
+/// 화면 표시명(서울/인천/제주 등) 매핑은 프론트에서 처리합니다.
 model Region {
+  /// PK.
   id   Int    @id @default(autoincrement())
+  /// 공식 지역명. 중복 불가입니다.
   name String @unique
 
+  /// 이 지역을 서비스하는 기사님 목록(역방향).
   moverServiceAreas    MoverServiceArea[]
-  customerServiceAreas CustomerServiceArea[] // 추가
+  /// 이 지역을 관심 지역으로 둔 고객 목록(역방향).
+  customerServiceAreas CustomerServiceArea[]
 
+  /// 이 지역을 출발지로 하는 견적 요청들.
   departureEstimateRequests   EstimateRequest[] @relation("EstimateRequestFromRegion")
+  /// 이 지역을 도착지로 하는 견적 요청들.
   destinationEstimateRequests EstimateRequest[] @relation("EstimateRequestToRegion")
 
+  /// 생성 시각.
   createdAt DateTime @default(now())
+  /// 수정 시각.
   updatedAt DateTime @updatedAt
 
   @@map("regions")
 }
 
+/// 일반 사용자 관심 이사 유형
+///
+/// 고객이 관심 있는 이사 유형을 관리합니다. 맞춤 추천/필터에 사용합니다.
 model CustomerServiceType {
+  /// PK.
   id                Int      @id @default(autoincrement())
+  /// 대상 고객 프로필.
   customerProfileId Int
+  /// 관심 이사 유형.
   moveType          MoveType
 
+  /// 고객 프로필 관계. 프로필 삭제 시 함께 삭제(Cascade).
   customerProfile CustomerProfile @relation(fields: [customerProfileId], references: [id], onDelete: Cascade)
 
+  /// 생성 시각.
   createdAt DateTime @default(now())
 
+  /// 같은 고객이 같은 이사 유형을 중복 등록할 수 없습니다.
   @@unique([customerProfileId, moveType])
+  /// 유형별 필터 조회 최적화.
   @@index([moveType])
   @@map("customer_service_types")
 }
 
+/// 기사님 제공 가능 이사 유형
+///
+/// 기사님 한 명이 여러 이사 유형을 제공할 수 있습니다.
+/// 받은 요청 목록·기사님 찾기의 서비스 유형 필터 기준이 됩니다.
 model MoverServiceType {
+  /// PK.
   id             Int          @id @default(autoincrement())
+  /// 대상 기사님 프로필.
   moverProfileId Int
+  /// 제공 이사 유형.
   moveType       MoveType
+  /// 기사님 프로필 관계. 프로필 삭제 시 함께 삭제(Cascade).
   moverProfile   MoverProfile @relation(fields: [moverProfileId], references: [id], onDelete: Cascade)
+  /// 생성 시각.
   createdAt      DateTime     @default(now())
 
+  /// 같은 기사님이 같은 이사 유형을 중복 등록할 수 없습니다.
   @@unique([moverProfileId, moveType])
+  /// 유형별 필터 조회 최적화.
   @@index([moveType])
   @@map("mover_service_types")
 }
 
+// ===========================================================================
+// ESTIMATE REQUEST
+// ===========================================================================
+
+/// 이사 견적 요청 (핵심 테이블)
+///
+/// 고객이 생성하는 견적 요청의 중심 엔티티입니다.
+/// 주요 정책
+/// - 고객은 동시에 하나의 활성 요청만 가질 수 있습니다.
+/// - 요청은 이사일 하루 전에 자동 만료됩니다.
+/// - 하나의 요청에서는 하나의 견적만 최종 확정할 수 있습니다.
+/// - 만료·취소·완료된 요청에는 새 견적을 제출할 수 없습니다.
 model EstimateRequest {
+  /// PK.
   id                  Int                   @id @default(autoincrement())
+  /// 요청을 생성한 고객.
   customerId          String                @db.Uuid
+  /// 이사 유형.
   moveType            MoveType
+  /// 이사 예정일.
   moveDate            DateTime
+  /// 출발지 우편번호.
   fromZipCode         String
+  /// 출발지 기본 주소.
   fromAddress         String
+  /// 출발지 상세 주소. 미입력 허용.
   fromDetailAddress   String?
+  /// 출발지 지역(Region 참조). 지역 필터/매칭 기준.
   fromRegionId        Int
+  /// 도착지 우편번호.
   toZipCode           String
+  /// 도착지 기본 주소.
   toAddress           String
+  /// 도착지 상세 주소. 미입력 허용.
   toDetailAddress     String?
+  /// 도착지 지역(Region 참조).
   toRegionId          Int
+  /// 요청 상태. 기본 PENDING(작성 중).
   status              EstimateRequestStatus @default(PENDING)
+  /// 활성 요청 여부. "동시 1건" 정책과 신규 견적 수용 가능 여부 판단에 사용.
   isActive            Boolean               @default(true)
+  /// 자동 만료 예정 시각(이사일 하루 전).
   expiresAt           DateTime
+  /// 실제 만료된 시각. 만료 처리 전에는 null.
   expiredAt           DateTime?
+  /// 고객이 최종 확정한 견적 ID. 요청당 하나이므로 unique.
   confirmedEstimateId Int?                  @unique
 
+  /// 요청 생성 고객 관계. 계정 삭제 시 함께 삭제(Cascade).
   customer          User                       @relation("CustomerEstimateRequests", fields: [customerId], references: [id], onDelete: Cascade)
+  /// 출발 지역 관계. 지역은 시드라 삭제 막음(Restrict).
   fromRegion        Region                     @relation("EstimateRequestFromRegion", fields: [fromRegionId], references: [id], onDelete: Restrict)
+  /// 도착 지역 관계. 지역은 시드라 삭제 막음(Restrict).
   toRegion          Region                     @relation("EstimateRequestToRegion", fields: [toRegionId], references: [id], onDelete: Restrict)
+  /// 이 요청에 제출된 견적들.
   estimates         Estimate[]                 @relation("RequestEstimates")
+  /// 이 요청에서 지정한 기사님들.
   designatedMovers  DesignatedMover[]
+  /// 이 요청에 대한 기사님 반려 기록들.
   rejections        EstimateRequestRejection[]
+  /// 이 요청의 생성/변경 이력들.
   histories         EstimateRequestHistory[]
+  /// 확정된 견적 관계(1:1). 견적이 지워지면 이 필드만 null 로(SetNull).
   confirmedEstimate Estimate?                  @relation("ConfirmedEstimate", fields: [confirmedEstimateId], references: [id], onDelete: SetNull)
+  /// 이 요청으로 파생된 채팅방들.
   chatRooms         ChatRoom[]
 
+  /// 생성 시각.
   createdAt   DateTime  @default(now())
+  /// 수정 시각.
   updatedAt   DateTime  @updatedAt
+  /// 취소 시각. 취소 전에는 null.
   canceledAt  DateTime?
+  /// 완료(이사 종료) 시각. 완료 전에는 null.
   completedAt DateTime?
 
+  /// 고객별 요청 목록 조회 최적화.
   @@index([customerId])
+  /// 상태별 조회 최적화.
   @@index([status])
+  /// 이사 유형 필터 최적화.
   @@index([moveType])
+  /// 출발 지역 필터/매칭 최적화.
   @@index([fromRegionId])
+  /// 도착 지역 필터/매칭 최적화.
   @@index([toRegionId])
+  /// 이사일 정렬/조회 최적화.
   @@index([moveDate])
+  /// 만료 대상 스케줄러 조회 최적화.
   @@index([expiresAt])
+  /// 최신순 목록 조회 최적화.
   @@index([createdAt])
   @@map("estimate_requests")
 }
 
+/// 지정 견적 요청
+///
+/// 고객이 특정 기사님을 콕 집어 견적을 요청한 기록입니다.
+/// - 한 요청에 같은 기사님을 중복 지정할 수 없습니다.
+/// - 지정은 최대 3명까지 보낼 수 있습니다(서비스 로직에서 제한).
 model DesignatedMover {
+  /// PK.
   id                Int             @id @default(autoincrement())
+  /// 대상 견적 요청.
   estimateRequestId Int
+  /// 지정된 기사님.
   moverId           String          @db.Uuid
+  /// 견적 요청 관계. 요청 삭제 시 함께 삭제(Cascade).
   estimateRequest   EstimateRequest @relation(fields: [estimateRequestId], references: [id], onDelete: Cascade)
+  /// 지정 기사님 관계. 계정 삭제 시 함께 삭제(Cascade).
   mover             User            @relation("DesignatedMoverUser", fields: [moverId], references: [id], onDelete: Cascade)
+  /// 생성 시각.
   createdAt         DateTime        @default(now())
 
+  /// 같은 요청에 같은 기사님을 중복 지정할 수 없습니다.
   @@unique([estimateRequestId, moverId])
+  /// 기사님 기준 "나를 지정한 요청" 조회 최적화.
   @@index([moverId])
   @@map("designated_movers")
 }
 
+/// 견적 (기사님이 제출)
+///
+/// 기사님이 고객의 요청에 제출하는 견적입니다.
+/// 주요 정책
+/// - 같은 기사님은 한 요청에 하나의 견적만 제출할 수 있습니다.
+/// - 반려·만료·취소·확정·완료된 요청에는 제출할 수 없습니다.
+/// - 일반 요청은 최대 5개, 지정 요청은 최대 3개까지 견적을 받습니다(서비스 로직).
+/// - 하나가 확정되면 나머지는 선택할 수 없습니다.
 model Estimate {
+  /// PK.
   id                Int            @id @default(autoincrement())
+  /// 대상 견적 요청.
   estimateRequestId Int            @map("estimate_request_id")
+  /// 견적을 제출한 기사님.
   moverId           String         @map("mover_id") @db.Uuid
+  /// 견적 금액(원). 최소 10,000원(서비스 검증).
   price             Int
+  /// 견적 내용. 20자 이상 150자 이하(서비스 검증).
   comment           String         @db.Text
+  /// 견적 상태. 기본 SENT(제출됨).
   status            EstimateStatus @default(SENT)
+  /// 지정 요청에 대한 견적인지 여부.
   isDesignated      Boolean        @default(false) @map("is_designated")
 
+  /// 견적 요청 관계. 요청 삭제 시 함께 삭제(Cascade).
   estimateRequest     EstimateRequest    @relation("RequestEstimates", fields: [estimateRequestId], references: [id], onDelete: Cascade)
+  /// 제출 기사님 관계. 계정 삭제 시 함께 삭제(Cascade).
   mover               User               @relation("MoverEstimates", fields: [moverId], references: [id], onDelete: Cascade)
+  /// 이 견적이 확정 견적일 때 연결되는 요청(역방향 1:1).
   confirmedForRequest EstimateRequest?   @relation("ConfirmedEstimate")
+  /// 이 견적에 달린 리뷰(1:1).
   review              Review?
+  /// 이 견적으로 생성된 채팅방(1:1).
   chatRoom            ChatRoom?
+  /// 이 견적에 대한 수정 요청들.
   revisions           EstimateRevision[]
 
+  /// 생성 시각.
   createdAt   DateTime  @default(now()) @map("created_at")
+  /// 수정 시각.
   updatedAt   DateTime  @updatedAt @map("updated_at")
+  /// 확정 시각. 확정 전에는 null.
   confirmedAt DateTime? @map("confirmed_at")
+  /// 만료 시각. 만료 전에는 null.
   expiredAt   DateTime? @map("expired_at")
+  /// 취소 시각. 취소 전에는 null.
   canceledAt  DateTime? @map("canceled_at")
 
+  /// 같은 기사님이 같은 요청에 견적을 두 번 낼 수 없습니다.
   @@unique([estimateRequestId, moverId])
+  /// 기사님별 견적 목록 조회 최적화.
   @@index([moverId])
+  /// 상태별 조회 최적화.
   @@index([status])
+  /// 최신순 목록 조회 최적화.
   @@index([createdAt])
   @@map("estimates")
 }
 
+/// 견적 요청 변경 이력
+///
+/// 채팅형 UI 로 요청 정보를 입력받는 과정에서 발생한 생성/변경/제출/취소를
+/// 기록합니다. 이력의 중심은 채팅 메시지가 아니라 "견적 요청 데이터"입니다.
+/// 주소처럼 여러 컬럼으로 구성되는 값은 previousData/changedData 에 JSON 으로 담습니다.
 model EstimateRequestHistory {
+  /// PK.
   id                Int                        @id @default(autoincrement())
+  /// 대상 견적 요청.
   estimateRequestId Int
+  /// 변경을 수행한 사용자.
   changedBy         String                     @db.Uuid
+  /// 변경 종류(생성/변경/제출/취소).
   type              EstimateRequestHistoryType
+  /// 변경 전 데이터 스냅샷(JSON). 생성 시엔 null.
   previousData      Json?
+  /// 변경 후 데이터 스냅샷(JSON).
   changedData       Json?
+  /// 견적 요청 관계. 요청 삭제 시 함께 삭제(Cascade).
   estimateRequest   EstimateRequest            @relation(fields: [estimateRequestId], references: [id], onDelete: Cascade)
+  /// 변경 주체 사용자 관계. 이력 보존을 위해 계정 삭제를 막음(Restrict).
   changedByUser     User                       @relation("EstimateRequestHistoryChangedBy", fields: [changedBy], references: [id], onDelete: Restrict)
+  /// 생성 시각.
   createdAt         DateTime                   @default(now())
 
+  /// 요청별 이력 시간순 조회 최적화.
   @@index([estimateRequestId, createdAt])
+  /// 변경 주체별 조회 최적화.
   @@index([changedBy])
+  /// 변경 종류별 조회 최적화.
   @@index([type])
   @@map("estimate_request_histories")
 }
 
+/// 견적 요청 반려
+///
+/// 기사님이 받은 견적 요청을 거절한 기록과 사유를 관리합니다.
+/// 주요 정책
+/// - 같은 기사님은 같은 요청을 중복 반려할 수 없습니다.
+/// - 반려한 요청은 그 기사님의 받은 요청 목록에서 제외됩니다.
+/// - 이미 견적을 제출한 요청은 반려할 수 없고, 반려 내역은 복구하지 않습니다.
+/// - 반려 시 고객에게 알림을 생성합니다.
 model EstimateRequestRejection {
+  /// PK.
   id                Int             @id @default(autoincrement())
+  /// 반려된 견적 요청.
   estimateRequestId Int             @map("estimate_request_id")
+  /// 반려한 기사님.
   moverId           String          @map("mover_id") @db.Uuid
+  /// 반려 사유.
   reason            String          @db.Text
+  /// 견적 요청 관계. 요청 삭제 시 함께 삭제(Cascade).
   estimateRequest   EstimateRequest @relation(fields: [estimateRequestId], references: [id], onDelete: Cascade)
+  /// 반려 기사님 관계. 계정 삭제 시 함께 삭제(Cascade).
   mover             User            @relation(fields: [moverId], references: [id], onDelete: Cascade)
+  /// 생성 시각.
   createdAt         DateTime        @default(now()) @map("created_at")
 
+  /// 같은 기사님이 같은 요청을 중복 반려할 수 없습니다.
   @@unique([estimateRequestId, moverId])
+  /// 기사님 기준 반려 목록 조회 최적화.
   @@index([moverId])
+  /// 요청 기준 반려 조회 최적화.
   @@index([estimateRequestId])
   @@map("estimate_request_rejections")
 }
 
+// ===========================================================================
+// FAVORITE / REVIEW
+// ===========================================================================
+
+/// 찜한 기사님
+///
+/// 고객이 찜한 기사님을 관리합니다. 같은 기사님을 중복으로 찜할 수 없습니다.
 model FavoriteMover {
+  /// PK.
   id         Int      @id @default(autoincrement())
+  /// 찜한 고객.
   customerId String   @map("customer_id") @db.Uuid
+  /// 찜 대상 기사님.
   moverId    String   @map("mover_id") @db.Uuid
+  /// 고객 관계. 계정 삭제 시 함께 삭제(Cascade).
   customer   User     @relation("CustomerFavorites", fields: [customerId], references: [id], onDelete: Cascade)
+  /// 기사님 관계. 계정 삭제 시 함께 삭제(Cascade).
   mover      User     @relation("MoverFavorites", fields: [moverId], references: [id], onDelete: Cascade)
+  /// 생성 시각.
   createdAt  DateTime @default(now()) @map("created_at")
 
+  /// 같은 고객이 같은 기사님을 중복으로 찜할 수 없습니다.
   @@unique([customerId, moverId])
+  /// 기사님 기준 "나를 찜한 고객 수" 등 조회 최적화.
   @@index([moverId])
+  /// 고객별 찜 목록 최신순 조회 최적화.
   @@index([customerId, createdAt])
   @@map("favorite_movers")
 }
 
+/// 리뷰
+///
+/// 이사 완료 후 고객이 기사님에게 남기는 평점/후기입니다.
+/// 주요 정책
+/// - 완료된 이사에 대해서만 작성할 수 있습니다.
+/// - 하나의 견적당 리뷰는 하나만 작성할 수 있습니다.
+/// - 리뷰 생성·수정 시 기사님의 averageRating / reviewCount 를 갱신합니다.
 model Review {
+  /// PK.
   id         Int      @id @default(autoincrement())
+  /// 작성 고객.
   customerId String   @map("customer_id") @db.Uuid
+  /// 리뷰 대상 기사님.
   moverId    String   @map("mover_id") @db.Uuid
+  /// 리뷰가 달린 견적. 견적당 하나이므로 unique.
   estimateId Int      @unique @map("estimate_id")
+  /// 평점. 유효 범위는 요청 검증에서 처리합니다.
   rating     Int
+  /// 리뷰 내용.
   content    String   @db.Text
+  /// 숨김 여부. 관리자가 신고 처리 등으로 노출을 막을 때 사용합니다.
+  isHidden   Boolean  @default(false) @map("is_hidden")
+  /// 작성 고객 관계. 계정 삭제 시 함께 삭제(Cascade).
   customer   User     @relation("CustomerReviews", fields: [customerId], references: [id], onDelete: Cascade)
+  /// 대상 기사님 관계. 계정 삭제 시 함께 삭제(Cascade).
   mover      User     @relation("MoverReviews", fields: [moverId], references: [id], onDelete: Cascade)
+  /// 대상 견적 관계. 견적 삭제 시 함께 삭제(Cascade).
   estimate   Estimate @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  /// 생성 시각.
   createdAt  DateTime @default(now()) @map("created_at")
+  /// 수정 시각.
   updatedAt  DateTime @updatedAt @map("updated_at")
 
+  /// 기사님별 리뷰 최신순 조회 최적화.
   @@index([moverId, createdAt])
+  /// 고객별 작성 리뷰 최신순 조회 최적화.
   @@index([customerId, createdAt])
+  /// 숨김 필터 조회 최적화.
+  @@index([isHidden])
   @@map("reviews")
 }
 
+// ===========================================================================
+// NOTIFICATION
+// ===========================================================================
+
+/// 알림
+///
+/// 견적 요청/도착/반려/확정, 이사 일정, 리뷰, 채팅 관련 알림을 관리합니다.
+/// 주요 정책
+/// - 읽음 여부와 읽은 시각을 관리합니다.
+/// - 최근 3일 이내 알림만 화면에 노출하고, 목록은 5개 단위로 조회합니다.
+/// - 만료된 알림은 스케줄러로 정리합니다. (실시간 전송은 SSE 고려)
 model Notification {
+  /// PK.
   id        Int              @id @default(autoincrement())
+  /// 알림을 받는 사용자.
   userId    String           @map("user_id") @db.Uuid
+  /// 알림 유형. 프론트 아이콘/문구 분기에 사용.
   type      NotificationType
+  /// 알림 제목.
   title     String
+  /// 알림 내용.
   content   String           @db.Text
+  /// 클릭 시 이동할 링크. 없을 수 있음.
   linkUrl   String?          @map("link_url")
+  /// 읽음 여부. 기본 false.
   isRead    Boolean          @default(false) @map("is_read")
+  /// 읽은 시각. 읽기 전에는 null.
   readAt    DateTime?        @map("read_at")
+  /// 노출/정리 기준 만료 시각.
   expiresAt DateTime?        @map("expires_at")
+  /// 수신 사용자 관계. 계정 삭제 시 함께 삭제(Cascade).
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /// 생성 시각.
   createdAt DateTime         @default(now()) @map("created_at")
 
+  /// 사용자별 안 읽은 알림 조회 최적화.
   @@index([userId, isRead])
+  /// 사용자별 최신순 알림 조회 최적화.
   @@index([userId, createdAt])
+  /// 만료 알림 정리(스케줄러) 조회 최적화.
   @@index([expiresAt])
   @@map("notifications")
 }
 
+// ===========================================================================
+// ADVANCED FEATURE: CHAT (채팅 및 합의 기반 견적 수정)
+// ===========================================================================
+
+/// 채팅방
+///
+/// 특정 견적을 기준으로 고객·기사님 사이에 생성되는 채팅방입니다.
+/// 주요 정책
+/// - 하나의 견적에는 하나의 채팅방만 생성할 수 있습니다.
+/// - 해당 견적의 고객과 기사님만 접근할 수 있습니다. (실시간은 WebSocket 고려)
 model ChatRoom {
+  /// PK.
   id                Int                @id @default(autoincrement())
+  /// 관련 견적 요청.
   estimateRequestId Int                @map("estimate_request_id")
+  /// 기준 견적. 견적당 하나이므로 unique.
   estimateId        Int                @unique @map("estimate_id")
+  /// 참여 고객.
   customerId        String             @map("customer_id") @db.Uuid
+  /// 참여 기사님.
   moverId           String             @map("mover_id") @db.Uuid
+  /// 마지막 메시지 시각. 목록 정렬용 비정규화 필드.
   lastMessageAt     DateTime?          @map("last_message_at")
+  /// 견적 요청 관계. 요청 삭제 시 함께 삭제(Cascade).
   estimateRequest   EstimateRequest    @relation(fields: [estimateRequestId], references: [id], onDelete: Cascade)
+  /// 기준 견적 관계. 견적 삭제 시 함께 삭제(Cascade).
   estimate          Estimate           @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  /// 참여 고객 관계. 계정 삭제 시 함께 삭제(Cascade).
   customer          User               @relation("CustomerChatRooms", fields: [customerId], references: [id], onDelete: Cascade)
+  /// 참여 기사님 관계. 계정 삭제 시 함께 삭제(Cascade).
   mover             User               @relation("MoverChatRooms", fields: [moverId], references: [id], onDelete: Cascade)
+  /// 이 방의 메시지들.
   messages          ChatMessage[]
+  /// 이 방에서 발생한 견적 수정 요청들.
   revisions         EstimateRevision[]
+  /// 생성 시각.
   createdAt         DateTime           @default(now()) @map("created_at")
+  /// 수정 시각.
   updatedAt         DateTime           @updatedAt @map("updated_at")
 
+  /// 요청+기사 조합으로 방이 중복 생성되지 않도록 보장.
   @@unique([estimateRequestId, moverId])
+  /// 고객별 채팅방 최근 대화순 조회 최적화.
   @@index([customerId, lastMessageAt])
+  /// 기사님별 채팅방 최근 대화순 조회 최적화.
   @@index([moverId, lastMessageAt])
   @@map("chat_rooms")
 }
 
+/// 채팅 메시지
+///
+/// 채팅방에서 오가는 개별 메시지입니다.
+/// type 으로 텍스트/이미지/시스템/견적 수정 요청 메시지를 구분합니다.
 model ChatMessage {
+  /// PK.
   id        Int               @id @default(autoincrement())
+  /// 소속 채팅방.
   roomId    Int               @map("room_id")
+  /// 보낸 사람.
   senderId  String            @map("sender_id") @db.Uuid
+  /// 메시지 유형. 기본 TEXT.
   type      ChatMessageType   @default(TEXT)
+  /// 텍스트 내용. IMAGE 등에서는 null 일 수 있음.
   content   String?           @db.Text
+  /// 이미지 URL. IMAGE 타입에서 사용.
   imageUrl  String?           @map("image_url")
+  /// 읽음 여부. 기본 false.
   isRead    Boolean           @default(false) @map("is_read")
+  /// 읽은 시각. 읽기 전에는 null.
   readAt    DateTime?         @map("read_at")
+  /// 채팅방 관계. 방 삭제 시 함께 삭제(Cascade).
   room      ChatRoom          @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  /// 보낸 사람 관계. 계정 삭제 시 함께 삭제(Cascade).
   sender    User              @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  /// 이 메시지에 연결된 견적 수정 요청(1:1, ESTIMATE_REVISION 타입일 때).
   revision  EstimateRevision?
+  /// 생성 시각.
   createdAt DateTime          @default(now()) @map("created_at")
 
+  /// 방별 메시지 시간순 조회 최적화.
   @@index([roomId, createdAt])
+  /// 방별 안 읽은 메시지 조회 최적화.
   @@index([roomId, isRead])
+  /// 보낸 사람 기준 조회 최적화.
   @@index([senderId])
   @@map("chat_messages")
 }
 
+/// 견적 수정 요청 (합의 기반)
+///
+/// 고객과 기사님이 채팅으로 협의해 견적 금액/내용을 바꾸는 요청입니다.
+/// 주요 정책
+/// - 확정 또는 완료된 견적은 수정할 수 없습니다.
+/// - 요청은 승인/거절/취소 상태를 가집니다.
+/// - 승인 시 기존 견적 금액·내용을 Transaction 으로 함께 갱신합니다.
 model EstimateRevision {
+  /// PK.
   id               Int                    @id @default(autoincrement())
+  /// 협의가 이뤄진 채팅방.
   chatRoomId       Int                    @map("chat_room_id")
+  /// 수정 대상 견적.
   estimateId       Int                    @map("estimate_id")
+  /// 수정을 요청한 사람.
   requesterId      String                 @map("requester_id") @db.Uuid
+  /// 요청에 응답(승인/거절)한 사람. 응답 전에는 null.
   responderId      String?                @map("responder_id") @db.Uuid
+  /// 이 요청을 표시하는 채팅 메시지. 1:1 이므로 unique, 없을 수도 있음.
   messageId        Int?                   @unique @map("message_id")
+  /// 변경 전 금액(스냅샷).
   previousPrice    Int                    @map("previous_price")
+  /// 요청한(변경 후) 금액.
   requestedPrice   Int                    @map("requested_price")
+  /// 변경 전 내용(스냅샷).
   previousComment  String                 @map("previous_comment") @db.Text
+  /// 요청한(변경 후) 내용.
   requestedComment String                 @map("requested_comment") @db.Text
+  /// 요청 상태. 기본 PENDING.
   status           EstimateRevisionStatus @default(PENDING)
+  /// 채팅방 관계. 방 삭제 시 함께 삭제(Cascade).
   chatRoom         ChatRoom               @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  /// 대상 견적 관계. 견적 삭제 시 함께 삭제(Cascade).
   estimate         Estimate               @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  /// 요청자 관계. 계정 삭제 시 함께 삭제(Cascade).
   requester        User                   @relation("RevisionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  /// 응답자 관계. 계정 삭제 시 이 필드만 null 로(SetNull).
   responder        User?                  @relation("RevisionResponder", fields: [responderId], references: [id], onDelete: SetNull)
+  /// 표시 메시지 관계. 메시지 삭제 시 이 필드만 null 로(SetNull).
   message          ChatMessage?           @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  /// 생성 시각.
   createdAt        DateTime               @default(now()) @map("created_at")
+  /// 응답 시각. 응답 전에는 null.
   respondedAt      DateTime?              @map("responded_at")
+  /// 수정 시각.
   updatedAt        DateTime               @updatedAt @map("updated_at")
 
+  /// 방별 수정 요청 시간순 조회 최적화.
   @@index([chatRoomId, createdAt])
+  /// 견적별 수정 요청 시간순 조회 최적화.
   @@index([estimateId, createdAt])
+  /// 상태별(대기 중 등) 조회 최적화.
   @@index([status])
   @@map("estimate_revisions")
+}
+
+// ===========================================================================
+// 관리자 기능
+// ===========================================================================
+
+/// 신고
+///
+/// 리뷰나 기사님을 대상으로 접수되는 신고입니다.
+/// 대상이 리뷰(Int PK)와 기사(User, uuid)로 타입이 달라
+/// targetId 를 String 으로 두고, 외래키 대신 서비스에서 대상 존재를 검증합니다.
+model Report {
+  /// PK.
+  id          Int              @id @default(autoincrement())
+  /// 신고 대상 종류(리뷰/기사).
+  targetType  ReportTargetType @map("target_type")
+  /// 신고 대상 식별자. 대상별 PK 타입이 달라 String 으로 저장합니다.
+  targetId    String           @map("target_id")
+  /// 신고자.
+  reporterId  String           @map("reporter_id") @db.Uuid
+  /// 신고 사유.
+  reason      ReportReason
+  /// 상세 서술. 사유가 OTHER 인 경우 등에 사용.
+  detail      String?          @db.Text
+  /// 처리 상태. 기본 PENDING(접수).
+  status      ReportStatus     @default(PENDING)
+  /// 처리한 관리자 ID. 처리 전에는 null.
+  handledBy   String?          @map("handled_by") @db.Uuid
+  /// 처리 시각. 처리 전에는 null.
+  handledAt   DateTime?        @map("handled_at")
+  /// 처리 메모(관리자 기록).
+  handlerNote String?          @map("handler_note") @db.Text
+
+  /// 신고자 관계. 계정 삭제 시 함께 삭제(Cascade).
+  reporter User  @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  /// 처리 관리자 관계. 관리자 계정 삭제 시 이 필드만 null 로(SetNull).
+  handler  User? @relation("ReportHandler", fields: [handledBy], references: [id], onDelete: SetNull)
+
+  /// 생성 시각.
+  createdAt DateTime @default(now()) @map("created_at")
+  /// 수정 시각.
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// 같은 사용자가 같은 대상을 중복 신고할 수 없습니다.
+  @@unique([targetType, targetId, reporterId])
+  /// 상태별 최신순 처리 목록 조회 최적화.
+  @@index([status, createdAt])
+  /// 대상 기준 신고 조회 최적화.
+  @@index([targetType, targetId])
+  /// 신고자 기준 조회 최적화.
+  @@index([reporterId])
+  @@map("reports")
+}
+
+/// 회원 정지 / 해제 이력
+///
+/// 현재 정지 여부는 User.isActive 로 판단하고, 이 테이블은 이력만 보관합니다.
+/// 정지는 영구이며 해제는 관리자가 문의 처리 후 수동으로 진행합니다.
+model UserSuspension {
+  /// PK.
+  id           Int              @id @default(autoincrement())
+  /// 정지/해제 대상 사용자.
+  userId       String           @map("user_id") @db.Uuid
+  /// 조치를 집행한 관리자.
+  adminId      String           @map("admin_id") @db.Uuid
+  /// 조치 종류(정지/해제).
+  action       SuspensionAction
+  /// 사용자에게 노출되는 사유.
+  reason       String           @db.Text
+  /// 관리자만 볼 수 있는 내부 메모.
+  internalNote String?          @map("internal_note") @db.Text
+
+  /// 대상 사용자 관계. 계정 삭제 시 함께 삭제(Cascade).
+  user  User @relation("SuspensionTarget", fields: [userId], references: [id], onDelete: Cascade)
+  /// 집행 관리자 관계. 이력 보존을 위해 관리자 계정 삭제를 막음(Restrict).
+  admin User @relation("SuspensionAdmin", fields: [adminId], references: [id], onDelete: Restrict)
+
+  /// 생성 시각.
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// 사용자별 정지/해제 이력 시간순 조회 최적화.
+  @@index([userId, createdAt])
+  /// 관리자별 처리 이력 시간순 조회 최적화.
+  @@index([adminId, createdAt])
+  @@map("user_suspensions")
+}
+
+/// 1:1 문의 (Q&A)
+///
+/// 정지된 회원이 이의를 제기하는 창구로도 사용합니다.
+/// 정지 회원도 접근할 수 있어야 하므로 인증 미들웨어에 예외 처리가 필요합니다.
+model Inquiry {
+  /// PK.
+  id        Int             @id @default(autoincrement())
+  /// 문의 작성자.
+  authorId  String          @map("author_id") @db.Uuid
+  /// 문의 분류. 기본 ETC.
+  category  InquiryCategory @default(ETC)
+  /// 문의 제목.
+  title     String
+  /// 문의 상태. 기본 OPEN(접수).
+  status    InquiryStatus   @default(OPEN)
+  /// 담당(처리) 관리자 ID. 배정 전에는 null.
+  handledBy String?         @map("handled_by") @db.Uuid
+  /// 종료 시각. 종료 전에는 null.
+  closedAt  DateTime?       @map("closed_at")
+
+  /// 목록 정렬용 비정규화 필드. 메시지 추가 시 함께 갱신합니다.
+  lastMessageAt DateTime? @map("last_message_at")
+
+  /// 작성자 관계. 계정 삭제 시 함께 삭제(Cascade).
+  author   User             @relation("InquiryAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  /// 담당 관리자 관계. 관리자 계정 삭제 시 이 필드만 null 로(SetNull).
+  handler  User?            @relation("InquiryHandler", fields: [handledBy], references: [id], onDelete: SetNull)
+  /// 이 문의 스레드의 메시지들.
+  messages InquiryMessage[]
+
+  /// 생성 시각.
+  createdAt DateTime @default(now()) @map("created_at")
+  /// 수정 시각.
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// 작성자별 문의 최신순 조회 최적화.
+  @@index([authorId, createdAt])
+  /// 상태별 최근 대화순 조회 최적화.
+  @@index([status, lastMessageAt])
+  @@map("inquiries")
+}
+
+/// 문의 메시지
+///
+/// 1:1 문의 스레드 안에서 오가는 개별 메시지입니다.
+model InquiryMessage {
+  /// PK.
+  id        Int     @id @default(autoincrement())
+  /// 소속 문의.
+  inquiryId Int     @map("inquiry_id")
+  /// 보낸 사람.
+  senderId  String  @map("sender_id") @db.Uuid
+  /// 메시지 내용.
+  content   String  @db.Text
+  /// 관리자 답변 여부. 목록에서 sender.role 조회 없이 판단하기 위한 필드입니다.
+  isAdmin   Boolean @default(false) @map("is_admin")
+  /// 읽음 여부. 기본 false.
+  isRead    Boolean @default(false) @map("is_read")
+
+  /// 소속 문의 관계. 문의 삭제 시 함께 삭제(Cascade).
+  inquiry Inquiry @relation(fields: [inquiryId], references: [id], onDelete: Cascade)
+  /// 보낸 사람 관계. 계정 삭제 시 함께 삭제(Cascade).
+  sender  User    @relation("InquiryMessageSender", fields: [senderId], references: [id], onDelete: Cascade)
+
+  /// 생성 시각.
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// 문의별 메시지 시간순 조회 최적화.
+  @@index([inquiryId, createdAt])
+  /// 보낸 사람 기준 조회 최적화.
+  @@index([senderId])
+  @@map("inquiry_messages")
+}
+
+/// 공지사항
+///
+/// 관리자가 작성해 사용자에게 노출하는 공지입니다.
+model Notice {
+  /// PK.
+  id        Int            @id @default(autoincrement())
+  /// 작성 관리자.
+  authorId  String         @map("author_id") @db.Uuid
+  /// 공지 제목.
+  title     String
+  /// 공지 내용.
+  content   String         @db.Text
+  /// 노출 대상 그룹. 기본 ALL.
+  audience  NoticeAudience @default(ALL)
+  /// 목록 상단 고정 여부.
+  isPinned  Boolean        @default(false) @map("is_pinned")
+  /// 노출 여부. false 면 숨김.
+  isVisible Boolean        @default(true) @map("is_visible")
+  /// 등록 시 알림을 함께 발송할지 여부.
+  sendNotification Boolean @default(false) @map("send_notification")
+  /// 조회수.
+  viewCount Int            @default(0) @map("view_count")
+
+  /// 작성 관리자 관계. 작성자 보존을 위해 계정 삭제를 막음(Restrict).
+  author User @relation("NoticeAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  /// 생성 시각.
+  createdAt DateTime @default(now()) @map("created_at")
+  /// 수정 시각.
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// 노출/고정/최신순 목록 조회 최적화.
+  @@index([isVisible, isPinned, createdAt])
+  /// 대상 그룹별 조회 최적화.
+  @@index([audience])
+  @@map("notices")
+}
+
+/// FAQ
+///
+/// 자주 바뀌지는 않지만 관리자가 화면에서 직접 수정할 수 있어야 하므로
+/// 코드 상수가 아니라 테이블로 관리합니다.
+model Faq {
+  /// PK.
+  id        Int     @id @default(autoincrement())
+  /// 작성 관리자.
+  authorId  String  @map("author_id") @db.Uuid
+  /// 질문.
+  question  String
+  /// 답변.
+  answer    String  @db.Text
+  /// 관리자가 지정하는 노출 순서(작을수록 위).
+  sortOrder Int     @default(0) @map("sort_order")
+  /// 노출 여부. false 면 숨김.
+  isVisible Boolean @default(true) @map("is_visible")
+
+  /// 작성 관리자 관계. 작성자 보존을 위해 계정 삭제를 막음(Restrict).
+  author User @relation("FaqAuthor", fields: [authorId], references: [id], onDelete: Restrict)
+
+  /// 생성 시각.
+  createdAt DateTime @default(now()) @map("created_at")
+  /// 수정 시각.
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// 노출+정렬순 목록 조회 최적화.
+  @@index([isVisible, sortOrder])
+  @@map("faqs")
+}
+
+/// 활동 로그
+///
+/// 관리자 조치와 일반 사용자의 데이터 변경을 한 테이블에 기록합니다.
+/// actorRole 로 관리자/일반을 구분해 조회합니다.
+///
+/// 변경 상세는 저장하지 않습니다. targetType + action 조합으로
+/// "리뷰 수정" 수준의 표현이 가능하고, 상세를 남기면 용량이 빠르게 커집니다.
+/// 사유가 필요한 관리자 조치에만 memo 를 사용합니다.
+///
+/// targetId 는 대상 테이블마다 PK 타입이 달라 String 으로 둡니다.
+/// 외래키가 없으므로 대상이 삭제되면 로그만 남습니다.
+model ActivityLog {
+  /// PK.
+  id         Int           @id @default(autoincrement())
+  /// 행위를 수행한 사용자.
+  actorId    String        @map("actor_id") @db.Uuid
+  /// 조회 시 관리자/일반 구분에 사용합니다. 행위 시점의 역할을 보존합니다.
+  actorRole  UserRole      @map("actor_role")
+  /// 동작 종류(생성/수정/삭제).
+  action     LogAction
+  /// 대상 테이블 종류.
+  targetType LogTargetType @map("target_type")
+  /// 대상 식별자. 대상별 PK 타입이 달라 String 으로 저장합니다.
+  targetId   String        @map("target_id")
+  /// 관리자 조치 사유 등 필요한 경우에만 기록합니다.
+  memo       String?       @db.Text
+
+  /// 행위자 관계. 계정 삭제 시 함께 삭제(Cascade).
+  actor User @relation("ActivityLogActor", fields: [actorId], references: [id], onDelete: Cascade)
+
+  /// 생성 시각.
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// 전체 최신순 조회 최적화.
+  @@index([createdAt])
+  /// 행위자별 최신순 조회 최적화.
+  @@index([actorId, createdAt])
+  /// 역할(관리자/일반)별 최신순 조회 최적화.
+  @@index([actorRole, createdAt])
+  /// 대상 기준 조회 최적화.
+  @@index([targetType, targetId])
+  /// 동작 종류별 최신순 조회 최적화.
+  @@index([action, createdAt])
+  @@map("activity_logs")
 }
