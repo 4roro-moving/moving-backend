@@ -9,6 +9,8 @@ import type { OAuthProfile } from "../auth.type";
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_USER_INFO_URL = "https://openidconnect.googleapis.com/v1/userinfo";
 
+const GOOGLE_FETCH_TIMEOUT_MS = 5000;
+
 /*
  * Google Authorization Code 교환 응답
  *
@@ -38,6 +40,13 @@ const googleUserInfoSchema = z.object({
 });
 
 /*
+ * fetch 요청이 제한 시간을 초과했는지 확인한다.
+ */
+const isTimeoutError = (error: unknown): boolean => {
+  return error instanceof Error && error.name === "TimeoutError";
+};
+
+/*
  * Google Authorization Code를 Access Token으로 교환한다.
  */
 const exchangeCodeForAccessToken = async (code: string): Promise<string> => {
@@ -58,8 +67,15 @@ const exchangeCodeForAccessToken = async (code: string): Promise<string> => {
         "Content-Type": "application/x-www-form-urlencoded",
       },
       body,
+      signal: AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
     });
-  } catch {
+  } catch (error: unknown) {
+    if (isTimeoutError(error)) {
+      throw new AppError("BAD_GATEWAY", {
+        message: "Google 인증 서버의 응답 시간이 초과되었습니다.",
+      });
+    }
+
     throw new AppError("BAD_GATEWAY", {
       message: "Google 인증 서버에 연결할 수 없습니다.",
     });
@@ -71,7 +87,16 @@ const exchangeCodeForAccessToken = async (code: string): Promise<string> => {
     });
   }
 
-  const responseBody: unknown = await response.json();
+  let responseBody: unknown;
+
+  try {
+    responseBody = await response.json();
+  } catch {
+    throw new AppError("BAD_GATEWAY", {
+      message: "Google 인증 서버의 응답을 처리할 수 없습니다.",
+    });
+  }
+
   const parsedTokenResponse = googleTokenResponseSchema.safeParse(responseBody);
 
   if (!parsedTokenResponse.success) {
@@ -95,8 +120,15 @@ const fetchGoogleUserInfo = async (accessToken: string): Promise<OAuthProfile> =
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
+      signal: AbortSignal.timeout(GOOGLE_FETCH_TIMEOUT_MS),
     });
-  } catch {
+  } catch (error: unknown) {
+    if (isTimeoutError(error)) {
+      throw new AppError("BAD_GATEWAY", {
+        message: "Google 사용자 정보 서버의 응답 시간이 초과되었습니다.",
+      });
+    }
+
     throw new AppError("BAD_GATEWAY", {
       message: "Google 사용자 정보 서버에 연결할 수 없습니다.",
     });
@@ -108,7 +140,16 @@ const fetchGoogleUserInfo = async (accessToken: string): Promise<OAuthProfile> =
     });
   }
 
-  const responseBody: unknown = await response.json();
+  let responseBody: unknown;
+
+  try {
+    responseBody = await response.json();
+  } catch {
+    throw new AppError("BAD_GATEWAY", {
+      message: "Google 사용자 정보 응답을 처리할 수 없습니다.",
+    });
+  }
+
   const parsedUserInfo = googleUserInfoSchema.safeParse(responseBody);
 
   if (!parsedUserInfo.success) {

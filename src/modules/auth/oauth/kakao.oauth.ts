@@ -2,12 +2,15 @@ import { AuthProvider } from "@prisma/client";
 import { z } from "zod";
 
 import { env } from "../../../config/env";
+import logger from "../../../config/logger";
 import { AppError } from "../../../lib/app-error";
 
 import type { OAuthProfile } from "../auth.type";
 
 const KAKAO_TOKEN_URL = "https://kauth.kakao.com/oauth/token";
 const KAKAO_USER_INFO_URL = "https://kapi.kakao.com/v2/user/me";
+
+const KAKAO_FETCH_TIMEOUT_MS = 5000;
 
 /*
  * Kakao Authorization Code 교환 응답
@@ -37,7 +40,11 @@ const kakaoUserInfoSchema = z.object({
   id: z.number(),
 
   kakao_account: z.object({
-    email: z.email(),
+    /*
+     * 사용자가 이메일 제공에 동의하지 않으면
+     * Kakao 응답에 email 필드가 없을 수 있다.
+     */
+    email: z.email().optional(),
     is_email_valid: z.boolean().optional(),
     is_email_verified: z.boolean().optional(),
 
@@ -48,6 +55,30 @@ const kakaoUserInfoSchema = z.object({
       .optional(),
   }),
 });
+
+/*
+ * fetch 요청이 제한 시간을 초과했는지 확인한다.
+ */
+const isTimeoutError = (error: unknown): boolean => {
+  return error instanceof Error && error.name === "TimeoutError";
+};
+
+/*
+ * 알 수 없는 오류를 로그에 남길 수 있는 형태로 변환한다.
+ */
+const getErrorLog = (error: unknown) => {
+  if (error instanceof Error) {
+    return {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    };
+  }
+
+  return {
+    message: "알 수 없는 오류가 발생했습니다.",
+  };
+};
 
 /*
  * Kakao Authorization Code를 Access Token으로 교환한다.
@@ -70,9 +101,18 @@ const exchangeCodeForAccessToken = async (code: string): Promise<string> => {
         "Content-Type": "application/x-www-form-urlencoded;charset=utf-8",
       },
       body: body.toString(),
+      signal: AbortSignal.timeout(KAKAO_FETCH_TIMEOUT_MS),
     });
-  } catch (error) {
-    console.error("[Kakao OAuth] 토큰 서버 연결 실패:", error);
+  } catch (error: unknown) {
+    logger.error("[Kakao OAuth] 토큰 서버 연결 실패", {
+      error: getErrorLog(error),
+    });
+
+    if (isTimeoutError(error)) {
+      throw new AppError("BAD_GATEWAY", {
+        message: "Kakao 인증 서버의 응답 시간이 초과되었습니다.",
+      });
+    }
 
     throw new AppError("BAD_GATEWAY", {
       message: "Kakao 인증 서버에 연결할 수 없습니다.",
@@ -83,10 +123,10 @@ const exchangeCodeForAccessToken = async (code: string): Promise<string> => {
 
   try {
     responseBody = await response.json();
-  } catch (error) {
-    console.error("[Kakao OAuth] 토큰 응답 JSON 변환 실패:", {
+  } catch (error: unknown) {
+    logger.error("[Kakao OAuth] 토큰 응답 JSON 변환 실패", {
       status: response.status,
-      error,
+      error: getErrorLog(error),
     });
 
     throw new AppError("BAD_GATEWAY", {
@@ -97,23 +137,23 @@ const exchangeCodeForAccessToken = async (code: string): Promise<string> => {
   if (!response.ok) {
     const parsedError = kakaoTokenErrorSchema.safeParse(responseBody);
 
-    console.error("[Kakao OAuth] 토큰 발급 실패:", {
+    logger.error("[Kakao OAuth] 토큰 발급 실패", {
       status: response.status,
-      responseBody,
+      providerErrorCode: parsedError.success
+        ? (parsedError.data.error_code ?? parsedError.data.error)
+        : undefined,
     });
 
-    const errorDescription = parsedError.success ? parsedError.data.error_description : undefined;
-
     throw new AppError("UNAUTHORIZED", {
-      message: errorDescription ?? "유효하지 않거나 만료된 Kakao 인증 코드입니다.",
+      message: "유효하지 않거나 만료된 Kakao 인증 코드입니다.",
     });
   }
 
   const parsedTokenResponse = kakaoTokenResponseSchema.safeParse(responseBody);
 
   if (!parsedTokenResponse.success) {
-    console.error("[Kakao OAuth] 토큰 응답 검증 실패:", {
-      responseBody,
+    logger.error("[Kakao OAuth] 토큰 응답 검증 실패", {
+      status: response.status,
       issues: parsedTokenResponse.error.issues,
     });
 
@@ -136,10 +176,20 @@ const fetchKakaoUserInfo = async (accessToken: string): Promise<OAuthProfile> =>
       method: "GET",
       headers: {
         Authorization: `Bearer ${accessToken}`,
+        Accept: "application/json",
       },
+      signal: AbortSignal.timeout(KAKAO_FETCH_TIMEOUT_MS),
     });
-  } catch (error) {
-    console.error("[Kakao OAuth] 사용자 정보 서버 연결 실패:", error);
+  } catch (error: unknown) {
+    logger.error("[Kakao OAuth] 사용자 정보 서버 연결 실패", {
+      error: getErrorLog(error),
+    });
+
+    if (isTimeoutError(error)) {
+      throw new AppError("BAD_GATEWAY", {
+        message: "Kakao 사용자 정보 서버의 응답 시간이 초과되었습니다.",
+      });
+    }
 
     throw new AppError("BAD_GATEWAY", {
       message: "Kakao 사용자 정보 서버에 연결할 수 없습니다.",
@@ -150,10 +200,10 @@ const fetchKakaoUserInfo = async (accessToken: string): Promise<OAuthProfile> =>
 
   try {
     responseBody = await response.json();
-  } catch (error) {
-    console.error("[Kakao OAuth] 사용자 정보 JSON 변환 실패:", {
+  } catch (error: unknown) {
+    logger.error("[Kakao OAuth] 사용자 정보 JSON 변환 실패", {
       status: response.status,
-      error,
+      error: getErrorLog(error),
     });
 
     throw new AppError("BAD_GATEWAY", {
@@ -162,9 +212,8 @@ const fetchKakaoUserInfo = async (accessToken: string): Promise<OAuthProfile> =>
   }
 
   if (!response.ok) {
-    console.error("[Kakao OAuth] 사용자 정보 조회 실패:", {
+    logger.error("[Kakao OAuth] 사용자 정보 조회 실패", {
       status: response.status,
-      responseBody,
     });
 
     throw new AppError("UNAUTHORIZED", {
@@ -175,8 +224,8 @@ const fetchKakaoUserInfo = async (accessToken: string): Promise<OAuthProfile> =>
   const parsedUserInfo = kakaoUserInfoSchema.safeParse(responseBody);
 
   if (!parsedUserInfo.success) {
-    console.error("[Kakao OAuth] 사용자 정보 응답 검증 실패:", {
-      responseBody,
+    logger.error("[Kakao OAuth] 사용자 정보 응답 검증 실패", {
+      status: response.status,
       issues: parsedUserInfo.error.issues,
     });
 
@@ -187,6 +236,16 @@ const fetchKakaoUserInfo = async (accessToken: string): Promise<OAuthProfile> =>
 
   const userInfo = parsedUserInfo.data;
   const account = userInfo.kakao_account;
+
+  /*
+   * 이메일 제공에 동의하지 않은 경우에는
+   * 외부 API 장애가 아닌 사용자 동의 문제로 처리한다.
+   */
+  if (!account.email) {
+    throw new AppError("BAD_REQUEST", {
+      message: "카카오 계정의 이메일 정보 제공 동의가 필요합니다.",
+    });
+  }
 
   if (account.is_email_valid === false) {
     throw new AppError("UNAUTHORIZED", {
@@ -200,12 +259,19 @@ const fetchKakaoUserInfo = async (accessToken: string): Promise<OAuthProfile> =>
     });
   }
 
+  /*
+   * 존재 여부 검증 이후 별도 상수에 저장해
+   * TypeScript가 string 타입으로 추론하도록 한다.
+   */
+  const email = account.email;
+  const name = account.profile?.nickname ?? "카카오 사용자";
+
   return {
     provider: AuthProvider.KAKAO,
     providerUserId: String(userInfo.id),
-    email: account.email.trim().toLowerCase(),
-    name: account.profile?.nickname.trim() ?? "카카오 사용자",
-    emailVerified: account.is_email_verified ?? true,
+    email: email.trim().toLowerCase(),
+    name: name.trim(),
+    emailVerified: account.is_email_verified === true,
   };
 };
 

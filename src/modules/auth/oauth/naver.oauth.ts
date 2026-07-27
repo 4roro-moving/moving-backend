@@ -1,11 +1,14 @@
 import { AuthProvider } from "@prisma/client";
 
-import type { OAuthProfile } from "../auth.type";
-
+import { env } from "../../../config/env";
 import { AppError } from "../../../lib/app-error";
+
+import type { OAuthProfile } from "../auth.type";
 
 const NAVER_TOKEN_URL = "https://nid.naver.com/oauth2.0/token";
 const NAVER_PROFILE_URL = "https://openapi.naver.com/v1/nid/me";
+
+const NAVER_FETCH_TIMEOUT_MS = 5000;
 
 interface NaverTokenResponse {
   access_token?: string;
@@ -33,22 +36,20 @@ interface NaverProfileResponse {
 }
 
 /*
+ * fetch 요청이 제한 시간을 초과했는지 확인한다.
+ */
+const isTimeoutError = (error: unknown): boolean => {
+  return error instanceof Error && error.name === "TimeoutError";
+};
+
+/*
  * 네이버 Authorization Code를 Access Token으로 교환한다.
  */
 const getNaverAccessToken = async (code: string, state: string): Promise<string> => {
-  const clientId = process.env.NAVER_CLIENT_ID;
-  const clientSecret = process.env.NAVER_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) {
-    throw new AppError("INTERNAL_SERVER_ERROR", {
-      message: "네이버 OAuth 환경변수가 설정되지 않았습니다.",
-    });
-  }
-
   const queryParams = new URLSearchParams({
     grant_type: "authorization_code",
-    client_id: clientId,
-    client_secret: clientSecret,
+    client_id: env.NAVER_CLIENT_ID,
+    client_secret: env.NAVER_CLIENT_SECRET,
     code,
     state,
   });
@@ -61,8 +62,15 @@ const getNaverAccessToken = async (code: string, state: string): Promise<string>
       headers: {
         Accept: "application/json",
       },
+      signal: AbortSignal.timeout(NAVER_FETCH_TIMEOUT_MS),
     });
-  } catch {
+  } catch (error: unknown) {
+    if (isTimeoutError(error)) {
+      throw new AppError("BAD_GATEWAY", {
+        message: "네이버 인증 서버의 응답 시간이 초과되었습니다.",
+      });
+    }
+
     throw new AppError("BAD_GATEWAY", {
       message: "네이버 인증 서버에 연결할 수 없습니다.",
     });
@@ -80,7 +88,7 @@ const getNaverAccessToken = async (code: string, state: string): Promise<string>
 
   if (!response.ok || data.error || !data.access_token) {
     throw new AppError("UNAUTHORIZED", {
-      message: data.error_description ?? "유효하지 않은 네이버 인증 코드입니다.",
+      message: "유효하지 않거나 만료된 네이버 인증 코드입니다.",
     });
   }
 
@@ -100,8 +108,15 @@ const getNaverUserProfile = async (accessToken: string): Promise<OAuthProfile> =
         Authorization: `Bearer ${accessToken}`,
         Accept: "application/json",
       },
+      signal: AbortSignal.timeout(NAVER_FETCH_TIMEOUT_MS),
     });
-  } catch {
+  } catch (error: unknown) {
+    if (isTimeoutError(error)) {
+      throw new AppError("BAD_GATEWAY", {
+        message: "네이버 사용자 정보 서버의 응답 시간이 초과되었습니다.",
+      });
+    }
+
     throw new AppError("BAD_GATEWAY", {
       message: "네이버 사용자 정보 서버에 연결할 수 없습니다.",
     });
@@ -149,8 +164,8 @@ const getNaverUserProfile = async (accessToken: string): Promise<OAuthProfile> =
   return {
     provider: AuthProvider.NAVER,
     providerUserId: profile.id,
-    email: profile.email,
-    name,
+    email: profile.email.trim().toLowerCase(),
+    name: name.trim(),
     emailVerified: true,
   };
 };

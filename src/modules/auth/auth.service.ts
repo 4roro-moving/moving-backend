@@ -298,10 +298,53 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
 };
 
 /*
+ * OAuth 계정 로그인 응답을 생성한다.
+ *
+ * 이미 가입된 OAuth 사용자와 동시 가입 충돌 후 다시 조회한 사용자가
+ * 동일한 로그인 흐름을 사용하도록 공통 처리한다.
+ */
+type OAuthUser = NonNullable<
+  Awaited<ReturnType<typeof authRepository.findByProviderAndProviderId>>
+>;
+
+const createOAuthLoginResponse = async (user: OAuthUser): Promise<AuthResponse> => {
+  if (!user.isActive || user.deletedAt !== null) {
+    throw new AppError("FORBIDDEN", {
+      message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
+    });
+  }
+
+  const { accessToken, refreshToken, refreshTokenExpiresAt } = createAuthTokens(user.id, user.role);
+
+  await authRepository.saveRefreshToken({
+    userId: user.id,
+    tokenHash: tokenHash(refreshToken),
+    expiresAt: refreshTokenExpiresAt,
+  });
+
+  return {
+    user: {
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      phone: user.phone,
+      role: user.role,
+    },
+    tokens: {
+      accessToken,
+      refreshToken,
+    },
+  };
+};
+
+/*
  * OAuth 로그인 공통 처리
  *
  * provider와 providerUserId가 일치하는 사용자가 있으면 로그인하고,
  * 없으면 이메일 중복 여부를 확인한 뒤 신규 OAuth 사용자를 생성한다.
+ *
+ * 동일한 OAuth 계정으로 요청이 동시에 들어와 신규 생성이 충돌한 경우에는
+ * 충돌 후 해당 계정을 다시 조회하여 기존 사용자 로그인 흐름으로 이어간다.
  */
 const loginWithOAuth = async (
   profile: OAuthProfile,
@@ -317,36 +360,7 @@ const loginWithOAuth = async (
    * 요청으로 전달받은 role은 무시하고 DB에 저장된 role을 사용한다.
    */
   if (existingOAuthUser) {
-    if (!existingOAuthUser.isActive || existingOAuthUser.deletedAt !== null) {
-      throw new AppError("FORBIDDEN", {
-        message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
-      });
-    }
-
-    const { accessToken, refreshToken, refreshTokenExpiresAt } = createAuthTokens(
-      existingOAuthUser.id,
-      existingOAuthUser.role,
-    );
-
-    await authRepository.saveRefreshToken({
-      userId: existingOAuthUser.id,
-      tokenHash: tokenHash(refreshToken),
-      expiresAt: refreshTokenExpiresAt,
-    });
-
-    return {
-      user: {
-        id: existingOAuthUser.id,
-        email: existingOAuthUser.email,
-        name: existingOAuthUser.name,
-        phone: existingOAuthUser.phone,
-        role: existingOAuthUser.role,
-      },
-      tokens: {
-        accessToken,
-        refreshToken,
-      },
-    };
+    return createOAuthLoginResponse(existingOAuthUser);
   }
 
   const email = profile.email.trim().toLowerCase();
@@ -410,10 +424,29 @@ const loginWithOAuth = async (
     });
   } catch (error) {
     /*
-     * 이메일 또는 provider 복합 UNIQUE 충돌을
-     * 동시 가입 요청에서도 안전하게 처리한다.
+     * 동일한 OAuth 계정의 동시 최초 로그인에서는 두 요청이 모두
+     * 사전 조회를 통과한 뒤 한 요청만 사용자 생성에 성공할 수 있다.
+     *
+     * P2002 발생 시 어떤 UNIQUE 인덱스가 먼저 충돌했는지와 관계없이
+     * provider + providerUserId로 다시 조회한다.
+     *
+     * 조회에 성공하면 다른 요청이 이미 생성한 동일 OAuth 계정이므로
+     * CONFLICT로 종료하지 않고 정상 로그인 흐름으로 이어간다.
      */
-    if (isUniqueConstraintError(error, "email")) {
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      const concurrentOAuthUser = await authRepository.findByProviderAndProviderId(
+        profile.provider,
+        profile.providerUserId,
+      );
+
+      if (concurrentOAuthUser) {
+        return createOAuthLoginResponse(concurrentOAuthUser);
+      }
+
+      /*
+       * 동일 OAuth 계정이 조회되지 않는다면 이메일 UNIQUE 충돌 등
+       * 실제로 다른 계정과 충돌한 상황인지 다시 확인한다.
+       */
       const existingUser = await authRepository.findByEmail(email);
 
       if (existingUser) {
@@ -423,16 +456,6 @@ const loginWithOAuth = async (
           message: `이미 ${providerName} 계정으로 가입된 이메일입니다. ${providerName} 로그인을 이용해주세요.`,
         });
       }
-
-      throw new AppError("OAUTH_EMAIL_ALREADY_EXISTS", {
-        message: "동일한 이메일로 가입된 계정이 이미 존재합니다.",
-      });
-    }
-
-    if (isUniqueConstraintError(error, "providerUserId")) {
-      throw new AppError("CONFLICT", {
-        message: "이미 가입된 OAuth 계정입니다.",
-      });
     }
 
     throw error;
