@@ -88,15 +88,6 @@ const oauthRoleSchema = z.enum([UserRole.CUSTOMER, UserRole.MOVER], {
   error: "회원 역할은 CUSTOMER 또는 MOVER여야 합니다.",
 });
 
-const refreshTokenSchema = z
-  .string({
-    error: "리프레시 토큰을 입력해주세요.",
-  })
-  .trim()
-  .min(1, {
-    error: "리프레시 토큰을 입력해주세요.",
-  });
-
 export const signUpSchema = z.strictObject({
   email: emailSchema,
   password: passwordSchema,
@@ -152,22 +143,12 @@ export const naverOAuthSchema = z.strictObject({
   role: oauthRoleSchema,
 });
 
-export const refreshSchema = z.strictObject({
-  refreshToken: refreshTokenSchema,
-});
-
-export const logoutSchema = z.strictObject({
-  refreshToken: refreshTokenSchema,
-});
-
 export const authValidator = {
   signUp: signUpSchema,
   login: loginSchema,
   googleOAuth: googleOAuthSchema,
   kakaoOAuth: kakaoOAuthSchema,
   naverOAuth: naverOAuthSchema,
-  refresh: refreshSchema,
-  logout: logoutSchema,
 };
 
 export type SignUpInput = z.infer<typeof signUpSchema>;
@@ -175,5 +156,3 @@ export type LoginInput = z.infer<typeof loginSchema>;
 export type GoogleOAuthInput = z.infer<typeof googleOAuthSchema>;
 export type KakaoOAuthInput = z.infer<typeof kakaoOAuthSchema>;
 export type NaverOAuthInput = z.infer<typeof naverOAuthSchema>;
-export type RefreshInput = z.infer<typeof refreshSchema>;
-export type LogoutInput = z.infer<typeof logoutSchema>;
