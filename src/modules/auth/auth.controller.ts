@@ -53,6 +53,24 @@ const setRefreshTokenCookie = (res: Response, refreshToken: string): void => {
 };
 
 /*
+ * Refresh Token을 HttpOnly Cookie에서 안전하게 조회한다.
+ */
+const getRefreshTokenFromCookie = (req: Request): string | undefined => {
+  const refreshToken: unknown = req.cookies?.[REFRESH_TOKEN_COOKIE];
+
+  return typeof refreshToken === "string" ? refreshToken : undefined;
+};
+
+/*
+ * 서명된 Naver OAuth state Cookie를 안전하게 조회한다.
+ */
+const getNaverOAuthStateFromCookie = (req: Request): string | undefined => {
+  const state: unknown = req.signedCookies?.[NAVER_OAUTH_STATE_COOKIE];
+
+  return typeof state === "string" ? state : undefined;
+};
+
+/*
  * 인증 Service 결과를 클라이언트 응답 형식으로 변환한다.
  *
  * Refresh Token은 Cookie로 저장하고
@@ -211,8 +229,7 @@ const loginWithNaver = async (
   next: NextFunction,
 ): Promise<void> => {
   try {
-    const storedState = req.signedCookies?.[NAVER_OAUTH_STATE_COOKIE] as string | undefined;
-
+    const storedState = getNaverOAuthStateFromCookie(req);
     const isValidState = validateOAuthState(req.body.state, storedState);
 
     /*
@@ -246,7 +263,7 @@ const loginWithNaver = async (
  */
 const refresh = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const currentRefreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE] as string | undefined;
+    const currentRefreshToken = getRefreshTokenFromCookie(req);
 
     if (!currentRefreshToken) {
       throw new AppError("UNAUTHORIZED", {
@@ -278,12 +295,16 @@ const refresh = async (req: Request, res: Response, next: NextFunction): Promise
  */
 const logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   try {
-    const currentRefreshToken = req.cookies?.[REFRESH_TOKEN_COOKIE] as string | undefined;
+    const currentRefreshToken = getRefreshTokenFromCookie(req);
 
     if (currentRefreshToken) {
       await authService.logout(currentRefreshToken);
     }
 
+    /*
+     * Refresh Token 쿠키가 없는 경우에도 이미 로그아웃된 상태로 간주한다.
+     * 반복 요청에도 동일한 결과를 반환하여 로그아웃의 멱등성을 보장한다.
+     */
     res.clearCookie(REFRESH_TOKEN_COOKIE, refreshTokenCookieOptions);
 
     res.status(200).json({
