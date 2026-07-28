@@ -10,7 +10,7 @@ export interface ConfirmedEstimateSeedRef {
   moverId: string;
 }
 
-/** COMPLETED 요청에 달린 확정 견적에 Review를 만들고 프로필 통계를 맞춥니다. */
+/** COMPLETED 요청에 달린 확정 견적에 Review를 upsert하고 프로필 통계를 맞춥니다. */
 export async function seedReviews(
   prisma: PrismaClient,
   confirmedEstimates: readonly ConfirmedEstimateSeedRef[],
@@ -39,18 +39,28 @@ export async function seedReviews(
           continue;
         }
 
-        await tx.review.create({
-          data: {
+        // estimateId unique — 재실행 시 중복 생성 없이 내용만 갱신
+        await tx.review.upsert({
+          where: {
+            estimateId: target.estimateId,
+          },
+          create: {
             customerId: target.customerId,
             moverId: target.moverId,
             estimateId: target.estimateId,
             rating: reviewSeed.rating,
             content: reviewSeed.content,
           },
+          update: {
+            customerId: target.customerId,
+            moverId: target.moverId,
+            rating: reviewSeed.rating,
+            content: reviewSeed.content,
+          },
         });
 
         touchedMoverIds.add(target.moverId);
-        console.log(`  ✅ 리뷰 생성: ${reviewSeed.moverEmail} / ${target.requestKey}`);
+        console.log(`  ✅ 리뷰 upsert: ${reviewSeed.moverEmail} / ${target.requestKey}`);
       }
 
       /*
