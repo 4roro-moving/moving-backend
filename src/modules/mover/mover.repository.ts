@@ -119,4 +119,17 @@ export const moverRepository = {
       select: MOVER_DETAIL_SELECT,
     });
   },
+
+  // 기사님 리뷰 별점 분포
+  countRatingDistributionByMoverId(moverId: string) {
+    return prisma.review.groupBy({
+      by: ["rating"],
+      where: {
+        moverId,
+      },
+      _count: {
+        _all: true,
+      },
+    });
+  },
 };
