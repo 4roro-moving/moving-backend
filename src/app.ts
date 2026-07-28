@@ -24,6 +24,7 @@ import reviewRouter from "./modules/review/review.route";
 // Swagger UI로 전환할 때 사용
 // import type { RequestHandler } from "express";
 // import swaggerUi from "swagger-ui-express";
+import noticeRouter from "./modules/admin/notice/notice.route";
 
 const app = express();
 
@@ -129,9 +130,13 @@ app.use("/api/estimates", estimateRouter);
 app.use("/api/reviews", reviewRouter);
 app.use("/api/favorites", favoriteRouter);
 
-/*
- * 존재하지 않는 경로 처리
- */
+/* 관리자*/
+
+app.use("/api/admin/notices", noticeRouter);
+
+  /*
+   * 존재하지 않는 경로 처리
+   */
 app.use(notFoundHandler);
 
 /*
