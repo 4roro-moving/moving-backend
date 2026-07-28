@@ -1,4 +1,11 @@
-export const ESTIMATE_REQUESTS = [
+import { toReviewEstimateRequests } from "./reviewSeeds.js";
+
+/*
+ * 기존 OPEN/CONFIRMED 요청은 BASE에 유지하고,
+ * 리뷰 시드용 COMPLETED 요청은 reviewSeeds에서 합칩니다.
+ * (Review는 estimateId FK가 필요해서 요청·견적 시드와 같이 확장)
+ */
+const BASE_ESTIMATE_REQUESTS = [
   {
     key: "customer1-open-request",
     customerEmail: "customer1@test.com",
@@ -60,5 +67,10 @@ export const ESTIMATE_REQUESTS = [
     isActive: true,
   },
 ] as const;
+
+const REVIEW_ESTIMATE_REQUESTS = toReviewEstimateRequests();
+
+/** 기존 견적 요청 + 리뷰용 COMPLETED 요청 */
+export const ESTIMATE_REQUESTS = [...BASE_ESTIMATE_REQUESTS, ...REVIEW_ESTIMATE_REQUESTS];
 
 export type EstimateRequestSeedKey = (typeof ESTIMATE_REQUESTS)[number]["key"];
