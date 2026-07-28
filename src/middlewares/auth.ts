@@ -2,7 +2,7 @@ import type { UserRole } from "@prisma/client";
 import type { RequestHandler } from "express";
 
 import { AppError } from "../lib/app-error";
-import { verifyAccessToken } from "../utils/jwt";
+import { verifyAccessToken, verifyAccessTokenOptional } from "../utils/jwt";
 
 export const authenticate: RequestHandler = (req, _res, next) => {
   try {
@@ -61,16 +61,21 @@ export function authorize(...roles: UserRole[]): RequestHandler {
   };
 }
 
-// 비회원 조회를 허용하되, 토큰이 있으면 로그인 사용자 정보 설정
+/**
+ * 비회원 조회 허용 + 유효 토큰이면 req.user 설정.
+ * - 헤더 없음 → 비회원
+ * - Access Token 만료 → 비회원 (목록 등 선택 인증 UX)
+ * - Bearer 형식 오류 / 위조·변조 토큰 → 401
+ */
 export const optionalAuthenticate: RequestHandler = (req, _res, next) => {
+  const authorization = req.header("authorization");
+
+  if (!authorization?.trim()) {
+    next();
+    return;
+  }
+
   try {
-    const authorization = req.header("authorization");
-
-    if (authorization === undefined) {
-      next();
-      return;
-    }
-
     const [scheme, token, ...rest] = authorization.trim().split(/\s+/);
 
     if (scheme?.toLowerCase() !== "bearer" || !token || rest.length > 0) {
@@ -79,11 +84,22 @@ export const optionalAuthenticate: RequestHandler = (req, _res, next) => {
       });
     }
 
-    const payload = verifyAccessToken(token);
+    const result = verifyAccessTokenOptional(token);
+
+    if (result.status === "expired") {
+      next();
+      return;
+    }
+
+    if (result.status === "invalid") {
+      throw new AppError("UNAUTHORIZED", {
+        message: "유효하지 않은 Access Token입니다.",
+      });
+    }
 
     req.user = {
-      id: payload.userId,
-      role: payload.role,
+      id: result.payload.userId,
+      role: result.payload.role,
     };
 
     next();

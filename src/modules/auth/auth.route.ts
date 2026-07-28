@@ -1,5 +1,6 @@
 import { Router } from "express";
 
+import { csrfProtection } from "../../middlewares/csrf.middleware";
 import { validate } from "../../middlewares/validate";
 
 import { authController } from "./auth.controller";
@@ -60,20 +61,14 @@ authRouter.post(
   authController.loginWithNaver,
 );
 
-authRouter.post(
-  "/refresh",
-  validate({
-    body: authValidator.refresh,
-  }),
-  authController.refresh,
-);
+/**
+ * Refresh Token은 HttpOnly Cookie에서 조회한다.
+ */
+authRouter.post("/refresh", csrfProtection, authController.refresh);
 
-authRouter.post(
-  "/logout",
-  validate({
-    body: authValidator.logout,
-  }),
-  authController.logout,
-);
+/**
+ * Refresh Token은 HttpOnly Cookie에서 조회한다.
+ */
+authRouter.post("/logout", csrfProtection, authController.logout);
 
 export { authRouter };
