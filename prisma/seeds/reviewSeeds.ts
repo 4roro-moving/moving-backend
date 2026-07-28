@@ -91,7 +91,8 @@ export function toReviewEstimateRequests(items: readonly ReviewSeedItem[] = REVI
     customerEmail: item.customerEmail,
     moveType: item.moveType,
     moveDateOffsetDays: item.moveDateOffsetDays,
-    expiresInDays: 7,
+    // COMPLETED(과거 이사) 요청은 만료일도 과거로 맞춤
+    expiresInDays: item.moveDateOffsetDays,
 
     fromRegion: "서울",
     fromZipCode: "06236",

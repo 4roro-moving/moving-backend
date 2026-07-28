@@ -9,8 +9,9 @@ export const MOVERS = [
     description:
       "소형 이사와 가정 이사를 전문으로 합니다. 고객님의 소중한 물건을 안전하고 신속하게 운반하겠습니다.",
     confirmedCount: 18,
-    averageRating: 4.3,
-    reviewCount: 12,
+    // seedReviews 결과와 맞춤 (리뷰 6개, 평균 약 4.7)
+    averageRating: 4.7,
+    reviewCount: 6,
     regions: ["서울", "경기", "인천"],
     moveTypes: ["SMALL", "HOME"],
     businessNumber: "101-45-67891",
@@ -26,8 +27,9 @@ export const MOVERS = [
     shortIntro: "든든하고 꼼꼼한 이사 서비스를 제공합니다.",
     description: "다년간의 경험을 바탕으로 포장부터 운반까지 꼼꼼하게 진행합니다.",
     confirmedCount: 42,
+    // seedReviews 결과와 맞춤 (리뷰 6개, 평균 약 4.7)
     averageRating: 4.7,
-    reviewCount: 31,
+    reviewCount: 6,
     regions: ["서울", "경기"],
     moveTypes: ["HOME", "OFFICE"],
     businessNumber: "102-45-67892",
@@ -77,8 +79,9 @@ export const MOVERS = [
     shortIntro: "18년 경력의 베테랑 기사입니다.",
     description: "가정 이사부터 대규모 사무실 이사까지 다양한 경험을 보유하고 있습니다.",
     confirmedCount: 154,
-    averageRating: 5.0,
-    reviewCount: 127,
+    // seedReviews 결과와 맞춤 (리뷰 12개, 평균 약 4.7)
+    averageRating: 4.7,
+    reviewCount: 12,
     regions: ["대구", "경북", "경남"],
     moveTypes: ["HOME", "OFFICE"],
     businessNumber: "105-45-67895",

@@ -30,6 +30,8 @@ export async function seedReviews(
 
   await prisma.$transaction(
     async (tx) => {
+      const touchedMoverIds = new Set<string>();
+
       for (const target of targets) {
         const reviewSeed = reviewByRequestKey.get(target.requestKey);
 
@@ -47,21 +49,30 @@ export async function seedReviews(
           },
         });
 
+        touchedMoverIds.add(target.moverId);
         console.log(`  ✅ 리뷰 생성: ${reviewSeed.moverEmail} / ${target.requestKey}`);
       }
 
-      const movers = await tx.user.findMany({
-        where: { role: "MOVER" },
-        select: { id: true, email: true },
-      });
-
       /*
-       * movers.ts 하드코딩 reviewCount와 실제 Review row 불일치를 없앱니다.
-       * 리뷰가 없는 기사님은 0으로 맞춥니다.
+       * 리뷰 시드를 만든 기사님만 통계를 갱신합니다.
+       * (리뷰가 없는 기사의 movers.ts 테스트용 평점/리뷰 수는 유지)
        */
-      for (const mover of movers) {
+      for (const moverId of touchedMoverIds) {
+        const mover = await tx.user.findUnique({
+          where: { id: moverId },
+          select: {
+            email: true,
+            moverProfile: { select: { id: true } },
+          },
+        });
+
+        if (!mover?.moverProfile) {
+          console.log(`  ⚠️ 프로필이 없어 통계 갱신을 건너뜁니다: ${moverId}`);
+          continue;
+        }
+
         const stats = await tx.review.aggregate({
-          where: { moverId: mover.id },
+          where: { moverId },
           _avg: { rating: true },
           _count: { _all: true },
         });
@@ -69,7 +80,7 @@ export async function seedReviews(
         const averageRating = Math.round((stats._avg.rating ?? 0) * 10) / 10;
 
         await tx.moverProfile.update({
-          where: { userId: mover.id },
+          where: { userId: moverId },
           data: {
             averageRating: new Prisma.Decimal(averageRating),
             reviewCount: stats._count._all,
