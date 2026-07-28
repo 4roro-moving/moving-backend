@@ -1,4 +1,4 @@
-import type { MoveType, Prisma } from "@prisma/client";
+import type { EstimateRequestStatus, MoveType, NotificationType, Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../lib/app-error";
@@ -26,6 +26,12 @@ const MIN_EXPIRATION_HOURS = 24;
 
 const MS_PER_HOUR = 60 * 60 * 1000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
+
+// 수정/취소가 가능한 상태
+const EDITABLE_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
+
+// 이미 종료되어 취소할 수 없는 상태
+const CLOSED_STATUSES: EstimateRequestStatus[] = ["CANCELED", "COMPLETED", "EXPIRED"];
 
 const MOVE_TYPE_LABEL: Record<MoveType, string> = {
   SMALL: "소형이사",
@@ -92,7 +98,6 @@ function resolveExpiresAt(moveDate: Date): Date {
 }
 
 // 주소의 시/도를 regions 레코드로 변환
-
 async function resolveRegionId(address: AddressInput, db: Tx): Promise<number> {
   const trimmed = address.sido.trim();
   const name = SIDO_ALIAS[trimmed] ?? trimmed;
@@ -108,12 +113,79 @@ async function resolveRegionId(address: AddressInput, db: Tx): Promise<number> {
   return region.id;
 }
 
-function assertOwnership(request: EstimateRequestDetail, customerId: string): void {
+/* -------------------------------------------------------------------------- */
+/* 공통 헬퍼                                                                     */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * [A] 견적 요청을 조회하고, 존재 여부와 소유권을 함께 검증한다.
+ * update / cancel / designate 등에서 반복되던 조회+검증을 한 곳으로 모은다.
+ */
+async function findOwnedRequestOrThrow(
+  estimateRequestId: number,
+  customerId: string,
+  db: Tx,
+): Promise<EstimateRequestDetail> {
+  const request = await estimateRequestRepository.findById(estimateRequestId, db);
+
+  if (!request) {
+    throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+  }
+
   if (request.customerId !== customerId) {
     throw new AppError("FORBIDDEN", {
       message: "본인의 견적 요청만 접근할 수 있습니다.",
     });
   }
+
+  return request;
+}
+
+/**
+ * [D] 수정/지정이 가능한 상태인지 검증한다.
+ * PENDING 또는 OPEN 이 아니면 에러를 던진다.
+ */
+function assertEditable(request: EstimateRequestDetail, message?: string): void {
+  if (!EDITABLE_STATUSES.includes(request.status)) {
+    throw new AppError("REQUEST_NOT_EDITABLE", message ? { message } : {});
+  }
+}
+
+/**
+ * [B] 히스토리에 남길 견적 요청 스냅샷을 만든다.
+ * create / update 에서 반복되던 데이터 구성을 통일한다.
+ */
+function toHistorySnapshot(request: {
+  moveType: MoveType;
+  moveDate: Date;
+  fromAddress: string;
+  toAddress: string;
+}): Prisma.InputJsonObject {
+  return {
+    moveType: request.moveType,
+    moveDate: request.moveDate.toISOString(),
+    fromAddress: request.fromAddress,
+    toAddress: request.toAddress,
+  };
+}
+
+/**
+ * [C] 기사님에게 보낼 알림 payload 를 만든다.
+ */
+function buildMoverNotification(params: {
+  moverId: string;
+  type: NotificationType;
+  title: string;
+  content: string;
+  estimateRequestId: number;
+}): Prisma.NotificationCreateManyInput {
+  return {
+    userId: params.moverId,
+    type: params.type,
+    title: params.title,
+    content: params.content,
+    linkUrl: `/mover/estimate-requests/${String(params.estimateRequestId)}`,
+  };
 }
 
 /* -------------------------------------------------------------------------- */
@@ -188,12 +260,7 @@ export const estimateRequestService = {
           estimateRequestId: created.id,
           changedBy: customerId,
           type: "CREATED",
-          changedData: {
-            moveType: created.moveType,
-            moveDate: created.moveDate.toISOString(),
-            fromAddress: created.fromAddress,
-            toAddress: created.toAddress,
-          },
+          changedData: toHistorySnapshot(created),
         },
         tx,
       );
@@ -205,13 +272,15 @@ export const estimateRequestService = {
 
       if (moverIds.length > 0) {
         await estimateRequestRepository.createNotifications(
-          moverIds.map((moverId) => ({
-            userId: moverId,
-            type: "ESTIMATE_REQUEST_RECEIVED" as const,
-            title: "새로운 견적 요청이 도착했어요",
-            content: `${MOVE_TYPE_LABEL[created.moveType]} 견적 요청이 등록되었습니다.`,
-            linkUrl: `/mover/estimate-requests/${String(created.id)}`,
-          })),
+          moverIds.map((moverId) =>
+            buildMoverNotification({
+              moverId,
+              type: "ESTIMATE_REQUEST_RECEIVED",
+              title: "새로운 견적 요청이 도착했어요",
+              content: `${MOVE_TYPE_LABEL[created.moveType]} 견적 요청이 등록되었습니다.`,
+              estimateRequestId: created.id,
+            }),
+          ),
           tx,
         );
       }
@@ -231,15 +300,7 @@ export const estimateRequestService = {
     estimateRequestId: number,
     customerId: string,
   ): Promise<EstimateRequestDetail> {
-    const request = await estimateRequestRepository.findById(estimateRequestId);
-
-    if (!request) {
-      throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
-    }
-
-    assertOwnership(request, customerId);
-
-    return request;
+    return findOwnedRequestOrThrow(estimateRequestId, customerId, prisma);
   },
 
   async getMyEstimateRequestList(customerId: string, query: ListEstimateRequestQuery) {
@@ -266,17 +327,9 @@ export const estimateRequestService = {
     input,
   }: UpdateParams): Promise<EstimateRequestDetail> {
     return prisma.$transaction(async (tx) => {
-      const request = await estimateRequestRepository.findById(estimateRequestId, tx);
+      const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
-      if (!request) {
-        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
-      }
-
-      assertOwnership(request, customerId);
-
-      if (request.status !== "PENDING" && request.status !== "OPEN") {
-        throw new AppError("REQUEST_NOT_EDITABLE");
-      }
+      assertEditable(request);
 
       if (request._count.estimates > 0) {
         throw new AppError("REQUEST_NOT_EDITABLE");
@@ -316,18 +369,8 @@ export const estimateRequestService = {
           estimateRequestId,
           changedBy: customerId,
           type: "UPDATED",
-          previousData: {
-            moveType: request.moveType,
-            moveDate: request.moveDate.toISOString(),
-            fromAddress: request.fromAddress,
-            toAddress: request.toAddress,
-          },
-          changedData: {
-            moveType: updated.moveType,
-            moveDate: updated.moveDate.toISOString(),
-            fromAddress: updated.fromAddress,
-            toAddress: updated.toAddress,
-          },
+          previousData: toHistorySnapshot(request),
+          changedData: toHistorySnapshot(updated),
         },
         tx,
       );
@@ -341,19 +384,9 @@ export const estimateRequestService = {
     customerId: string,
   ): Promise<EstimateRequestDetail> {
     return prisma.$transaction(async (tx) => {
-      const request = await estimateRequestRepository.findById(estimateRequestId, tx);
+      const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
-      if (!request) {
-        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
-      }
-
-      assertOwnership(request, customerId);
-
-      if (
-        request.status === "CANCELED" ||
-        request.status === "COMPLETED" ||
-        request.status === "EXPIRED"
-      ) {
+      if (CLOSED_STATUSES.includes(request.status)) {
         throw new AppError("REQUEST_NOT_EDITABLE", {
           message: "이미 종료된 견적 요청입니다.",
         });
@@ -393,19 +426,9 @@ export const estimateRequestService = {
     moverId,
   }: DesignateParams): Promise<EstimateRequestDetail> {
     return prisma.$transaction(async (tx) => {
-      const request = await estimateRequestRepository.findById(estimateRequestId, tx);
+      const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
-      if (!request) {
-        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
-      }
-
-      assertOwnership(request, customerId);
-
-      if (request.status !== "PENDING" && request.status !== "OPEN") {
-        throw new AppError("REQUEST_NOT_EDITABLE", {
-          message: "지금은 지정 견적을 요청할 수 없는 상태입니다.",
-        });
-      }
+      assertEditable(request, "지금은 지정 견적을 요청할 수 없는 상태입니다.");
 
       if (request.expiresAt.getTime() <= Date.now()) {
         throw new AppError("REQUEST_NOT_EDITABLE", {
@@ -442,24 +465,18 @@ export const estimateRequestService = {
 
       await estimateRequestRepository.createNotifications(
         [
-          {
-            userId: moverId,
-            type: "DESIGNATED_REQUEST_RECEIVED" as const,
+          buildMoverNotification({
+            moverId,
+            type: "DESIGNATED_REQUEST_RECEIVED",
             title: "지정 견적 요청이 도착했어요",
             content: "고객님이 회원님을 지정하여 견적을 요청했습니다.",
-            linkUrl: `/mover/estimate-requests/${String(estimateRequestId)}`,
-          },
+            estimateRequestId,
+          }),
         ],
         tx,
       );
 
-      const refreshed = await estimateRequestRepository.findById(estimateRequestId, tx);
-
-      if (!refreshed) {
-        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
-      }
-
-      return refreshed;
+      return findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
     });
   },
 };
