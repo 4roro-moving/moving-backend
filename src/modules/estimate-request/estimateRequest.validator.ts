@@ -11,10 +11,18 @@ const addressSchema = z.object({
     .regex(/^\d{5}$/, "우편번호는 5자리 숫자여야 합니다.")
     .or(z.literal(""))
     .optional(),
-  address: z.string().trim().min(1, "주소를 입력해 주세요.").max(255),
-  detailAddress: z.string().trim().max(255).optional(),
-  sido: z.string().trim().min(1, "시/도 정보가 필요합니다.").max(30),
-  sigungu: z.string().trim().max(50).optional(),
+  address: z
+    .string()
+    .trim()
+    .min(1, "주소를 입력해 주세요.")
+    .max(255, "주소는 255자 이하여야 합니다."),
+  detailAddress: z.string().trim().max(255, "상세 주소는 255자 이하여야 합니다.").optional(),
+  sido: z
+    .string()
+    .trim()
+    .min(1, "시/도 정보가 필요합니다.")
+    .max(30, "시/도는 30자 이하여야 합니다."),
+  sigungu: z.string().trim().max(50, "시/군/구는 50자 이하여야 합니다.").optional(),
 });
 
 const moveDateSchema = z
@@ -26,7 +34,7 @@ const moveDateSchema = z
 
 export const createEstimateRequestSchema = z.object({
   moveType: z.enum(["SMALL", "HOME", "OFFICE"], {
-    message: "이사 유형을 선택해 주세요.",
+    error: "이사 유형을 선택해 주세요.",
   }),
   moveDate: moveDateSchema,
   from: addressSchema,
@@ -35,7 +43,11 @@ export const createEstimateRequestSchema = z.object({
 
 export const updateEstimateRequestSchema = z
   .object({
-    moveType: z.enum(["SMALL", "HOME", "OFFICE"]).optional(),
+    moveType: z
+      .enum(["SMALL", "HOME", "OFFICE"], {
+        error: "이사 유형을 선택해 주세요.",
+      })
+      .optional(),
     moveDate: moveDateSchema.optional(),
     from: addressSchema.optional(),
     to: addressSchema.optional(),
@@ -45,7 +57,10 @@ export const updateEstimateRequestSchema = z
   });
 
 export const estimateRequestIdParamSchema = z.object({
-  estimateRequestId: z.coerce.number().int().positive("올바른 견적 요청 ID가 아닙니다."),
+  estimateRequestId: z.coerce
+    .number()
+    .int("올바른 견적 요청 ID가 아닙니다.")
+    .positive("올바른 견적 요청 ID가 아닙니다."),
 });
 
 export const designateMoverSchema = z.object({
@@ -53,6 +68,15 @@ export const designateMoverSchema = z.object({
 });
 
 export const listEstimateRequestQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(50).default(10),
+  page: z.coerce
+    .number()
+    .int("페이지 번호는 정수여야 합니다.")
+    .positive("페이지 번호는 1 이상이어야 합니다.")
+    .default(1),
+  limit: z.coerce
+    .number()
+    .int("조회 개수는 정수여야 합니다.")
+    .positive("조회 개수는 1 이상이어야 합니다.")
+    .max(50, "조회 개수는 50 이하여야 합니다.")
+    .default(10),
 });
