@@ -1,5 +1,6 @@
 import { Router } from "express";
 
+import { csrfProtection } from "../../middlewares/csrf.middleware";
 import { validate } from "../../middlewares/validate";
 
 import { authController } from "./auth.controller";
@@ -32,19 +33,42 @@ authRouter.post(
 );
 
 authRouter.post(
-  "/refresh",
+  "/oauth/google",
   validate({
-    body: authValidator.refresh,
+    body: authValidator.googleOAuth,
   }),
-  authController.refresh,
+  authController.loginWithGoogle,
 );
 
 authRouter.post(
-  "/logout",
+  "/oauth/kakao",
   validate({
-    body: authValidator.logout,
+    body: authValidator.kakaoOAuth,
   }),
-  authController.logout,
+  authController.loginWithKakao,
 );
+
+/**
+ * Naver OAuth state 발급
+ */
+authRouter.get("/oauth/naver/state", authController.createNaverOAuthState);
+
+authRouter.post(
+  "/oauth/naver",
+  validate({
+    body: authValidator.naverOAuth,
+  }),
+  authController.loginWithNaver,
+);
+
+/**
+ * Refresh Token은 HttpOnly Cookie에서 조회한다.
+ */
+authRouter.post("/refresh", csrfProtection, authController.refresh);
+
+/**
+ * Refresh Token은 HttpOnly Cookie에서 조회한다.
+ */
+authRouter.post("/logout", csrfProtection, authController.logout);
 
 export { authRouter };

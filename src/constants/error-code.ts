@@ -36,6 +36,18 @@ export const ERROR_CODES = {
     message: "서버 내부 오류가 발생했습니다.",
   },
 
+  BAD_GATEWAY: {
+    status: 502,
+    code: "BAD_GATEWAY",
+    message: "외부 인증 서버와 통신 중 오류가 발생했습니다.",
+  },
+
+  OAUTH_EMAIL_ALREADY_EXISTS: {
+    status: 409,
+    code: "OAUTH_EMAIL_ALREADY_EXISTS",
+    message: "동일한 이메일로 가입된 계정이 이미 존재합니다.",
+  },
+
   VALIDATION_ERROR: {
     status: 422,
     code: "VALIDATION_ERROR",
