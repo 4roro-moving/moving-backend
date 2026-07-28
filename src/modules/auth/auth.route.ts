@@ -1,5 +1,6 @@
 import { Router } from "express";
 
+import { csrfProtection } from "../../middlewares/csrf.middleware";
 import { validate } from "../../middlewares/validate";
 
 import { authController } from "./auth.controller";
@@ -63,11 +64,11 @@ authRouter.post(
 /**
  * Refresh Token은 HttpOnly Cookie에서 조회한다.
  */
-authRouter.post("/refresh", authController.refresh);
+authRouter.post("/refresh", csrfProtection, authController.refresh);
 
 /**
  * Refresh Token은 HttpOnly Cookie에서 조회한다.
  */
-authRouter.post("/logout", authController.logout);
+authRouter.post("/logout", csrfProtection, authController.logout);
 
 export { authRouter };
