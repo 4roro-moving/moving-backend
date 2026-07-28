@@ -51,7 +51,7 @@ export const noticeRepository = {
       db.notice.findMany({
         where,
         select: noticeSelect,
-        orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }],
+        orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }, { id: "asc" }],
         skip,
         take,
       }),

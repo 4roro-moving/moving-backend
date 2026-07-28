@@ -5,7 +5,7 @@ import { z } from "zod";
  * ALL: 전체 / CUSTOMER: 일반 사용자 / MOVER: 기사님
  */
 const audienceSchema = z.enum(["ALL", "CUSTOMER", "MOVER"], {
-  message: "노출 대상을 선택해 주세요.",
+  error: "노출 대상을 선택해 주세요.",
 });
 
 /**
@@ -31,7 +31,12 @@ export const createNoticeSchema = z.object({
  */
 export const updateNoticeSchema = z
   .object({
-    title: z.string().trim().min(1, "제목을 입력해 주세요.").max(100).optional(),
+    title: z
+      .string()
+      .trim()
+      .min(1, "제목을 입력해 주세요.")
+      .max(100, "제목은 100자 이하여야 합니다.")
+      .optional(),
     content: z.string().trim().min(1, "내용을 입력해 주세요.").optional(),
     audience: audienceSchema.optional(),
     isPinned: z.boolean().optional(),
@@ -45,7 +50,10 @@ export const updateNoticeSchema = z
  * 공지 ID 경로 파라미터.
  */
 export const noticeIdParamSchema = z.object({
-  noticeId: z.coerce.number().int().positive("올바른 공지 ID가 아닙니다."),
+  noticeId: z.coerce
+    .number()
+    .int("올바른 공지 ID가 아닙니다.")
+    .positive("올바른 공지 ID가 아닙니다."),
 });
 
 /**
@@ -53,8 +61,17 @@ export const noticeIdParamSchema = z.object({
  * 관리자 목록이므로 숨김(isVisible=false) 공지도 함께 조회할 수 있습니다.
  */
 export const listNoticeQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
-  limit: z.coerce.number().int().positive().max(50).default(10),
+  page: z.coerce
+    .number()
+    .int("페이지 번호는 정수여야 합니다.")
+    .positive("페이지 번호는 1 이상이어야 합니다.")
+    .default(1),
+  limit: z.coerce
+    .number()
+    .int("조회 개수는 정수여야 합니다.")
+    .positive("조회 개수는 1 이상이어야 합니다.")
+    .max(50, "조회 개수는 50 이하여야 합니다.")
+    .default(10),
   audience: audienceSchema.optional(),
   isVisible: z
     .enum(["true", "false"])
