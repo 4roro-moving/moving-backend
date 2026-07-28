@@ -47,7 +47,7 @@ export const createReviewSchema = z.object({
     .max(5, "별점은 최대 5점까지 입력할 수 있습니다."),
   // 리뷰 내용은 10자 이상
   content: z
-    .string("리뷰 내용을 입력해주세요.")
+    .string("리뷰 내용을 입력해 주세요.")
     .trim()
     .min(10, "리뷰 내용은 최소 10자 이상 입력해 주세요."),
 });
