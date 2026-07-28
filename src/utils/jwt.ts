@@ -101,6 +101,34 @@ export const verifyAccessToken = (token: string): VerifiedTokenPayload => {
   }
 };
 
+/**
+ * optionalAuthenticate 전용.
+ * 만료와 위조/형식 오류를 구분해, 만료만 비회원 통과시킬 수 있게 한다.
+ * verifyAccessToken(필수 인증) 동작은 건드리지 않는다.
+ */
+export type OptionalAccessTokenResult =
+  | { status: "authenticated"; payload: VerifiedTokenPayload }
+  | { status: "expired" }
+  | { status: "invalid" };
+
+export const verifyAccessTokenOptional = (token: string): OptionalAccessTokenResult => {
+  try {
+    const payload = jwt.verify(token, getJwtSecret());
+
+    if (!isTokenPayload(payload)) {
+      return { status: "invalid" };
+    }
+
+    return { status: "authenticated", payload };
+  } catch (error) {
+    if (error instanceof jwt.TokenExpiredError) {
+      return { status: "expired" };
+    }
+
+    return { status: "invalid" };
+  }
+};
+
 export const verifyRefreshToken = (token: string): VerifiedTokenPayload => {
   try {
     const payload = jwt.verify(token, getRefreshSecret());
