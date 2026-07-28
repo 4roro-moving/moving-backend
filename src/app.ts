@@ -23,6 +23,7 @@ import moverRouter from "./modules/mover/mover.route";
 import estimateRouter from "./modules/estimate/estimate.route";
 import reviewRouter from "./modules/review/review.route";
 import favoriteRouter from "./modules/favorite/favorite.route";
+import noticeRouter from "./modules/admin/notice/notice.route";
 
 const app = express();
 
@@ -106,6 +107,9 @@ app.use("/api/movers", moverRouter);
 app.use("/api/estimates", estimateRouter);
 app.use("/api/reviews", reviewRouter);
 app.use("/api/favorites", favoriteRouter);
+
+// 관리자
+app.use("/api/admin/notices", noticeRouter);
 
 // 존재하지 않는 경로 처리
 app.use(notFoundHandler);
