@@ -6,15 +6,13 @@ import { googleOAuth } from "./oauth/google.oauth";
 import { kakaoOAuth } from "./oauth/kakao.oauth";
 import { naverOAuth } from "./oauth/naver.oauth";
 
-import type { AuthResponse, AuthTokens, OAuthProfile } from "./auth.type";
+import type { AuthResponse, IssuedAuthTokens, OAuthProfile, RefreshResponse } from "./auth.type";
 
 import type {
   GoogleOAuthInput,
   KakaoOAuthInput,
   NaverOAuthInput,
   LoginInput,
-  LogoutInput,
-  RefreshInput,
   SignUpInput,
 } from "./auth.validator";
 
@@ -72,7 +70,7 @@ const isUniqueConstraintError = (
 const createAuthTokens = (
   userId: string,
   role: UserRole,
-): AuthTokens & { refreshTokenExpiresAt: Date } => {
+): IssuedAuthTokens & { refreshTokenExpiresAt: Date } => {
   const tokenPayload = {
     userId,
     role,
@@ -509,9 +507,7 @@ const loginWithNaver = async (input: NaverOAuthInput): Promise<AuthResponse> => 
  * 기존 토큰 revoke와 신규 토큰 저장은
  * 하나의 트랜잭션으로 처리한다.
  */
-const refresh = async (input: RefreshInput): Promise<AuthTokens> => {
-  const currentRefreshToken = input.refreshToken;
-
+const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> => {
   let refreshTokenPayload;
 
   try {
@@ -635,8 +631,7 @@ const refresh = async (input: RefreshInput): Promise<AuthTokens> => {
  * Refresh Token 레코드는 삭제하지 않고
  * revokedAt을 기록하여 로그아웃 이력을 유지한다.
  */
-const logout = async (input: LogoutInput): Promise<void> => {
-  const currentRefreshToken = input.refreshToken;
+const logout = async (currentRefreshToken: string): Promise<void> => {
   const currentTokenHash = tokenHash(currentRefreshToken);
 
   /*
