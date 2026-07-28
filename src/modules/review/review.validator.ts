@@ -35,11 +35,21 @@ export const listMoverReviewQuerySchema = z.object({
 });
 
 export const createReviewSchema = z.object({
-  estimateId: z.number().int().positive(),
+  estimateId: z
+    .number("견적 ID는 숫자여야 합니다.")
+    .int("견적 ID는 정수여야 합니다.")
+    .positive("올바른 견적 ID가 아닙니다."),
   // 별점을 1~5 사이의 정수로 제한
-  rating: z.number().int().min(1).max(5),
+  rating: z
+    .number("별점은 숫자여야 합니다.")
+    .int("별점은 정수여야 합니다.")
+    .min(1, "별점은 최소 1점 이상이어야 합니다.")
+    .max(5, "별점은 최대 5점까지 입력할 수 있습니다."),
   // 리뷰 내용은 10자 이상
-  content: z.string().trim().min(10),
+  content: z
+    .string("리뷰 내용을 입력해주세요.")
+    .trim()
+    .min(10, "리뷰 내용은 최소 10자 이상 입력해 주세요."),
 });
 
 export type ListMyReviewQuery = z.infer<typeof listMyReviewQuerySchema>;
