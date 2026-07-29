@@ -140,8 +140,8 @@ type CreateReviewData = {
 
 export const reviewRepository = {
   // 리뷰 목록 조회 전 기사님 존재 여부 확인
-  findMoverForReviewList(moverId: string) {
-    return prisma.user.findFirst({
+  findMoverForReviewList(moverId: string, db: DbClient = prisma) {
+    return db.user.findFirst({
       where: {
         id: moverId,
         role: "MOVER",
@@ -155,8 +155,8 @@ export const reviewRepository = {
     });
   },
 
-  findMyReviewsByCustomerId(customerId: string, skip: number, take: number) {
-    return prisma.review.findMany({
+  findMyReviewsByCustomerId(customerId: string, skip: number, take: number, db: DbClient = prisma) {
+    return db.review.findMany({
       where: {
         customerId,
       },
@@ -167,8 +167,8 @@ export const reviewRepository = {
     });
   },
 
-  countMyReviewsByCustomerId(customerId: string) {
-    return prisma.review.count({
+  countMyReviewsByCustomerId(customerId: string, db: DbClient = prisma) {
+    return db.review.count({
       where: {
         customerId,
       },
@@ -176,8 +176,8 @@ export const reviewRepository = {
   },
 
   // 특정 기사님에게 작성된 리뷰 목록 조회
-  findReviewsByMoverId(moverId: string, skip: number, take: number) {
-    return prisma.review.findMany({
+  findReviewsByMoverId(moverId: string, skip: number, take: number, db: DbClient = prisma) {
+    return db.review.findMany({
       where: {
         moverId,
       },
@@ -189,16 +189,16 @@ export const reviewRepository = {
   },
 
   // 특정 기사님에게 작성된 전체 리뷰 수 조회
-  countReviewsByMoverId(moverId: string) {
-    return prisma.review.count({
+  countReviewsByMoverId(moverId: string, db: DbClient = prisma) {
+    return db.review.count({
       where: {
         moverId,
       },
     });
   },
 
-  findReviewableEstimatesByCustomerId(customerId: string) {
-    return prisma.estimate.findMany({
+  findReviewableEstimatesByCustomerId(customerId: string, db: DbClient = prisma) {
+    return db.estimate.findMany({
       where: {
         // 개별 견적이 고객이 선택한 확정 견적인지 확인
         status: EstimateStatus.CONFIRMED,
@@ -223,8 +223,8 @@ export const reviewRepository = {
   },
 
   // 리뷰 작성 대상 견적 조회
-  findEstimateForReviewById(estimateId: number) {
-    return prisma.estimate.findUnique({
+  findEstimateForReviewById(estimateId: number, db: DbClient = prisma) {
+    return db.estimate.findUnique({
       where: {
         id: estimateId,
       },
@@ -234,13 +234,7 @@ export const reviewRepository = {
 
   // Review 생성
   createReview(
-    {
-      customerId,
-      moverId,
-      estimateId,
-      rating,
-      content,
-    }: CreateReviewData,
+    { customerId, moverId, estimateId, rating, content }: CreateReviewData,
     db: DbClient = prisma,
   ) {
     return db.review.create({

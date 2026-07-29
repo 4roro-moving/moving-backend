@@ -10,6 +10,7 @@ import { seedCustomers } from "./seeds/seedCustomers.js";
 import { seedEstimateData } from "./seeds/seedEstimateData.js";
 import { seedMovers } from "./seeds/seedMovers.js";
 import { seedRegions } from "./seeds/seedRegions.js";
+import { seedReviews } from "./seeds/seedReviews.js";
 
 const prisma = new PrismaClient();
 
@@ -36,7 +37,14 @@ async function main(): Promise<void> {
 
   console.log("");
 
-  await seedEstimateData(prisma, regionIdMap);
+  // 확정 견적 ref를 받아 바로 아래에서 Review row를 만듭니다.
+  const confirmedEstimates = await seedEstimateData(prisma, regionIdMap);
+
+  console.log("");
+
+  // Review는 estimateId FK가 필요하므로 견적 시드 이후에 실행합니다.
+  // admin 신고 시드(seedAdminContents)가 리뷰 id를 쓰므로 그 전에 둡니다.
+  await seedReviews(prisma, confirmedEstimates);
 
   console.log("");
 
@@ -51,6 +59,7 @@ async function main(): Promise<void> {
   console.log("고객 계정: customer1@test.com ~ customer8@test.com");
   console.log("기사 계정: mover1@test.com ~ mover8@test.com");
   console.log("견적 요청 및 견적 테스트 데이터 생성 완료");
+  console.log("리뷰 테스트 데이터 생성 완료");
   console.log("공지 / FAQ / 문의 / 신고 / 정지 이력 / 활동 로그 생성 완료");
   console.log("");
   console.log("※ customer3@test.com 은 정지 상태로 생성됩니다.");
