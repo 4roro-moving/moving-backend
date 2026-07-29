@@ -13,18 +13,19 @@ import { generateOpenApiDocument } from "./config/openapi";
 import errorHandler from "./middlewares/error-handler";
 import notFoundHandler from "./middlewares/not-found-handler";
 
+import noticeRouter from "./modules/admin/notice/notice.route";
 import { authRouter } from "./modules/auth/auth.route";
 import estimateRequestRouter from "./modules/estimate-request/estimateRequest.route";
 import estimateRouter from "./modules/estimate/estimate.route";
 import favoriteRouter from "./modules/favorite/favorite.route";
 import moverRouter from "./modules/mover/mover.route";
+import { notificationRouter } from "./modules/notification/notification.route";
 import { profileRouter } from "./modules/profile/profile.route";
 import reviewRouter from "./modules/review/review.route";
 
 // Swagger UI로 전환할 때 사용
 // import type { RequestHandler } from "express";
 // import swaggerUi from "swagger-ui-express";
-import noticeRouter from "./modules/admin/notice/notice.route";
 
 const app = express();
 
@@ -129,14 +130,16 @@ app.use("/api/movers", moverRouter);
 app.use("/api/estimates", estimateRouter);
 app.use("/api/reviews", reviewRouter);
 app.use("/api/favorites", favoriteRouter);
+app.use("/api/notifications", notificationRouter);
 
-/* 관리자*/
-
+/*
+ * 관리자 API
+ */
 app.use("/api/admin/notices", noticeRouter);
 
-  /*
-   * 존재하지 않는 경로 처리
-   */
+/*
+ * 존재하지 않는 경로 처리
+ */
 app.use(notFoundHandler);
 
 /*
