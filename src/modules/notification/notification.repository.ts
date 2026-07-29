@@ -1,11 +1,9 @@
-import { NotificationType } from "@prisma/client";
+import { NotificationType, type Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
 
 import type { CreateNotificationInput } from "./notification.type";
-
-const NOTIFICATION_LIST_LIMIT = 5;
 
 /*
  * 알림 조회 및 생성 결과에서 공통으로 반환할 필드를 정의한다.
@@ -26,36 +24,70 @@ const notificationSelect = {
 } as const;
 
 /*
- * 사용자의 유효한 알림 목록을 조회한다.
+ * 사용자의 유효한 알림 목록 조회에 필요한 값을 정의한다.
+ *
+ * skip은 건너뛸 알림 개수이며,
+ * take는 한 번에 조회할 알림 개수이다.
+ */
+interface FindManyByUserIdInput {
+  userId: string;
+  skip: number;
+  take: number;
+}
+
+/*
+ * 사용자의 유효한 알림 목록과 전체 개수를 조회한다.
  *
  * expiresAt이 null인 무기한 알림과
  * 현재 시각보다 expiresAt이 이후인 알림만 조회한다.
  *
- * 최신순으로 최대 5개까지 반환한다.
+ * 목록 조회와 전체 개수 조회는 동일한 조건을 사용하며,
+ * Promise.all을 이용해 병렬로 실행한다.
+ *
+ * createdAt이 같은 알림이 존재할 수 있으므로
+ * id를 보조 정렬 조건으로 사용해 조회 순서를 안정적으로 유지한다.
  */
-async function findManyByUserId(userId: string, db: DbClient = prisma) {
+async function findManyByUserId(input: FindManyByUserIdInput, db: DbClient = prisma) {
   const now = new Date();
 
-  return db.notification.findMany({
-    where: {
-      userId,
-      OR: [
+  const where: Prisma.NotificationWhereInput = {
+    userId: input.userId,
+    OR: [
+      {
+        expiresAt: null,
+      },
+      {
+        expiresAt: {
+          gt: now,
+        },
+      },
+    ],
+  };
+
+  const [notifications, totalCount] = await Promise.all([
+    db.notification.findMany({
+      where,
+      select: notificationSelect,
+      orderBy: [
         {
-          expiresAt: null,
+          createdAt: "desc",
         },
         {
-          expiresAt: {
-            gt: now,
-          },
+          id: "desc",
         },
       ],
-    },
-    select: notificationSelect,
-    orderBy: {
-      createdAt: "desc",
-    },
-    take: NOTIFICATION_LIST_LIMIT,
-  });
+      skip: input.skip,
+      take: input.take,
+    }),
+    db.notification.count({
+      where,
+    }),
+  ]);
+
+  return {
+    notifications,
+    totalCount,
+  };
 }
 
 /*
@@ -159,7 +191,7 @@ async function markAllAsRead(
   chatExpiresAt: Date,
   db: DbClient = prisma,
 ) {
-  const unreadCondition = {
+  const unreadCondition: Prisma.NotificationWhereInput = {
     userId,
     isRead: false,
     OR: [
@@ -208,9 +240,13 @@ async function markAllAsRead(
  * 다른 도메인의 Service에서 전달받은 사용자, 알림 타입,
  * 제목, 내용, 이동 경로, 만료일을 저장한다.
  *
- * linkUrl과 expiresAt이 전달되지 않으면
- * null로 저장한다.
+ * linkUrl은 선택값이므로 전달되지 않으면 null로 저장한다.
+ *
+ * expiresAt은 알림 생성 시 반드시 전달해야 한다.
+ * 만료되는 알림은 실제 만료 시각을 전달하고,
+ * 무기한 알림인 경우에만 명시적으로 null을 전달한다.
  */
+
 async function create(input: CreateNotificationInput, db: DbClient = prisma) {
   return db.notification.create({
     data: {
@@ -219,7 +255,7 @@ async function create(input: CreateNotificationInput, db: DbClient = prisma) {
       title: input.title,
       content: input.content,
       linkUrl: input.linkUrl ?? null,
-      expiresAt: input.expiresAt ?? null,
+      expiresAt: input.expiresAt,
     },
     select: notificationSelect,
   });
