@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { registerRouterDocs } from "../../config/openapi-router";
+
 import { notificationRouter } from "./notification.route";
 
 const authHeaderSchema = z.object({
@@ -23,7 +24,16 @@ registerRouterDocs(notificationRouter, {
   endpoints: {
     "GET /": {
       summary: "알림 목록 조회",
-      description: "로그인한 사용자의 만료되지 않은 알림을 최신순으로 최대 5개 조회합니다.",
+      description: [
+        "로그인한 사용자의 만료되지 않은 알림을 페이지 단위로 조회합니다.",
+        "",
+        "- page Query를 통해 조회할 페이지를 지정합니다.",
+        "- page를 생략하면 기본값으로 1이 적용됩니다.",
+        "- limit Query를 통해 한 페이지에 조회할 알림 개수를 지정합니다.",
+        "- limit를 생략하면 기본값으로 5가 적용됩니다.",
+        "- 알림은 생성일 기준 최신순으로 조회됩니다.",
+        "- 응답에는 알림 목록과 페이지네이션 정보가 함께 반환됩니다.",
+      ].join("\n"),
       responses: {
         200: "알림 목록 조회 성공",
       },

@@ -19,13 +19,9 @@ import { notificationSseService } from "./notification-sse.service";
  * 브라우저를 닫거나 네트워크가 끊기면
  * close 이벤트를 통해 연결 정보를 제거한다.
  */
-const subscribe = (req: Request, res: Response): void => {
+const subscribe = async (req: Request, res: Response): Promise<void> => {
   const userId = req.user?.id;
 
-  /*
-   * authenticate 미들웨어를 통과했더라도
-   * 방어적으로 사용자 정보를 다시 확인한다.
-   */
   if (!userId) {
     throw new AppError("UNAUTHORIZED", {
       message: "인증 정보가 없습니다.",
@@ -46,13 +42,16 @@ const subscribe = (req: Request, res: Response): void => {
   res.flushHeaders();
 
   /*
-   * 사용자의 SSE 연결을 등록한다.
+   * SSE Service에 사용자의 연결을 등록한다.
+   *
+   * 등록된 연결은 notification 이벤트와
+   * heartbeat 전송에 사용된다.
    */
   notificationSseService.addConnection(userId, res);
 
   /*
-   * 브라우저 종료, 새로고침 등으로
-   * 연결이 종료되면 SSE 연결을 제거한다.
+   * 브라우저 종료, 새로고침, 네트워크 연결 종료 등으로
+   * SSE 연결이 종료되면 등록된 연결을 제거한다.
    */
   req.on("close", () => {
     notificationSseService.removeConnection(userId, res);
