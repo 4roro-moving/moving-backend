@@ -1,5 +1,5 @@
 import { Router } from "express";
-
+import { asyncHandler } from "../../../utils/async-handler.util";
 import { authenticate, authorize } from "../../../middlewares/auth";
 import { validate } from "../../../middlewares/validate";
 import { noticeController } from "./notice.controller";
@@ -17,16 +17,16 @@ noticeRouter.use(authenticate, authorize("ADMIN"));
 
 noticeRouter
   .route("/")
-  .post(validate({ body: createNoticeSchema }), noticeController.createNotice)
-  .get(validate({ query: listNoticeQuerySchema }), noticeController.getNoticeList);
+  .post(validate({ body: createNoticeSchema }), asyncHandler(noticeController.createNotice))
+  .get(validate({ query: listNoticeQuerySchema }), asyncHandler(noticeController.getNoticeList));
 
 noticeRouter
   .route("/:noticeId")
-  .get(validate({ params: noticeIdParamSchema }), noticeController.getNoticeById)
+  .get(validate({ params: noticeIdParamSchema }), asyncHandler(noticeController.getNoticeById))
   .patch(
     validate({ params: noticeIdParamSchema, body: updateNoticeSchema }),
-    noticeController.updateNotice,
+    asyncHandler(noticeController.updateNotice),
   )
-  .delete(validate({ params: noticeIdParamSchema }), noticeController.deleteNotice);
+  .delete(validate({ params: noticeIdParamSchema }), asyncHandler(noticeController.deleteNotice));
 
 export default noticeRouter;

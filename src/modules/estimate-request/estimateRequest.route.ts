@@ -1,5 +1,5 @@
 import { Router } from "express";
-
+import { asyncHandler } from "../../utils/async-handler.util";
 import { authenticate, authorize } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
 import { estimateController } from "../estimate/estimate.controller";
@@ -21,35 +21,38 @@ const estimateRequestRouter = Router();
 
 estimateRequestRouter.use(authenticate, authorize("CUSTOMER"));
 
-estimateRequestRouter.get("/active", estimateRequestController.getActiveEstimateRequest);
+estimateRequestRouter.get(
+  "/active",
+  asyncHandler(estimateRequestController.getActiveEstimateRequest),
+);
 
 estimateRequestRouter
   .route("/")
   .post(
     validate({ body: createEstimateRequestSchema }),
-    estimateRequestController.createEstimateRequest,
+    asyncHandler(estimateRequestController.createEstimateRequest),
   )
   .get(
     validate({ query: listEstimateRequestQuerySchema }),
-    estimateRequestController.getMyEstimateRequestList,
+    asyncHandler(estimateRequestController.getMyEstimateRequestList),
   );
 
 estimateRequestRouter
   .route("/:estimateRequestId")
   .get(
     validate({ params: estimateRequestIdParamSchema }),
-    estimateRequestController.getEstimateRequestById,
+    asyncHandler(estimateRequestController.getEstimateRequestById),
   )
   .patch(
     validate({
       params: estimateRequestIdParamSchema,
       body: updateEstimateRequestSchema,
     }),
-    estimateRequestController.updateEstimateRequest,
+    asyncHandler(estimateRequestController.updateEstimateRequest),
   )
   .delete(
     validate({ params: estimateRequestIdParamSchema }),
-    estimateRequestController.cancelEstimateRequest,
+    asyncHandler(estimateRequestController.cancelEstimateRequest),
   );
 
 estimateRequestRouter.get(
@@ -84,7 +87,7 @@ estimateRequestRouter.post(
     params: estimateRequestIdParamSchema,
     body: designateMoverSchema,
   }),
-  estimateRequestController.designateMover,
+  asyncHandler(estimateRequestController.designateMover),
 );
 
 export default estimateRequestRouter;

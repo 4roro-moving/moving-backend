@@ -1,5 +1,4 @@
-import type { Request, RequestHandler } from "express";
-
+import type { Request, Response } from "express";
 import { AppError } from "../../../lib/app-error";
 import { noticeService } from "./notice.service";
 import type {
@@ -19,87 +18,66 @@ function getAdminId(req: Request): string {
 
 export const noticeController = {
   // POST /api/admin/notices
-  createNotice: (async (req, res, next) => {
-    try {
-      const notice = await noticeService.createNotice({
-        authorId: getAdminId(req),
-        input: req.body as CreateNoticeInput,
-      });
+  createNotice: async (req: Request, res: Response) => {
+    const notice = await noticeService.createNotice({
+      authorId: getAdminId(req),
+      input: req.body as CreateNoticeInput,
+    });
 
-      res.status(201).json({
-        success: true,
-        data: notice,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }) satisfies RequestHandler,
+    res.status(201).json({
+      success: true,
+      data: notice,
+    });
+  },
 
   // GET /api/admin/notices
-  getNoticeList: (async (_req, res, next) => {
-    try {
-      const query = res.locals.query as ListNoticeQuery;
+  getNoticeList: async (_req: Request, res: Response) => {
+    const query = res.locals.query as ListNoticeQuery;
+    const result = await noticeService.getNoticeList(query);
 
-      const result = await noticeService.getNoticeList(query);
-
-      res.status(200).json({
-        success: true,
-        data: result.notices,
-        pagination: result.pagination,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }) satisfies RequestHandler,
+    res.status(200).json({
+      success: true,
+      data: result.notices,
+      pagination: result.pagination,
+    });
+  },
 
   // GET /api/admin/notices/:noticeId
-  getNoticeById: (async (_req, res, next) => {
-    try {
-      const { noticeId } = res.locals.params as NoticeIdParam;
+  getNoticeById: async (_req: Request, res: Response) => {
+    const { noticeId } = res.locals.params as NoticeIdParam;
 
-      const notice = await noticeService.getNoticeById(noticeId);
+    const notice = await noticeService.getNoticeById(noticeId);
 
-      res.status(200).json({
-        success: true,
-        data: notice,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }) satisfies RequestHandler,
+    res.status(200).json({
+      success: true,
+      data: notice,
+    });
+  },
 
   // PATCH /api/admin/notices/:noticeId
-  updateNotice: (async (req, res, next) => {
-    try {
-      const { noticeId } = res.locals.params as NoticeIdParam;
+  updateNotice: async (req: Request, res: Response) => {
+    const { noticeId } = res.locals.params as NoticeIdParam;
 
-      const notice = await noticeService.updateNotice({
-        noticeId,
-        input: req.body as UpdateNoticeInput,
-      });
+    const notice = await noticeService.updateNotice({
+      noticeId,
+      input: req.body as UpdateNoticeInput,
+    });
 
-      res.status(200).json({
-        success: true,
-        data: notice,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }) satisfies RequestHandler,
+    res.status(200).json({
+      success: true,
+      data: notice,
+    });
+  },
 
   // DELETE /api/admin/notices/:noticeId
-  deleteNotice: (async (_req, res, next) => {
-    try {
-      const { noticeId } = res.locals.params as NoticeIdParam;
+  deleteNotice: async (_req: Request, res: Response) => {
+    const { noticeId } = res.locals.params as NoticeIdParam;
 
-      await noticeService.deleteNotice(noticeId);
+    await noticeService.deleteNotice(noticeId);
 
-      res.status(200).json({
-        success: true,
-        data: { id: noticeId },
-      });
-    } catch (error) {
-      next(error);
-    }
-  }) satisfies RequestHandler,
+    res.status(200).json({
+      success: true,
+      data: { id: noticeId },
+    });
+  },
 };
