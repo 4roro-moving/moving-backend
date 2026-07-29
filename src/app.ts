@@ -27,7 +27,6 @@ import reviewRouter from "./modules/review/review.route";
 // Swagger UI로 전환할 때 사용
 // import type { RequestHandler } from "express";
 // import swaggerUi from "swagger-ui-express";
-import noticeRouter from "./modules/admin/notice/notice.route";
 import { adminFaqRouter, publicFaqRouter } from "./modules/admin/faq/faq.route";
 
 const app = express();
