@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+const MAX_PAGE = 10000;
+
 /**
  * 공지 노출 대상.
  * ALL: 전체 / CUSTOMER: 일반 사용자 / MOVER: 기사님
@@ -65,6 +67,7 @@ export const listNoticeQuerySchema = z.object({
     .number()
     .int("페이지 번호는 정수여야 합니다.")
     .positive("페이지 번호는 1 이상이어야 합니다.")
+    .max(MAX_PAGE, `페이지 번호는 ${String(MAX_PAGE)} 이하여야 합니다.`)
     .default(1),
   limit: z.coerce
     .number()

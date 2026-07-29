@@ -1,7 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 
 import type { EstimateRequestSeedKey } from "./estimateRequests.js";
-import { REVIEW_SEED_ITEMS } from "./reviewSeeds.js";
+import { REVIEW_SEED_ITEMS, REVIEW_STAT_MOVER_EMAILS } from "./reviewSeeds.js";
 
 export interface ConfirmedEstimateSeedRef {
   requestKey: EstimateRequestSeedKey;
@@ -23,15 +23,8 @@ export async function seedReviews(
     reviewByRequestKey.has(estimate.requestKey),
   );
 
-  if (targets.length === 0) {
-    console.log("  ⚠️ 리뷰를 연결할 확정 견적이 없습니다.");
-    return;
-  }
-
   await prisma.$transaction(
     async (tx) => {
-      const touchedMoverIds = new Set<string>();
-
       for (const target of targets) {
         const reviewSeed = reviewByRequestKey.get(target.requestKey);
 
@@ -59,38 +52,55 @@ export async function seedReviews(
           },
         });
 
-        touchedMoverIds.add(target.moverId);
         console.log(`  ✅ 리뷰 upsert: ${reviewSeed.moverEmail} / ${target.requestKey}`);
       }
 
-      /*
-       * 리뷰 시드를 만든 기사님만 통계를 갱신합니다.
-       * (리뷰가 없는 기사의 movers.ts 테스트용 평점/리뷰 수는 유지)
-       */
-      for (const moverId of touchedMoverIds) {
-        const mover = await tx.user.findUnique({
-          where: { id: moverId },
-          select: {
-            email: true,
-            moverProfile: { select: { id: true } },
+      const seedMovers = await tx.user.findMany({
+        where: {
+          email: {
+            in: [...REVIEW_STAT_MOVER_EMAILS],
           },
-        });
+          role: "MOVER",
+        },
+        select: {
+          id: true,
+          email: true,
+          moverProfile: {
+            select: {
+              id: true,
+            },
+          },
+        },
+      });
 
-        if (!mover?.moverProfile) {
-          console.log(`  ⚠️ 프로필이 없어 통계 갱신을 건너뜁니다: ${moverId}`);
+      /*
+       * 리뷰 시드 대상 기사님 전체의 통계를 실제 Review row 기준으로 맞춥니다.
+       * 리뷰가 0개가 된 기사님도 reviewCount=0, averageRating=0으로 갱신됩니다.
+       */
+      for (const mover of seedMovers) {
+        if (!mover.moverProfile) {
+          console.log(`  ⚠️ 프로필이 없어 통계 갱신을 건너뜁니다: ${mover.email}`);
           continue;
         }
 
         const stats = await tx.review.aggregate({
-          where: { moverId },
-          _avg: { rating: true },
-          _count: { _all: true },
+          where: {
+            moverId: mover.id,
+          },
+          _avg: {
+            rating: true,
+          },
+          _count: {
+            _all: true,
+          },
         });
 
         const averageRating = Math.round((stats._avg.rating ?? 0) * 10) / 10;
 
         await tx.moverProfile.update({
-          where: { userId: moverId },
+          where: {
+            userId: mover.id,
+          },
           data: {
             averageRating: new Prisma.Decimal(averageRating),
             reviewCount: stats._count._all,
