@@ -112,6 +112,7 @@ const readNotification = async (
 
   const updatedNotification = await notificationRepository.markAsRead(
     notificationId,
+    userId,
     readAt,
     expiresAt,
   );

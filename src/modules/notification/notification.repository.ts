@@ -108,6 +108,9 @@ async function findById(notificationId: number, db: DbClient = prisma) {
 /*
  * 단일 알림을 읽음 처리한다.
  *
+ * 알림 ID와 사용자 ID를 함께 조회 조건으로 사용하여
+ * 현재 로그인한 사용자의 알림만 수정할 수 있도록 한다.
+ *
  * isRead와 readAt을 갱신한다.
  *
  * 채팅 알림처럼 읽음 처리 시 만료일을 변경해야 하는 경우에는
@@ -117,6 +120,7 @@ async function findById(notificationId: number, db: DbClient = prisma) {
  */
 async function markAsRead(
   notificationId: number,
+  userId: string,
   readAt: Date,
   expiresAt: Date | undefined,
   db: DbClient = prisma,
@@ -124,6 +128,7 @@ async function markAsRead(
   return db.notification.update({
     where: {
       id: notificationId,
+      userId,
     },
     data: {
       isRead: true,

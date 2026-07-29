@@ -55,7 +55,26 @@ app.use(
   }),
 );
 
-app.use(compression());
+/*
+ * 일반 응답에는 압축을 적용한다.
+ *
+ * SSE 응답은 연결을 유지한 채 이벤트를 즉시 전송해야 하므로
+ * compression 적용 대상에서 제외한다.
+ *
+ * compression이 SSE 응답을 버퍼링하면
+ * 이벤트가 클라이언트에 바로 전달되지 않을 수 있다.
+ */
+app.use(
+  compression({
+    filter: (req, res) => {
+      if (req.path.startsWith("/api/notifications/sse")) {
+        return false;
+      }
+
+      return compression.filter(req, res);
+    },
+  }),
+);
 
 /*
  * 일반 쿠키와 서명된 쿠키를 파싱한다.
