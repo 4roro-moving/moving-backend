@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { authenticate, authorize } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
+import { asyncHandler } from "../../utils/async-handler.util";
 import { reviewController } from "./review.controller";
 import { createReviewSchema, listMyReviewQuerySchema } from "./review.validator";
 
@@ -14,7 +15,7 @@ reviewRouter.use(authenticate, authorize("CUSTOMER"));
 reviewRouter.get(
   "/me",
   validate({ query: listMyReviewQuerySchema }),
-  reviewController.getMyReviewList,
+  asyncHandler(reviewController.getMyReviewList),
 );
 
 // 리뷰 작성 가능한 견적 목록 조회

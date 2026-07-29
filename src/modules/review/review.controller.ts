@@ -49,23 +49,19 @@ export const reviewController = {
    *
    * 현재 로그인한 고객이 작성한 리뷰 목록을 페이지네이션으로 조회
    */
-  getMyReviewList: (async (req, res, next) => {
-    try {
-      const query = res.locals.query as ListMyReviewQuery;
-      const result = await reviewService.getMyReviewList({
-        customerId: getCustomerId(req),
-        page: query.page,
-        limit: query.limit,
-      });
+  getMyReviewList: (async (req, res) => {
+    const query = res.locals.query as ListMyReviewQuery;
+    const result = await reviewService.getMyReviewList({
+      customerId: getCustomerId(req),
+      page: query.page,
+      limit: query.limit,
+    });
 
-      res.status(200).json({
-        success: true,
-        data: result.reviews,
-        pagination: result.pagination,
-      });
-    } catch (error) {
-      next(error);
-    }
+    res.status(200).json({
+      success: true,
+      data: result.reviews,
+      pagination: result.pagination,
+    });
   }) satisfies RequestHandler,
 
   /**
