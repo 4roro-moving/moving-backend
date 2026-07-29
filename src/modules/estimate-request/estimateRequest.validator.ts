@@ -91,4 +91,10 @@ export const listEstimateRequestQuerySchema = z.object({
     .positive("조회 개수는 1 이상이어야 합니다.")
     .max(50, "조회 개수는 50 이하여야 합니다.")
     .default(10),
+  // 선택값 — 미전달 시 전체 조회. 허용값은 EstimateRequestStatus Enum
+  status: z
+    .enum(["PENDING", "OPEN", "CONFIRMED", "COMPLETED", "EXPIRED", "CANCELED"], {
+      error: "올바른 견적 요청 상태가 아닙니다.",
+    })
+    .optional(),
 });
