@@ -4,6 +4,11 @@ import { AppError } from "../../lib/app-error";
 
 import { notificationService } from "./notification.service";
 
+import type { NotificationIdParam } from "./notification.validator";
+
+/**
+ * 현재 로그인한 사용자의 알림 목록을 조회합니다.
+ */
 const getNotifications: RequestHandler = async (req, res) => {
   if (!req.user) {
     throw new AppError("UNAUTHORIZED", {
@@ -20,6 +25,9 @@ const getNotifications: RequestHandler = async (req, res) => {
   });
 };
 
+/**
+ * 현재 로그인한 사용자의 읽지 않은 알림 개수를 조회합니다.
+ */
 const getUnreadCount: RequestHandler = async (req, res) => {
   if (!req.user) {
     throw new AppError("UNAUTHORIZED", {
@@ -36,6 +44,9 @@ const getUnreadCount: RequestHandler = async (req, res) => {
   });
 };
 
+/**
+ * 특정 알림을 읽음 상태로 변경합니다.
+ */
 const readNotification: RequestHandler = async (req, res) => {
   if (!req.user) {
     throw new AppError("UNAUTHORIZED", {
@@ -43,13 +54,7 @@ const readNotification: RequestHandler = async (req, res) => {
     });
   }
 
-  const notificationId = Number(req.params.notificationId);
-
-  if (!Number.isInteger(notificationId) || notificationId <= 0) {
-    throw new AppError("VALIDATION_ERROR", {
-      message: "알림 ID가 올바르지 않습니다.",
-    });
-  }
+  const { notificationId } = res.locals.params as NotificationIdParam;
 
   const data = await notificationService.readNotification(req.user.id, notificationId);
 
@@ -60,6 +65,9 @@ const readNotification: RequestHandler = async (req, res) => {
   });
 };
 
+/**
+ * 현재 로그인한 사용자의 모든 알림을 읽음 상태로 변경합니다.
+ */
 const readAllNotifications: RequestHandler = async (req, res) => {
   if (!req.user) {
     throw new AppError("UNAUTHORIZED", {
