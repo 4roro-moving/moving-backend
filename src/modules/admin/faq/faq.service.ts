@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
@@ -15,6 +15,10 @@ type UpdateParams = {
   faqId: number;
   input: UpdateFaqInput;
 };
+
+function isRecordNotFoundError(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2025";
+}
 
 export const faqService = {
   /**
@@ -72,17 +76,27 @@ export const faqService = {
    * FAQ를 수정합니다.
    */
   async updateFaq({ faqId, input }: UpdateParams) {
-    await faqService.getFaqById(faqId);
-
-    return faqRepository.update(faqId, input);
+    try {
+      return await faqRepository.update(faqId, input);
+    } catch (error) {
+      if (isRecordNotFoundError(error)) {
+        throw new AppError("FAQ_NOT_FOUND");
+      }
+      throw error;
+    }
   },
 
   /**
    * FAQ를 삭제합니다.
    */
   async deleteFaq(faqId: number) {
-    await faqService.getFaqById(faqId);
-
-    await faqRepository.delete(faqId);
+    try {
+      await faqRepository.delete(faqId);
+    } catch (error) {
+      if (isRecordNotFoundError(error)) {
+        throw new AppError("FAQ_NOT_FOUND");
+      }
+      throw error;
+    }
   },
 };
