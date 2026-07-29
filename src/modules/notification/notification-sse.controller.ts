@@ -7,6 +7,12 @@ import { notificationSseService } from "./notification-sse.service";
 /*
  * 인증된 사용자의 SSE 연결을 시작한다.
  *
+ * authenticate 미들웨어가 Authorization Bearer Access Token을 검증하며,
+ * 인증된 사용자 정보는 req.user에 저장된다.
+ *
+ * 브라우저 기본 EventSource는 Authorization 헤더를 설정할 수 없으므로
+ * 프론트에서는 fetch 기반 SSE 클라이언트를 사용해야 한다.
+ *
  * SSE 응답에 필요한 헤더를 설정한 뒤
  * 사용자의 연결을 SSE Service에 등록한다.
  *

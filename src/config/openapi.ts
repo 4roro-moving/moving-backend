@@ -26,6 +26,9 @@ async function registerModuleDocs(): Promise<void> {
 
   // 2026.07.29 장민주 - [추가] 알림 API 문서 등록
   await import("../modules/notification/notification.docs");
+
+  // 2026.07.29 장민주 - [추가] 알림 SSE API 문서 등록
+  await import("../modules/notification/notification-sse.docs");
 }
 
 export async function generateOpenApiDocument(): Promise<OpenAPIObject> {
