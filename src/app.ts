@@ -20,6 +20,7 @@ import estimateRouter from "./modules/estimate/estimate.route";
 import favoriteRouter from "./modules/favorite/favorite.route";
 import moverRouter from "./modules/mover/mover.route";
 import { notificationRouter } from "./modules/notification/notification.route";
+import notificationSseRouter from "./modules/notification/notification-sse.route";
 import { profileRouter } from "./modules/profile/profile.route";
 import reviewRouter from "./modules/review/review.route";
 
@@ -131,6 +132,7 @@ app.use("/api/estimates", estimateRouter);
 app.use("/api/reviews", reviewRouter);
 app.use("/api/favorites", favoriteRouter);
 app.use("/api/notifications", notificationRouter);
+app.use("/api/notifications/sse", notificationSseRouter);
 
 /*
  * 관리자 API

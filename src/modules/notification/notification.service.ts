@@ -4,6 +4,7 @@ import { AppError } from "../../lib/app-error";
 import { runTransaction } from "../../utils/transaction";
 
 import { notificationRepository } from "./notification.repository";
+import { notificationSseService } from "./notification-sse.service";
 
 import type {
   CreateNotificationInput,
@@ -76,20 +77,12 @@ const readNotification = async (
 ): Promise<ReadNotificationResponse> => {
   const notification = await notificationRepository.findById(notificationId);
 
-  /*
-   * 요청한 ID에 해당하는 알림이 존재하지 않으면
-   * NOT_FOUND 오류를 반환한다.
-   */
   if (!notification) {
     throw new AppError("NOT_FOUND", {
       message: "알림을 찾을 수 없습니다.",
     });
   }
 
-  /*
-   * 요청한 사용자가 해당 알림의 소유자가 아니면
-   * 읽음 처리할 수 없다.
-   */
   if (notification.userId !== userId) {
     throw new AppError("FORBIDDEN", {
       message: "해당 알림에 접근할 권한이 없습니다.",
@@ -98,23 +91,12 @@ const readNotification = async (
 
   const readAt = new Date();
 
-  /*
-   * 목록 조회에서는 만료된 알림이 제외되지만,
-   * 사용자가 알림 ID를 직접 요청할 수 있으므로
-   * Service에서도 만료 여부를 다시 확인한다.
-   */
   if (notification.expiresAt !== null && notification.expiresAt.getTime() <= readAt.getTime()) {
     throw new AppError("NOT_FOUND", {
       message: "알림을 찾을 수 없습니다.",
     });
   }
 
-  /*
-   * 이미 읽은 알림은 readAt과 expiresAt을 다시 갱신하지 않는다.
-   *
-   * 채팅 알림을 반복해서 클릭할 때마다
-   * 노출 기간이 계속 연장되는 것을 방지한다.
-   */
   if (notification.isRead) {
     const { userId: _, ...notificationItem } = notification;
 
@@ -123,23 +105,11 @@ const readNotification = async (
     };
   }
 
-  /*
-   * 채팅 알림은 읽은 시점부터 3일간 추가 노출한다.
-   *
-   * 일반 알림은 기존 expiresAt을 유지하므로
-   * undefined를 전달한다.
-   */
   const expiresAt =
     notification.type === NotificationType.CHAT_MESSAGE_RECEIVED
       ? addDays(readAt, CHAT_READ_VISIBILITY_DAYS)
       : undefined;
 
-  /*
-   * 읽음 여부와 읽은 시각을 갱신한다.
-   *
-   * 채팅 알림인 경우에만
-   * 새로 계산한 expiresAt도 함께 갱신한다.
-   */
   const updatedNotification = await notificationRepository.markAsRead(
     notificationId,
     readAt,
@@ -163,16 +133,8 @@ const readNotification = async (
 const readAllNotifications = async (userId: string): Promise<ReadAllNotificationsResponse> => {
   const readAt = new Date();
 
-  /*
-   * 채팅 알림의 새로운 만료 시각을
-   * 전체 읽음 처리 시각 기준 3일 후로 계산한다.
-   */
   const chatExpiresAt = addDays(readAt, CHAT_READ_VISIBILITY_DAYS);
 
-  /*
-   * 채팅 알림과 일반 알림의 읽음 처리를
-   * 하나의 트랜잭션 안에서 실행한다.
-   */
   const updatedCount = await runTransaction(async (tx) => {
     return notificationRepository.markAllAsRead(userId, readAt, chatExpiresAt, tx);
   });
@@ -190,11 +152,19 @@ const readAllNotifications = async (userId: string): Promise<ReadAllNotification
  * 견적, 리뷰, 신고 등의 도메인 Service에서
  * 알림 발생 시점에 이 함수를 호출한다.
  *
- * 추후 알림 생성 이후 해당 사용자에게
- * SSE 이벤트를 발행하는 로직을 연결할 수 있다.
+ * 알림을 먼저 DB에 저장한 뒤,
+ * 현재 SSE로 연결되어 있는 사용자에게
+ * 실시간 알림 이벤트를 전송한다.
+ *
+ * 사용자가 SSE에 연결되어 있지 않더라도
+ * DB에는 알림이 정상적으로 저장된다.
  */
 const createNotification = async (input: CreateNotificationInput): Promise<NotificationItem> => {
-  return notificationRepository.create(input);
+  const notification = await notificationRepository.create(input);
+
+  notificationSseService.sendNotification(input.userId, notification);
+
+  return notification;
 };
 
 /*

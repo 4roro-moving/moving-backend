@@ -28,10 +28,26 @@ const writeEvent = (response: Response, event: string, data: unknown): void => {
 };
 
 /*
+ * 활성화된 SSE 연결이 하나도 없으면
+ * heartbeat 작업을 종료한다.
+ */
+const stopHeartbeatIfUnused = (): void => {
+  if (connections.size > 0 || heartbeatInterval === null) {
+    return;
+  }
+
+  clearInterval(heartbeatInterval);
+  heartbeatInterval = null;
+};
+
+/*
  * 특정 사용자의 SSE 연결을 제거한다.
  *
  * 한 사용자의 모든 연결이 제거되면
  * 사용자 정보도 연결 목록에서 삭제한다.
+ *
+ * 전체 SSE 연결이 하나도 남지 않으면
+ * heartbeat 작업도 함께 종료한다.
  */
 const removeConnection = (userId: string, response: Response): void => {
   const userConnections = connections.get(userId);
@@ -45,6 +61,8 @@ const removeConnection = (userId: string, response: Response): void => {
   if (userConnections.size === 0) {
     connections.delete(userId);
   }
+
+  stopHeartbeatIfUnused();
 
   logger.info("SSE 연결이 제거되었습니다.", {
     userId,
@@ -96,19 +114,6 @@ const startHeartbeat = (): void => {
   }
 
   heartbeatInterval = setInterval(sendHeartbeat, HEARTBEAT_INTERVAL_MS);
-};
-
-/*
- * 활성화된 SSE 연결이 하나도 없으면
- * heartbeat 작업을 종료한다.
- */
-const stopHeartbeatIfUnused = (): void => {
-  if (connections.size > 0 || heartbeatInterval === null) {
-    return;
-  }
-
-  clearInterval(heartbeatInterval);
-  heartbeatInterval = null;
 };
 
 /*
@@ -173,8 +178,6 @@ const sendNotification = (userId: string, notification: NotificationItem): void 
       removeConnection(userId, response);
     }
   });
-
-  stopHeartbeatIfUnused();
 };
 
 /*
