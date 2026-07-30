@@ -1,4 +1,5 @@
-import type { CookieOptions, NextFunction, Request, Response } from "express";
+import type { CookieOptions, Request, Response } from "express";
+import type { ParamsDictionary } from "express-serve-static-core";
 
 import { authService } from "./auth.service";
 import { AppError } from "../../lib/app-error";
@@ -35,7 +36,8 @@ const naverOAuthStateCookieOptions: CookieOptions = {
 /*
  * Refresh Token을 HttpOnly Cookie로 저장한다.
  *
- * Cookie 만료 시간은 Refresh Token의 exp와 동일하게 설정한다.
+ * Cookie 만료 시간은 Refresh Token의 exp와
+ * 동일한 시간으로 설정한다.
  */
 const setRefreshTokenCookie = (res: Response, refreshToken: string): void => {
   const payload = verifyRefreshToken(refreshToken);
@@ -53,7 +55,10 @@ const setRefreshTokenCookie = (res: Response, refreshToken: string): void => {
 };
 
 /*
- * Refresh Token을 HttpOnly Cookie에서 안전하게 조회한다.
+ * Refresh Token을 HttpOnly Cookie에서 조회한다.
+ *
+ * Cookie 값이 문자열인 경우에만
+ * Refresh Token으로 반환한다.
  */
 const getRefreshTokenFromCookie = (req: Request): string | undefined => {
   const refreshToken: unknown = req.cookies?.[REFRESH_TOKEN_COOKIE];
@@ -62,7 +67,10 @@ const getRefreshTokenFromCookie = (req: Request): string | undefined => {
 };
 
 /*
- * 서명된 Naver OAuth state Cookie를 안전하게 조회한다.
+ * 서명된 Naver OAuth state Cookie를 조회한다.
+ *
+ * Cookie 값이 문자열인 경우에만
+ * OAuth state로 반환한다.
  */
 const getNaverOAuthStateFromCookie = (req: Request): string | undefined => {
   const state: unknown = req.signedCookies?.[NAVER_OAUTH_STATE_COOKIE];
@@ -73,7 +81,7 @@ const getNaverOAuthStateFromCookie = (req: Request): string | undefined => {
 /*
  * 인증 Service 결과를 클라이언트 응답 형식으로 변환한다.
  *
- * Refresh Token은 Cookie로 저장하고
+ * Refresh Token은 HttpOnly Cookie로 저장하고,
  * Response Body에는 Access Token만 포함한다.
  */
 const sendAuthResponse = (
@@ -102,104 +110,85 @@ const sendAuthResponse = (
 };
 
 /*
- * 일반 고객 회원가입
+ * 일반 고객 회원가입을 진행한다.
  *
- * POST /auth/signup/customer
+ * 회원가입 정보를 Service에 전달한 뒤
+ * 생성된 사용자 정보와 Access Token을 반환한다.
  */
 const signUpCustomer = async (
-  req: Request<Record<string, never>, unknown, SignUpInput>,
+  req: Request<ParamsDictionary, unknown, SignUpInput>,
   res: Response,
-  next: NextFunction,
 ): Promise<void> => {
-  try {
-    const result = await authService.signUpCustomer(req.body);
+  const result = await authService.signUpCustomer(req.body);
 
-    sendAuthResponse(res, 201, result);
-  } catch (error) {
-    next(error);
-  }
+  sendAuthResponse(res, 201, result);
 };
 
 /*
- * 기사 회원가입
+ * 무버 회원가입을 진행한다.
  *
- * POST /auth/signup/mover
+ * 회원가입 정보를 Service에 전달한 뒤
+ * 생성된 사용자 정보와 Access Token을 반환한다.
  */
 const signUpMover = async (
-  req: Request<Record<string, never>, unknown, SignUpInput>,
+  req: Request<ParamsDictionary, unknown, SignUpInput>,
   res: Response,
-  next: NextFunction,
 ): Promise<void> => {
-  try {
-    const result = await authService.signUpMover(req.body);
+  const result = await authService.signUpMover(req.body);
 
-    sendAuthResponse(res, 201, result);
-  } catch (error) {
-    next(error);
-  }
+  sendAuthResponse(res, 201, result);
 };
 
 /*
- * 로컬 로그인
+ * 로컬 로그인을 진행한다.
  *
- * POST /auth/login
+ * 이메일과 비밀번호를 Service에 전달한 뒤
+ * 사용자 정보와 Access Token을 반환한다.
  */
 const login = async (
-  req: Request<Record<string, never>, unknown, LoginInput>,
+  req: Request<ParamsDictionary, unknown, LoginInput>,
   res: Response,
-  next: NextFunction,
 ): Promise<void> => {
-  try {
-    const result = await authService.login(req.body);
+  const result = await authService.login(req.body);
 
-    sendAuthResponse(res, 200, result);
-  } catch (error) {
-    next(error);
-  }
+  sendAuthResponse(res, 200, result);
 };
 
 /*
- * Google OAuth 로그인
+ * Google OAuth 로그인을 진행한다.
  *
- * POST /auth/oauth/google
+ * Google OAuth 인증 정보를 Service에 전달한 뒤
+ * 사용자 정보와 Access Token을 반환한다.
  */
 const loginWithGoogle = async (
-  req: Request<Record<string, never>, unknown, GoogleOAuthInput>,
+  req: Request<ParamsDictionary, unknown, GoogleOAuthInput>,
   res: Response,
-  next: NextFunction,
 ): Promise<void> => {
-  try {
-    const result = await authService.loginWithGoogle(req.body);
+  const result = await authService.loginWithGoogle(req.body);
 
-    sendAuthResponse(res, 200, result, "Google 로그인에 성공했습니다.");
-  } catch (error) {
-    next(error);
-  }
+  sendAuthResponse(res, 200, result, "Google 로그인에 성공했습니다.");
 };
 
 /*
- * Kakao OAuth 로그인
+ * Kakao OAuth 로그인을 진행한다.
  *
- * POST /auth/oauth/kakao
+ * Kakao OAuth 인증 정보를 Service에 전달한 뒤
+ * 사용자 정보와 Access Token을 반환한다.
  */
 const loginWithKakao = async (
-  req: Request<Record<string, never>, unknown, KakaoOAuthInput>,
+  req: Request<ParamsDictionary, unknown, KakaoOAuthInput>,
   res: Response,
-  next: NextFunction,
 ): Promise<void> => {
-  try {
-    const result = await authService.loginWithKakao(req.body);
+  const result = await authService.loginWithKakao(req.body);
 
-    sendAuthResponse(res, 200, result, "Kakao 로그인에 성공했습니다.");
-  } catch (error) {
-    next(error);
-  }
+  sendAuthResponse(res, 200, result, "Kakao 로그인에 성공했습니다.");
 };
 
 /*
- * Naver OAuth state 발급
+ * Naver OAuth state를 발급한다.
  *
- * GET /auth/oauth/naver/state
+ * 생성한 state를 서명된 HttpOnly Cookie에 저장하고
+ * 클라이언트 Response에도 함께 반환한다.
  */
 const createNaverOAuthState = (_req: Request, res: Response): void => {
   const state = createOAuthState();
@@ -219,102 +208,91 @@ const createNaverOAuthState = (_req: Request, res: Response): void => {
 };
 
 /*
- * Naver OAuth 로그인
+ * Naver OAuth 로그인을 진행한다.
  *
- * POST /auth/oauth/naver
+ * 요청 state와 Cookie에 저장된 state를 검증한 뒤
+ * Naver OAuth 인증 정보를 Service에 전달한다.
  */
 const loginWithNaver = async (
-  req: Request<Record<string, never>, unknown, NaverOAuthInput>,
+  req: Request<ParamsDictionary, unknown, NaverOAuthInput>,
   res: Response,
-  next: NextFunction,
 ): Promise<void> => {
-  try {
-    const storedState = getNaverOAuthStateFromCookie(req);
-    const isValidState = validateOAuthState(req.body.state, storedState);
+  const storedState = getNaverOAuthStateFromCookie(req);
+  const isValidState = validateOAuthState(req.body.state, storedState);
 
-    /*
-     * OAuth state는 한 번만 사용할 수 있도록
-     * 검증 성공 여부와 관계없이 쿠키를 제거한다.
-     */
-    res.clearCookie(NAVER_OAUTH_STATE_COOKIE, naverOAuthStateCookieOptions);
+  /*
+   * OAuth state는 한 번만 사용할 수 있도록
+   * 검증 성공 여부와 관계없이 Cookie를 제거한다.
+   */
+  res.clearCookie(NAVER_OAUTH_STATE_COOKIE, naverOAuthStateCookieOptions);
 
-    if (!isValidState) {
-      res.status(400).json({
-        success: false,
-        message: "유효하지 않은 OAuth state입니다.",
-        errorCode: "INVALID_OAUTH_STATE",
-      });
-
-      return;
-    }
-
-    const result = await authService.loginWithNaver(req.body);
-
-    sendAuthResponse(res, 200, result, "Naver 로그인에 성공했습니다.");
-  } catch (error) {
-    next(error);
+  if (!isValidState) {
+    throw new AppError("BAD_REQUEST", {
+      message: "유효하지 않은 OAuth state입니다.",
+    });
   }
+
+  const result = await authService.loginWithNaver(req.body);
+
+  sendAuthResponse(res, 200, result, "Naver 로그인에 성공했습니다.");
 };
 
 /*
- * Access Token 및 Refresh Token 재발급
+ * Access Token과 Refresh Token을 재발급한다.
  *
- * POST /auth/refresh
+ * HttpOnly Cookie에서 Refresh Token을 조회한 뒤
+ * Token Rotation을 통해 새로운 Token을 발급한다.
  */
-const refresh = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const currentRefreshToken = getRefreshTokenFromCookie(req);
+const refresh = async (req: Request, res: Response): Promise<void> => {
+  const currentRefreshToken = getRefreshTokenFromCookie(req);
 
-    if (!currentRefreshToken) {
-      throw new AppError("UNAUTHORIZED", {
-        message: "Refresh Token이 없습니다.",
-      });
-    }
+  if (!currentRefreshToken) {
+    throw new AppError("UNAUTHORIZED", {
+      message: "Refresh Token이 없습니다.",
+    });
+  }
 
-    const { accessToken, refreshToken } = await authService.refresh(currentRefreshToken);
+  const { accessToken, refreshToken } = await authService.refresh(currentRefreshToken);
 
-    setRefreshTokenCookie(res, refreshToken);
+  setRefreshTokenCookie(res, refreshToken);
 
-    res.status(200).json({
-      success: true,
-      data: {
-        tokens: {
-          accessToken,
-        },
+  res.status(200).json({
+    success: true,
+    data: {
+      tokens: {
+        accessToken,
       },
-    });
-  } catch (error) {
-    next(error);
-  }
+    },
+  });
 };
 
 /*
- * 현재 로그인 세션 로그아웃
+ * 현재 로그인 세션을 로그아웃한다.
  *
- * POST /auth/logout
+ * Refresh Token이 존재하면 현재 세션을 종료하고
+ * 클라이언트의 Refresh Token Cookie를 제거한다.
  */
-const logout = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const currentRefreshToken = getRefreshTokenFromCookie(req);
+const logout = async (req: Request, res: Response): Promise<void> => {
+  const currentRefreshToken = getRefreshTokenFromCookie(req);
 
-    if (currentRefreshToken) {
-      await authService.logout(currentRefreshToken);
-    }
-
-    /*
-     * Refresh Token 쿠키가 없는 경우에도 이미 로그아웃된 상태로 간주한다.
-     * 반복 요청에도 동일한 결과를 반환하여 로그아웃의 멱등성을 보장한다.
-     */
-    res.clearCookie(REFRESH_TOKEN_COOKIE, refreshTokenCookieOptions);
-
-    res.status(200).json({
-      success: true,
-      data: null,
-      message: "로그아웃되었습니다.",
-    });
-  } catch (error) {
-    next(error);
+  if (currentRefreshToken) {
+    await authService.logout(currentRefreshToken);
   }
+
+  /*
+   * Refresh Token Cookie가 없는 경우에도
+   * 이미 로그아웃된 상태로 간주한다.
+   *
+   * 반복 요청에도 동일한 결과를 반환하여
+   * 로그아웃의 멱등성을 보장한다.
+   */
+  res.clearCookie(REFRESH_TOKEN_COOKIE, refreshTokenCookieOptions);
+
+  res.status(200).json({
+    success: true,
+    data: null,
+    message: "로그아웃되었습니다.",
+  });
 };
 
 export const authController = {
