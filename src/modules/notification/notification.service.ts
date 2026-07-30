@@ -41,11 +41,30 @@ const addDays = (date: Date, days: number): Date => {
  * 만료되지 않은 알림만 최신순으로 최대 5개 조회하는 조건은
  * Repository에서 처리한다.
  */
-const getNotifications = async (userId: string): Promise<NotificationListResponse> => {
-  const notifications = await notificationRepository.findManyByUserId(userId);
+const getNotifications = async (
+  userId: string,
+  page: number,
+  limit: number,
+): Promise<NotificationListResponse> => {
+  const skip = (page - 1) * limit;
+
+  const { notifications, totalCount } = await notificationRepository.findManyByUserId({
+    userId,
+    skip,
+    take: limit,
+  });
+
+  const totalPages = Math.ceil(totalCount / limit);
 
   return {
     notifications,
+    pagination: {
+      page,
+      limit,
+      totalCount,
+      totalPages,
+      hasNextPage: page < totalPages,
+    },
   };
 };
 
