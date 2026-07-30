@@ -2,11 +2,9 @@ import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 
 import { favoriteRepository } from "../favorite/favorite.repository";
+import { mapMoverBase } from "./mover.mapper";
 import { moverRepository } from "./mover.repository";
 import type { ListMoverQuery } from "./mover.type";
-
-// 목록 조회 repository 결과에서 기사 1명의 타입
-type MoverBase = Awaited<ReturnType<typeof moverRepository.findMany>>["movers"][number];
 
 // 상세 조회 repository 결과에서 null을 제외한 기사 타입
 type MoverDetail = NonNullable<Awaited<ReturnType<typeof moverRepository.findByMoverUserId>>>;
@@ -17,24 +15,6 @@ type RatingDistributionRow = Awaited<
 
 // 없는 점수도 0으로 채우기 위해 5→1 고정
 const RATING_SCORES = [5, 4, 3, 2, 1] as const;
-
-// 기사 목록/상세 응답에 공통으로 들어가는 필드
-function mapMoverBase(mover: MoverBase | MoverDetail) {
-  return {
-    id: mover.userId,
-    moverProfileId: mover.id,
-    nickname: mover.nickname,
-    profileImageUrl: mover.imageUrl,
-    shortIntro: mover.shortIntro,
-    description: mover.description,
-    career: mover.career,
-    rating: Number(mover.averageRating),
-    reviewCount: mover.reviewCount,
-    confirmedEstimateCount: mover.confirmedCount,
-    favoriteCount: mover.user._count.favoritesReceived,
-    moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
-  };
-}
 
 // 상세 응답에서만 필요한 서비스 가능 지역 추가
 function mapMoverDetail(mover: MoverDetail) {

@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 
+import { mapMoverBase } from "../mover/mover.mapper";
 import { favoriteRepository } from "./favorite.repository";
 import type { FavoriteMoverParams, ListFavoriteMoverQuery } from "./favorite.type";
 
@@ -92,18 +93,7 @@ export const favoriteService = {
         }
 
         return {
-          id: mover.userId,
-          moverProfileId: mover.id,
-          nickname: mover.nickname,
-          profileImageUrl: mover.imageUrl,
-          shortIntro: mover.shortIntro,
-          description: mover.description,
-          career: mover.career,
-          rating: Number(mover.averageRating),
-          reviewCount: mover.reviewCount,
-          confirmedEstimateCount: mover.confirmedCount,
-          favoriteCount: mover.user._count.favoritesReceived,
-          moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
+          ...mapMoverBase(mover),
           isFavorite: true,
           favoritedAt: favorite.createdAt,
         };
