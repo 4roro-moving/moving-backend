@@ -37,7 +37,7 @@ estimateRouter.get(
   authenticate,
   authorize("MOVER"),
   validate({ query: moverEstimateRejectionListQuerySchema }),
-  estimateController.getRejections,
+  asyncHandler(estimateController.getRejections),
 );
 
 /* 
