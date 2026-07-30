@@ -106,7 +106,11 @@ export const inquiryRepository = {
     return inquiry.id;
   },
 
-  /** 메시지 추가 + 문의 상태/lastMessageAt 갱신 (트랜잭션으로 감싼다) */
+  /**
+   * 메시지 추가 + 문의 상태/lastMessageAt 갱신 (트랜잭션으로 감싼다)
+   * 상태 전이(updateMany, status != CLOSED)를 먼저 시도해 이미 종료된 문의면 아무것도 하지 않는다.
+   * @returns 전이 성공 여부. false 면 이미 종료된 문의(호출 측에서 409 처리).
+   */
   async addMessage(
     params: {
       inquiryId: number;
@@ -118,16 +122,7 @@ export const inquiryRepository = {
       now: Date;
     },
     db: DbClient = prisma,
-  ) {
-    await db.inquiryMessage.create({
-      data: {
-        inquiryId: params.inquiryId,
-        senderId: params.senderId,
-        content: params.content,
-        isAdmin: params.isAdmin,
-      },
-    });
-
+  ): Promise<boolean> {
     const data: Prisma.InquiryUncheckedUpdateInput = {
       status: params.nextStatus,
       lastMessageAt: params.now,
@@ -137,19 +132,39 @@ export const inquiryRepository = {
       data.handledBy = params.handledBy;
     }
 
-    await db.inquiry.update({
-      where: { id: params.inquiryId },
+    // 상태 전이와 "종료 여부 확인"을 하나의 원자적 쿼리로 묶는다.
+    const { count } = await db.inquiry.updateMany({
+      where: { id: params.inquiryId, status: { not: "CLOSED" } },
       data,
     });
+
+    if (count === 0) {
+      return false;
+    }
+
+    await db.inquiryMessage.create({
+      data: {
+        inquiryId: params.inquiryId,
+        senderId: params.senderId,
+        content: params.content,
+        isAdmin: params.isAdmin,
+      },
+    });
+
+    return true;
   },
 
-  /** 문의 종료 */
-  close(inquiryId: number, now: Date, db: DbClient = prisma) {
-    return db.inquiry.update({
-      where: { id: inquiryId },
+  /**
+   * 문의 종료. status != CLOSED 조건으로 원자적으로 전이한다.
+   * @returns 종료 성공 여부. false 면 이미 종료된 문의(호출 측에서 409 처리).
+   */
+  async close(inquiryId: number, now: Date, db: DbClient = prisma): Promise<boolean> {
+    const { count } = await db.inquiry.updateMany({
+      where: { id: inquiryId, status: { not: "CLOSED" } },
       data: { status: "CLOSED", closedAt: now },
-      select: inquiryListSelect,
     });
+
+    return count > 0;
   },
 
   async findManyWithCount({ skip, take, where }: ListParams, db: DbClient = prisma) {
@@ -172,7 +187,6 @@ export const inquiryRepository = {
     return db.inquiryMessage.updateMany({
       where: {
         inquiryId: params.inquiryId,
-        // 읽는 사람이 관리자면 사용자(isAdmin=false) 메시지를, 사용자면 관리자(isAdmin=true) 메시지를 읽음 처리
         isAdmin: !params.readerIsAdmin,
         isRead: false,
       },

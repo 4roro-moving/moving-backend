@@ -54,13 +54,6 @@ async function findInquiryOrThrow(inquiryId: number, db?: DbClient): Promise<Own
   return inquiry;
 }
 
-/** 닫힌 문의면 메시지 추가/종료를 막는다. */
-function assertNotClosed(inquiry: Ownership) {
-  if (inquiry.status === "CLOSED") {
-    throw new AppError("INQUIRY_CLOSED");
-  }
-}
-
 // ============================================================================
 // 사용자 기능
 // ============================================================================
@@ -121,10 +114,9 @@ export const inquiryService = {
     const now = new Date();
 
     await runTransaction(async (tx) => {
-      const inquiry = await findOwnedInquiryOrThrow(inquiryId, userId, tx);
-      assertNotClosed(inquiry);
-
-      await inquiryRepository.addMessage(
+      // 소유권/존재 확인 (없으면 404, 남의 것이면 403)
+      await findOwnedInquiryOrThrow(inquiryId, userId, tx);
+      const ok = await inquiryRepository.addMessage(
         {
           inquiryId,
           senderId: userId,
@@ -135,6 +127,10 @@ export const inquiryService = {
         },
         tx,
       );
+
+      if (!ok) {
+        throw new AppError("INQUIRY_CLOSED");
+      }
     });
 
     return inquiryRepository.findById(inquiryId);
@@ -145,10 +141,14 @@ export const inquiryService = {
     const now = new Date();
 
     return runTransaction(async (tx) => {
-      const inquiry = await findOwnedInquiryOrThrow(inquiryId, userId, tx);
-      assertNotClosed(inquiry);
+      await findOwnedInquiryOrThrow(inquiryId, userId, tx);
+      const ok = await inquiryRepository.close(inquiryId, now, tx);
 
-      return inquiryRepository.close(inquiryId, now, tx);
+      if (!ok) {
+        throw new AppError("INQUIRY_CLOSED");
+      }
+
+      return inquiryRepository.findById(inquiryId, tx);
     });
   },
 };
@@ -196,10 +196,9 @@ export const adminInquiryService = {
     const now = new Date();
 
     await runTransaction(async (tx) => {
-      const inquiry = await findInquiryOrThrow(inquiryId, tx);
-      assertNotClosed(inquiry);
+      await findInquiryOrThrow(inquiryId, tx);
 
-      await inquiryRepository.addMessage(
+      const ok = await inquiryRepository.addMessage(
         {
           inquiryId,
           senderId: adminId,
@@ -211,6 +210,10 @@ export const adminInquiryService = {
         },
         tx,
       );
+
+      if (!ok) {
+        throw new AppError("INQUIRY_CLOSED");
+      }
     });
 
     return inquiryRepository.findById(inquiryId);
@@ -221,10 +224,15 @@ export const adminInquiryService = {
     const now = new Date();
 
     return runTransaction(async (tx) => {
-      const inquiry = await findInquiryOrThrow(inquiryId, tx);
-      assertNotClosed(inquiry);
+      await findInquiryOrThrow(inquiryId, tx);
 
-      return inquiryRepository.close(inquiryId, now, tx);
+      const ok = await inquiryRepository.close(inquiryId, now, tx);
+
+      if (!ok) {
+        throw new AppError("INQUIRY_CLOSED");
+      }
+
+      return inquiryRepository.findById(inquiryId, tx);
     });
   },
 };
