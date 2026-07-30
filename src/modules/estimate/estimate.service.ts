@@ -3,6 +3,7 @@
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
+import { notificationService } from "../notification/notification.service";
 import { moverEstimateRequestRepository, receivedEstimateRepository } from "./estimate.repository";
 import type {
   ConfirmReceivedEstimateParams,
@@ -601,7 +602,7 @@ export const receivedEstimateService = {
     estimateId,
     customerId,
   }: ConfirmReceivedEstimateParams) {
-    return runTransaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       //확정 대상 견적 조회
       const estimate = await receivedEstimateRepository.findReceivedEstimateForConfirm(
         estimateRequestId,
@@ -717,5 +718,16 @@ export const receivedEstimateService = {
         expiredEstimateCount: expiredEstimates.count,
       };
     });
+
+    await notificationService.createNotification({
+      userId: result.estimate.mover.id,
+      type: "ESTIMATE_CONFIRMED",
+      title: "견적 확정",
+      content: "고객님이 견적을 확정",
+      linkUrl: "/estimate/received-requests",
+      expiresAt: null,
+    });
+
+    return result;
   },
 };

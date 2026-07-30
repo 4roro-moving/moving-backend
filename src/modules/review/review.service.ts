@@ -3,6 +3,7 @@ import { EstimateRequestStatus, EstimateStatus, Prisma } from "@prisma/client";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
+import { notificationService } from "../notification/notification.service";
 import { reviewRepository } from "./review.repository";
 
 type GetMyReviewListParams = {
@@ -259,6 +260,15 @@ export const reviewService = {
           isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
         },
       );
+
+      await notificationService.createNotification({
+        userId: estimate.moverId,
+        type: "REVIEW_RECEIVED",
+        title: "리뷰 도착",
+        content: "고객님이",
+        linkUrl: null,
+        expiresAt: null,
+      });
 
       return {
         review,
