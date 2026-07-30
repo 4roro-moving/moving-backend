@@ -1,36 +1,9 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
+import { MOVER_LIST_SELECT } from "./mover.select";
 import type { MoverListSort, FindManyMoversParams } from "./mover.type";
 
 type Db = PrismaClient | Prisma.TransactionClient;
-
-// 기사 목록 조회 시 DB에서 가져올 필드 목록
-const MOVER_LIST_SELECT = {
-  id: true,
-  userId: true,
-  nickname: true,
-  imageUrl: true,
-  career: true,
-  shortIntro: true,
-  description: true,
-  confirmedCount: true,
-  averageRating: true,
-  reviewCount: true,
-  serviceTypes: {
-    select: {
-      moveType: true,
-    },
-  },
-  user: {
-    select: {
-      _count: {
-        select: {
-          favoritesReceived: true,
-        },
-      },
-    },
-  },
-} satisfies Prisma.MoverProfileSelect;
 
 // 기사 상세 조회 시 DB에서 가져올 필드 목록
 const MOVER_DETAIL_SELECT = {
