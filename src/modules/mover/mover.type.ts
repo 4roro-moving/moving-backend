@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import type { MoveType } from "@prisma/client";
 
 import type { listMoverQuerySchema, moverIdParamSchema } from "./mover.validator";
 
@@ -11,7 +12,7 @@ export type FindManyMoversParams = {
   keyword?: string;
   sort: MoverListSort;
   serviceArea?: number;
-  moveType?: "SMALL" | "HOME" | "OFFICE";
+  moveType?: MoveType;
   skip: number;
   take: number;
 };
