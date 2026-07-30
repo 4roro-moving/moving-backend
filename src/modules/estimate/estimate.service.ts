@@ -785,6 +785,7 @@ export const receivedEstimateService = {
       return {
         estimateRequest: confirmedEstimateRequest,
         moveDate: estimate.estimateRequest.moveDate,
+        customerName: estimate.estimateRequest.customer.name,
         estimate: {
           id: confirmedEstimate.id,
           price: confirmedEstimate.price,
@@ -805,7 +806,7 @@ export const receivedEstimateService = {
       userId: result.estimate.mover.id,
       type: "ESTIMATE_CONFIRMED",
       title: "견적 확정",
-      content: "고객님이 회원님의 견적을 확정했습니다.",
+      content: `${result.customerName}님의`,
       linkUrl: "/estimate/received-requests",
       expiresAt: getKstEndOfDay(result.moveDate),
     });
