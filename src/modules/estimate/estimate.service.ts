@@ -293,7 +293,7 @@ export const moverEstimateRequestService = {
       type: "ESTIMATE_RECEIVED",
       title: "견적 도착",
       content: `${result.moverNickname} 기사님의 ${MOVE_TYPE_LABEL[result.moveType]} 견적`,
-      linkUrl: "/estimates/pending",
+      linkUrl: null,
       expiresAt: result.expiresAt,
     });
 
@@ -388,7 +388,7 @@ export const moverEstimateRequestService = {
       type: "ESTIMATE_REQUEST_REJECTED",
       title: "견적 요청 반려",
       content: result.moverNickname,
-      linkUrl: `/estimates/requests/${String(estimateRequestId)}`,
+      linkUrl: null,
       expiresAt: result.expiresAt,
     });
 
