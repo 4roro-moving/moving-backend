@@ -1,7 +1,7 @@
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 
-import { favoriteRepository } from "../favorite/favorite.repository";
+import { getFavoriteMoverIdSet, isMoverFavoritedByCustomer } from "./mover-favorite.enrichment";
 import { mapMoverBase } from "./mover.shared";
 import { moverRepository } from "./mover.repository";
 import type { ListMoverQuery } from "./mover.type";
@@ -35,18 +35,6 @@ function mapRatingDistribution(rows: RatingDistributionRow[]) {
     score,
     count: countByScore.get(score) ?? 0,
   }));
-}
-
-// 목록 응답의 isFavorite 계산을 위해 찜한 기사 ID를 Set으로 변환
-async function getFavoriteMoverIdSet(customerId: string | undefined, moverIds: string[]) {
-  if (!customerId || moverIds.length === 0) {
-    return new Set<string>();
-  }
-  const favorites = await favoriteRepository.findFavoriteMoversByCustomerId({
-    customerId,
-    moverIds,
-  });
-  return new Set(favorites.map((f) => f.moverId));
 }
 
 export const moverService = {
@@ -83,16 +71,14 @@ export const moverService = {
       throw new AppError("MOVER_NOT_FOUND");
     }
 
-    const [favorite, ratingDistributionRows] = await Promise.all([
-      customerId
-        ? favoriteRepository.findFavoriteMover({ customerId, moverId: moverUserId })
-        : Promise.resolve(null),
+    const [isFavorite, ratingDistributionRows] = await Promise.all([
+      isMoverFavoritedByCustomer(customerId, moverUserId),
       moverRepository.countRatingDistributionByMoverId(moverUserId),
     ]);
 
     return {
       ...mapMoverDetail(mover),
-      isFavorite: favorite !== null,
+      isFavorite,
       // 리뷰 목록과 분리된 상세 요약(평균·개수와 함께 노출)
       ratingDistribution: mapRatingDistribution(ratingDistributionRows),
     };
