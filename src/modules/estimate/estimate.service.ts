@@ -302,7 +302,7 @@ export const moverEstimateRequestService = {
 
   // 견적 요청 반려
   async rejectEstimate({ estimateRequestId, moverId, input }: RejectEstimateParams) {
-    return runTransaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       //기사 프로필
       const profile = await moverEstimateRequestRepository.findMoverProfile(moverId, tx);
 
@@ -366,7 +366,7 @@ export const moverEstimateRequestService = {
       }
 
       //데이터 생성
-      return moverEstimateRequestRepository.createEstimateRejection(
+      const rejection = await moverEstimateRequestRepository.createEstimateRejection(
         {
           estimateRequestId,
           moverId,
@@ -374,7 +374,25 @@ export const moverEstimateRequestService = {
         },
         tx,
       );
+
+      return {
+        rejection,
+        customerId: estimateRequest.customerId,
+        moverNickname: profile.nickname,
+        expiresAt: estimateRequest.expiresAt,
+      };
     });
+
+    await notificationService.createNotification({
+      userId: result.customerId,
+      type: "ESTIMATE_REQUEST_REJECTED",
+      title: "견적 요청 반려",
+      content: result.moverNickname,
+      linkUrl: `/estimates/requests/${String(estimateRequestId)}`,
+      expiresAt: result.expiresAt,
+    });
+
+    return result.rejection;
   },
 };
 
