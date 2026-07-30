@@ -5,6 +5,29 @@ import { AppError } from "../../lib/app-error";
 
 import { profileService as customerProfileService } from "./customer/profile.service";
 import { profileService as moverProfileService } from "./mover/profile.service";
+import { profileImageService } from "./profile-image.service";
+
+/*
+ * 프로필 이미지 업로드 URL을 발급한다.
+ *
+ * 인증된 사용자의 ID를 기준으로 이미지 Key를 생성하고
+ * 프로필 이미지 업로드에 사용할 URL 정보를 반환한다.
+ */
+const createProfileImageUploadUrl: RequestHandler = async (req, res) => {
+  if (!req.user) {
+    throw new AppError("UNAUTHORIZED", {
+      message: "인증이 필요합니다.",
+    });
+  }
+
+  const data = await profileImageService.createUploadUrl(req.user.id, req.body);
+
+  res.status(201).json({
+    success: true,
+    message: "프로필 이미지 업로드 URL을 발급했습니다.",
+    data,
+  });
+};
 
 /*
  * 내 프로필을 등록한다.
@@ -203,6 +226,7 @@ const updateProfile: RequestHandler = async (req, res) => {
 };
 
 export const profileController = {
+  createProfileImageUploadUrl,
   createProfile,
   getMyProfile,
   getProfileStatus,

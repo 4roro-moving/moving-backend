@@ -17,8 +17,24 @@ import {
 } from "./mover/profile.validator";
 
 import { profileController } from "./profile.controller";
+import { createProfileImageUploadUrlSchema } from "./profile-image.validator";
 
 export const profileRouter = Router();
+
+/*
+ * 프로필 이미지 업로드 URL을 발급한다.
+ *
+ * 고객과 무버 모두 사용할 수 있으며,
+ * 요청 Body를 검증한 뒤 업로드 URL 정보를 반환한다.
+ */
+profileRouter.post(
+  "/image/upload-url",
+  authenticate,
+  validate({
+    body: createProfileImageUploadUrlSchema,
+  }),
+  asyncHandler(profileController.createProfileImageUploadUrl),
+);
 
 /*
  * 고객 프로필을 등록한다.
