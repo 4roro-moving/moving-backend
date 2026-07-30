@@ -3,7 +3,7 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 
-import { mapMoverBase } from "../mover/mover.mapper";
+import { mapMoverBase } from "../mover/mover.shared";
 import { favoriteRepository } from "./favorite.repository";
 import type { FavoriteMoverParams, ListFavoriteMoverQuery } from "./favorite.type";
 

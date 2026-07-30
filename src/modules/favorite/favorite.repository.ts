@@ -1,8 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
-import { MOVER_LIST_SELECT } from "../mover/mover.select";
-import { buildActiveMoverUserWhere } from "../mover/mover.where";
+import { buildActiveMoverUserWhere, MOVER_LIST_SELECT } from "../mover/mover.shared";
 import type {
   FavoriteMoverParams,
   FindFavoriteMoverListParams,

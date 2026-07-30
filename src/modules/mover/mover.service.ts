@@ -2,7 +2,7 @@ import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 
 import { favoriteRepository } from "../favorite/favorite.repository";
-import { mapMoverBase } from "./mover.mapper";
+import { mapMoverBase } from "./mover.shared";
 import { moverRepository } from "./mover.repository";
 import type { ListMoverQuery } from "./mover.type";
 

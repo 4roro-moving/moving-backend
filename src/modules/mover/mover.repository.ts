@@ -1,7 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
-import { MOVER_LIST_SELECT } from "./mover.select";
-import { buildActiveMoverUserWhere } from "./mover.where";
+import { buildActiveMoverUserWhere, MOVER_LIST_SELECT } from "./mover.shared";
 import type { MoverListSort, FindManyMoversParams } from "./mover.type";
 
 type Db = PrismaClient | Prisma.TransactionClient;
