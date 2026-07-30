@@ -115,3 +115,31 @@ export type MoverEstimateRequestListResult = {
     totalCount: number;
   };
 };
+
+export type MoverEstimateRejectionListItem = {
+  id: number;
+  reason: string;
+  rejectedAt: string;
+  request: {
+    id: number;
+    customer: {
+      id: string;
+      name: string;
+    };
+    moveType: MoveType;
+    moveDate: string;
+    fromAddress: string;
+    toAddress: string;
+    fromRegion: string;
+    toRegion: string;
+    isDesignated: boolean;
+  };
+};
+
+export type MoverEstimateRejectionListResult = {
+  items: MoverEstimateRejectionListItem[];
+  pagination: {
+    nextCursor: string | null;
+    hasNextPage: boolean;
+  };
+};
