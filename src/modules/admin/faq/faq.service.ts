@@ -76,8 +76,26 @@ export const faqService = {
    * FAQ를 수정합니다.
    */
   async updateFaq({ faqId, input }: UpdateParams) {
+    const data: Prisma.FaqUncheckedUpdateInput = {};
+
+    if (input.question !== undefined) {
+      data.question = input.question;
+    }
+
+    if (input.answer !== undefined) {
+      data.answer = input.answer;
+    }
+
+    if (input.sortOrder !== undefined) {
+      data.sortOrder = input.sortOrder;
+    }
+
+    if (input.isVisible !== undefined) {
+      data.isVisible = input.isVisible;
+    }
+
     try {
-      return await faqRepository.update(faqId, input);
+      return await faqRepository.update(faqId, data);
     } catch (error) {
       if (isRecordNotFoundError(error)) {
         throw new AppError("FAQ_NOT_FOUND");
