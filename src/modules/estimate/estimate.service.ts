@@ -3,6 +3,7 @@
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
+import { notificationService } from "../notification/notification.service";
 import { moverEstimateRequestRepository, receivedEstimateRepository } from "./estimate.repository";
 import type {
   ConfirmReceivedEstimateParams,
@@ -27,16 +28,34 @@ import type {
 -DB 결과 API 응답 형태로 가공
 */
 
-/* 
+/*
 2026.07.23 add 김성현
 - 받은 견적 목록 비즈니스 로직
 - 받은 견적 상세 비즈니스 로직
 - 받은 견적 확정 비즈니스 로직
 */
 
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 // =============================================================================
 // 기사: 고객의 견적 요청 목록 조회
 // =============================================================================
+
+function getKstEndOfDay(date: Date): Date {
+  const kstDate = new Date(date.getTime() + KST_OFFSET_MS);
+
+  return new Date(
+    Date.UTC(
+      kstDate.getUTCFullYear(),
+      kstDate.getUTCMonth(),
+      kstDate.getUTCDate(),
+      14,
+      59,
+      59,
+      999,
+    ),
+  );
+}
 
 function getCursorId(cursor: string | undefined) {
   if (!cursor) {
@@ -640,7 +659,7 @@ export const receivedEstimateService = {
     estimateId,
     customerId,
   }: ConfirmReceivedEstimateParams) {
-    return runTransaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       //확정 대상 견적 조회
       const estimate = await receivedEstimateRepository.findReceivedEstimateForConfirm(
         estimateRequestId,
@@ -741,6 +760,7 @@ export const receivedEstimateService = {
       //확정 응답 형태 가공
       return {
         estimateRequest: confirmedEstimateRequest,
+        moveDate: estimate.estimateRequest.moveDate,
         estimate: {
           id: confirmedEstimate.id,
           price: confirmedEstimate.price,
@@ -756,5 +776,16 @@ export const receivedEstimateService = {
         expiredEstimateCount: expiredEstimates.count,
       };
     });
+
+    await notificationService.createNotification({
+      userId: result.estimate.mover.id,
+      type: "ESTIMATE_CONFIRMED",
+      title: "견적 확정",
+      content: "고객님이 회원님의 견적을 확정했습니다.",
+      linkUrl: "/estimate/received-requests",
+      expiresAt: getKstEndOfDay(result.moveDate),
+    });
+
+    return result;
   },
 };

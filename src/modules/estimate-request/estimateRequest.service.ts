@@ -304,12 +304,13 @@ export const estimateRequestService = {
   },
 
   async getMyEstimateRequestList(customerId: string, query: ListEstimateRequestQuery) {
-    const { page, limit } = query;
+    const { page, limit, status } = query;
 
     const { items, totalCount } = await estimateRequestRepository.findManyByCustomerId({
       customerId,
       skip: (page - 1) * limit,
       take: limit,
+      ...(status !== undefined ? { status } : {}),
     });
 
     return {

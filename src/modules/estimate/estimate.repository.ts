@@ -653,6 +653,7 @@ export const receivedEstimateRepository = {
           select: {
             id: true,
             customerId: true,
+            moveDate: true,
             status: true,
             confirmedEstimateId: true,
           },

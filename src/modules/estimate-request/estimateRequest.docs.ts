@@ -41,7 +41,14 @@ registerRouterDocs(estimateRequestRouter, {
 
     "GET /": {
       summary: "내 견적 요청 목록",
-      description: "최신순으로 정렬되며 `pagination` 이 함께 반환됩니다.",
+      description: [
+        "최신순(`createdAt` DESC, 동일 시각은 `id` DESC)으로 정렬되며 `pagination` 이 함께 반환됩니다.",
+        "",
+        "- `status` 미전달: 전체 조회",
+        "- `status=OPEN`: 진행 중(견적 모집 중)",
+        "- `status=COMPLETED`: 이사 완료",
+        "- 허용 Enum: `PENDING` | `OPEN` | `CONFIRMED` | `COMPLETED` | `EXPIRED` | `CANCELED`",
+      ].join("\n"),
       responses: { 200: "조회 성공" },
     },
 
