@@ -265,7 +265,7 @@ export const reviewService = {
         userId: estimate.moverId,
         type: "REVIEW_RECEIVED",
         title: "리뷰 도착",
-        content: "고객님이 회원님에게 리뷰를 작성했습니다.",
+        content: "고객님이",
         linkUrl: null,
         expiresAt: null,
       });
