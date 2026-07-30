@@ -232,6 +232,7 @@ export const moverEstimateRequestRepository = {
         },
       },
       select: {
+        nickname: true,
         serviceTypes: {
           select: {
             moveType: true,

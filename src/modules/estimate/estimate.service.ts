@@ -36,6 +36,11 @@ import type {
 */
 
 const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const MOVE_TYPE_LABEL: Record<MoveType, string> = {
+  SMALL: "소형이사",
+  HOME: "가정이사",
+  OFFICE: "사무실이사",
+};
 
 // =============================================================================
 // 기사: 고객의 견적 요청 목록 조회
@@ -197,7 +202,7 @@ export const moverEstimateRequestService = {
 
   //견적 제안
   async sendEstimate({ estimateRequestId, moverId, input }: SendEstimateParams) {
-    return runTransaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const profile = await moverEstimateRequestRepository.findMoverProfile(moverId, tx);
 
       //기사 프로필 존재 확인
@@ -262,8 +267,8 @@ export const moverEstimateRequestService = {
 
       const isDesignated = estimateRequest.designatedMovers.length > 0;
 
-      //견적 셍성
-      return moverEstimateRequestRepository.createEstimate(
+      //견적 생성
+      const estimate = await moverEstimateRequestRepository.createEstimate(
         {
           estimateRequestId,
           moverId,
@@ -273,7 +278,26 @@ export const moverEstimateRequestService = {
         },
         tx,
       );
+
+      return {
+        estimate,
+        customerId: estimateRequest.customerId,
+        moverNickname: profile.nickname,
+        moveType: estimateRequest.moveType,
+        expiresAt: estimateRequest.expiresAt,
+      };
     });
+
+    await notificationService.createNotification({
+      userId: result.customerId,
+      type: "ESTIMATE_RECEIVED",
+      title: "견적 도착",
+      content: `${result.moverNickname} 기사님의 ${MOVE_TYPE_LABEL[result.moveType]} 견적`,
+      linkUrl: "/estimates/pending",
+      expiresAt: result.expiresAt,
+    });
+
+    return result.estimate;
   },
 
   // 견적 요청 반려
