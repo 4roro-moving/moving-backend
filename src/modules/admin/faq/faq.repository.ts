@@ -2,6 +2,8 @@ import type { Prisma, PrismaClient } from "@prisma/client";
 
 import { prisma } from "../../../lib/prisma";
 
+import type { UpdateFaqInput } from "./faq.type";
+
 type Db = PrismaClient | Prisma.TransactionClient;
 
 /**
@@ -73,10 +75,10 @@ export const faqRepository = {
     });
   },
 
-  update(faqId: number, data: Prisma.FaqUpdateInput, db: Db = prisma) {
+  update(faqId: number, data: UpdateFaqInput, db: Db = prisma) {
     return db.faq.update({
       where: { id: faqId },
-      data,
+      data: data as Prisma.FaqUncheckedUpdateInput,
       select: faqSelect,
     });
   },
