@@ -5,6 +5,7 @@ import { moverEstimateRequestService, receivedEstimateService } from "./estimate
 import type {
   ConfirmReceivedEstimateParam,
   MoverEstimateRequestListQuery,
+  MoverEstimateRejectionListQuery,
   PendingEstimateQuery,
   ReceivedEstimateDetailParam,
   ReceivedEstimateIdParam,
@@ -65,7 +66,8 @@ const getList: RequestHandler = async (req, res, next) => {
 //기사 견적 반려 내역 조회
 const getRejections: RequestHandler = async (req, res, next) => {
   try {
-    const result = await moverEstimateRequestService.getRejections(getMoverId(req));
+    const query = res.locals.query as MoverEstimateRejectionListQuery;
+    const result = await moverEstimateRequestService.getRejections(getMoverId(req), query);
 
     res.status(200).json({
       success: true,

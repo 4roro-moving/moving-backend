@@ -11,6 +11,7 @@ import type {
   MoverEstimateRequestListItem,
   MoverEstimateRequestListQuery,
   MoverEstimateRequestListResult,
+  MoverEstimateRejectionListQuery,
   PendingEstimateQuery,
   RejectEstimateParams,
   SendEstimateParams,
@@ -140,10 +141,11 @@ export const moverEstimateRequestService = {
 - 2026.07.30 add 윤소정
 기사 견적 반려 내역 조회
  */
-  async getRejections(moverId: string) {
-    const rows = await moverEstimateRequestRepository.findRejections(moverId);
-
-    return rows.map((row) => ({
+  async getRejections(moverId: string, query: MoverEstimateRejectionListQuery) {
+    const rows = await moverEstimateRequestRepository.findRejections(moverId, query);
+    const hasNextPage = rows.length > query.limit;
+    const pageRows = rows.slice(0, query.limit);
+    const items = pageRows.map((row) => ({
       id: row.id,
       reason: row.reason,
       rejectedAt: row.createdAt.toISOString(),
@@ -159,6 +161,14 @@ export const moverEstimateRequestService = {
         isDesignated: row.estimateRequest.designatedMovers.length > 0,
       },
     }));
+
+    return {
+      items,
+      pagination: {
+        nextCursor: hasNextPage ? String(items.at(-1)?.id) : null,
+        hasNextPage,
+      },
+    };
   },
 
   //견적 제안

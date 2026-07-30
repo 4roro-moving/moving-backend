@@ -66,6 +66,11 @@ export const moverEstimateRequestListQuerySchema = z.object({
   sort: z.enum(["moveDate", "requestedAt"]).default("requestedAt"),
 });
 
+export const moverEstimateRejectionListQuerySchema = z.object({
+  cursor: z.string().regex(/^\d+$/).optional(),
+  limit: z.coerce.number().int().positive().max(50).default(10),
+});
+
 // 견적 제안 estimateRequestID 검증
 export const sendEstimateParamSchema = z.object({
   estimateRequestId: z.coerce.number().int().positive("올바른 견적 요청 ID가 아닙니다."),

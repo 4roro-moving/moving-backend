@@ -3,7 +3,11 @@ import { EstimateStatus } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
-import type { MoverEstimateRequestListQuery, PendingEstimateQuery } from "./estimate.type";
+import type {
+  MoverEstimateRejectionListQuery,
+  MoverEstimateRequestListQuery,
+  PendingEstimateQuery,
+} from "./estimate.type";
 
 type FindManyParams = {
   moverId: string;
@@ -401,7 +405,7 @@ export const moverEstimateRequestRepository = {
   },
 
   //기사 견적 반려 내역 조회
-  findRejections(moverId: string) {
+  findRejections(moverId: string, query: MoverEstimateRejectionListQuery) {
     return prisma.estimateRequestRejection.findMany({
       where: { moverId },
       select: {
@@ -439,6 +443,13 @@ export const moverEstimateRequestRepository = {
         },
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: query.limit + 1,
+      ...(query.cursor
+        ? {
+            cursor: { id: Number(query.cursor) },
+            skip: 1,
+          }
+        : {}),
     });
   },
 };
