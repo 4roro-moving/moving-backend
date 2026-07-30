@@ -26,8 +26,6 @@ async function registerModuleDocs(): Promise<void> {
   await import("../modules/notification/notification.docs");
   // 2026.07.29 장민주 - [추가] 알림 SSE API 문서 등록
   await import("../modules/notification/notification-sse.docs");
-  // 2026.07.28 심현수 - [추가] 관리자 공지사항 API 문서 등록
-  await import("../modules/admin/notice/notice.docs");
   // 2026.07.29 심현수 - [추가] 관리자 FAQ API 문서 등록
   await import("../modules/admin/faq/faq.docs");
   // 2026.07.30 심현수 - [추가] QNA API 문서 등록

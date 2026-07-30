@@ -18,7 +18,7 @@ import {
  */
 const inquiryRouter = Router();
 
-inquiryRouter.use(authenticate);
+inquiryRouter.use(authenticate, authorize("CUSTOMER", "MOVER"));
 
 inquiryRouter
   .route("/")
