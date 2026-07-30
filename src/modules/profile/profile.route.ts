@@ -3,6 +3,7 @@ import { Router } from "express";
 
 import { authenticate, authorize } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
+import { asyncHandler } from "../../utils/async-handler.util";
 
 import {
   createProfileSchema as createCustomerProfileSchema,
@@ -16,12 +17,31 @@ import {
 } from "./mover/profile.validator";
 
 import { profileController } from "./profile.controller";
+import { createProfileImageUploadUrlSchema } from "./profile-image.validator";
 
-const profileRouter = Router();
+export const profileRouter = Router();
 
 /*
- * 고객 프로필 등록
- * POST /profiles/customer
+ * 프로필 이미지 업로드 URL을 발급한다.
+ *
+ * 고객(CUSTOMER)과 무버(MOVER)만 접근할 수 있으며,
+ * 요청 Body를 검증한 뒤 업로드 URL 정보를 반환한다.
+ */
+profileRouter.post(
+  "/image/upload-url",
+  authenticate,
+  authorize(UserRole.CUSTOMER, UserRole.MOVER),
+  validate({
+    body: createProfileImageUploadUrlSchema,
+  }),
+  asyncHandler(profileController.createProfileImageUploadUrl),
+);
+
+/*
+ * 고객 프로필을 등록한다.
+ *
+ * 고객 역할만 접근할 수 있으며,
+ * 요청 Body를 검증한 뒤 프로필을 등록한다.
  */
 profileRouter.post(
   "/customer",
@@ -30,34 +50,35 @@ profileRouter.post(
   validate({
     body: createCustomerProfileSchema,
   }),
-  profileController.createProfile,
+  asyncHandler(profileController.createProfile),
 );
 
 /*
- * 내 고객 프로필 조회
- * GET /profiles/customer/me
+ * 현재 로그인한 고객의 프로필을 조회한다.
  */
 profileRouter.get(
   "/customer/me",
   authenticate,
   authorize(UserRole.CUSTOMER),
-  profileController.getMyProfile,
+  asyncHandler(profileController.getMyProfile),
 );
 
 /*
- * 고객 프로필 등록 여부 조회
- * GET /profiles/customer/status
+ * 현재 로그인한 고객의
+ * 프로필 등록 여부를 조회한다.
  */
 profileRouter.get(
   "/customer/status",
   authenticate,
   authorize(UserRole.CUSTOMER),
-  profileController.getProfileStatus,
+  asyncHandler(profileController.getProfileStatus),
 );
 
 /*
- * 내 고객 프로필 수정
- * PATCH /profiles/customer/me
+ * 현재 로그인한 고객의 프로필을 수정한다.
+ *
+ * 요청 Body를 검증한 뒤
+ * 고객 프로필 정보를 수정한다.
  */
 profileRouter.patch(
   "/customer/me",
@@ -66,12 +87,14 @@ profileRouter.patch(
   validate({
     body: updateCustomerProfileSchema,
   }),
-  profileController.updateProfile,
+  asyncHandler(profileController.updateProfile),
 );
 
 /*
- * 무버 프로필 등록
- * POST /profiles/mover
+ * 무버 프로필을 등록한다.
+ *
+ * 무버 역할만 접근할 수 있으며,
+ * 요청 Body를 검증한 뒤 프로필을 등록한다.
  */
 profileRouter.post(
   "/mover",
@@ -80,40 +103,35 @@ profileRouter.post(
   validate({
     body: createMoverProfileSchema,
   }),
-  profileController.createProfile,
+  asyncHandler(profileController.createProfile),
 );
 
 /*
- * 내 무버 프로필 조회
- * GET /profiles/mover/me
+ * 현재 로그인한 무버의 프로필을 조회한다.
  */
 profileRouter.get(
   "/mover/me",
   authenticate,
   authorize(UserRole.MOVER),
-  profileController.getMyProfile,
+  asyncHandler(profileController.getMyProfile),
 );
 
 /*
- * 무버 프로필 등록 여부 조회
- * GET /profiles/mover/status
+ * 현재 로그인한 무버의
+ * 프로필 등록 여부를 조회한다.
  */
 profileRouter.get(
   "/mover/status",
   authenticate,
   authorize(UserRole.MOVER),
-  profileController.getProfileStatus,
+  asyncHandler(profileController.getProfileStatus),
 );
 
 /*
- * 내 무버 기본정보 수정
+ * 현재 로그인한 무버의 기본정보를 수정한다.
  *
- * User 테이블:
- * - name
- * - phone
- * - password
- *
- * PATCH /profiles/mover/me/basic
+ * User 테이블의 이름, 전화번호, 비밀번호를
+ * 요청 Body 검증 후 수정한다.
  */
 profileRouter.patch(
   "/mover/me/basic",
@@ -122,24 +140,14 @@ profileRouter.patch(
   validate({
     body: updateMoverBasicInfoSchema,
   }),
-  profileController.updateBasicInfo,
+  asyncHandler(profileController.updateBasicInfo),
 );
 
 /*
- * 내 무버 프로필 수정
+ * 현재 로그인한 무버의 프로필을 수정한다.
  *
- * MoverProfile 테이블:
- * - nickname
- * - imageUrl
- * - career
- * - shortIntro
- * - description
- *
- * 관계 테이블:
- * - serviceAreas
- * - serviceTypes
- *
- * PATCH /profiles/mover/me
+ * MoverProfile 정보와 서비스 가능 지역,
+ * 이사 유형을 요청 Body 검증 후 수정한다.
  */
 profileRouter.patch(
   "/mover/me",
@@ -148,7 +156,5 @@ profileRouter.patch(
   validate({
     body: updateMoverProfileSchema,
   }),
-  profileController.updateProfile,
+  asyncHandler(profileController.updateProfile),
 );
-
-export { profileRouter };
