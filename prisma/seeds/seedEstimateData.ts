@@ -2,6 +2,7 @@ import type { PrismaClient } from "@prisma/client";
 
 import { ESTIMATE_REQUESTS, type EstimateRequestSeedKey } from "./estimateRequests.js";
 import { ESTIMATES } from "./estimates.js";
+import type { ConfirmedEstimateSeedRef } from "./seedReviews.js";
 
 function addDays(baseDate: Date, days: number): Date {
   const date = new Date(baseDate);
@@ -10,10 +11,15 @@ function addDays(baseDate: Date, days: number): Date {
   return date;
 }
 
+/*
+ * 리뷰 시드 연동을 위해 반환값을 추가했습니다.
+ * - 확정 견적 ref를 seedReviews에 넘겨 Review.estimateId를 연결합니다.
+ * - COMPLETED 요청은 확정 시 상태를 CONFIRMED로 덮어쓰지 않습니다.
+ */
 export async function seedEstimateData(
   prisma: PrismaClient,
   regionIdMap: Map<string, number>,
-): Promise<void> {
+): Promise<ConfirmedEstimateSeedRef[]> {
   console.log("📦 견적 요청 및 견적 데이터를 생성합니다.");
 
   const customerEmails = ESTIMATE_REQUESTS.map((request) => request.customerEmail);
@@ -82,142 +88,182 @@ export async function seedEstimateData(
   }
 
   const now = new Date();
+  // seedReviews에서 Review 생성 시 사용할 확정 견적 목록
+  const confirmedEstimates: ConfirmedEstimateSeedRef[] = [];
 
   /*
    * 기존 견적 요청 삭제부터 관련 데이터 재생성까지
    * 하나의 트랜잭션으로 처리합니다.
    *
-   * 중간에 예외가 발생하면 모든 변경 사항이 롤백됩니다.
+   * 리뷰 시드 추가로 요청·견적 수가 늘어나
+   * 기본 timeout(5s)에 걸릴 수 있어 여유를 둡니다.
    */
-  await prisma.$transaction(async (tx) => {
-    /*
-     * 견적 요청에는 별도의 시드 식별용 unique 필드가 없으므로,
-     * 시드 전용 고객들의 기존 견적 요청을 삭제한 뒤 다시 생성합니다.
-     *
-     * Estimate, DesignatedMover 등 관련 데이터는
-     * onDelete: Cascade 설정에 따라 함께 삭제됩니다.
-     */
-    await tx.estimateRequest.deleteMany({
-      where: {
-        customerId: {
-          in: [...customerIdMap.values()],
-        },
-      },
-    });
-
-    const estimateRequestIdMap = new Map<EstimateRequestSeedKey, number>();
-
-    /*
-     * 견적 요청 생성
-     */
-    for (const requestData of ESTIMATE_REQUESTS) {
-      const customerId = customerIdMap.get(requestData.customerEmail);
-
-      const fromRegionId = regionIdMap.get(requestData.fromRegion);
-
-      const toRegionId = regionIdMap.get(requestData.toRegion);
-
-      if (!customerId) {
-        throw new Error(`고객 ID를 찾을 수 없습니다: ${requestData.customerEmail}`);
-      }
-
-      if (fromRegionId === undefined) {
-        throw new Error(`출발 지역을 찾을 수 없습니다: ${requestData.fromRegion}`);
-      }
-
-      if (toRegionId === undefined) {
-        throw new Error(`도착 지역을 찾을 수 없습니다: ${requestData.toRegion}`);
-      }
-
-      const estimateRequest = await tx.estimateRequest.create({
-        data: {
-          customerId,
-
-          moveType: requestData.moveType,
-          moveDate: addDays(now, requestData.moveDateOffsetDays),
-
-          fromZipCode: requestData.fromZipCode,
-          fromAddress: requestData.fromAddress,
-          fromDetailAddress: requestData.fromDetailAddress,
-          fromRegionId,
-
-          toZipCode: requestData.toZipCode,
-          toAddress: requestData.toAddress,
-          toDetailAddress: requestData.toDetailAddress,
-          toRegionId,
-
-          status: requestData.status,
-          isActive: requestData.isActive,
-          expiresAt: addDays(now, requestData.expiresInDays),
+  await prisma.$transaction(
+    async (tx) => {
+      /*
+       * 견적 요청에는 별도의 시드 식별용 unique 필드가 없으므로,
+       * 시드 전용 고객들의 기존 견적 요청을 삭제한 뒤 다시 생성합니다.
+       *
+       * Estimate, DesignatedMover 등 관련 데이터는
+       * onDelete: Cascade 설정에 따라 함께 삭제됩니다.
+       */
+      await tx.estimateRequest.deleteMany({
+        where: {
+          customerId: {
+            in: [...customerIdMap.values()],
+          },
         },
       });
 
-      estimateRequestIdMap.set(requestData.key, estimateRequest.id);
+      const estimateRequestIdMap = new Map<EstimateRequestSeedKey, number>();
 
-      console.log(`  ✅ 견적 요청 생성: ${requestData.customerEmail} / ${requestData.key}`);
-    }
+      /*
+       * 견적 요청 생성
+       */
+      for (const requestData of ESTIMATE_REQUESTS) {
+        const customerId = customerIdMap.get(requestData.customerEmail);
 
-    /*
-     * 기사님 견적 생성
-     */
-    for (const estimateData of ESTIMATES) {
-      const estimateRequestId = estimateRequestIdMap.get(estimateData.requestKey);
+        const fromRegionId = regionIdMap.get(requestData.fromRegion);
 
-      const moverId = moverIdMap.get(estimateData.moverEmail);
+        const toRegionId = regionIdMap.get(requestData.toRegion);
 
-      if (estimateRequestId === undefined) {
-        throw new Error(`견적 요청을 찾을 수 없습니다: ${estimateData.requestKey}`);
-      }
+        if (!customerId) {
+          throw new Error(`고객 ID를 찾을 수 없습니다: ${requestData.customerEmail}`);
+        }
 
-      if (!moverId) {
-        throw new Error(`기사님을 찾을 수 없습니다: ${estimateData.moverEmail}`);
+        if (fromRegionId === undefined) {
+          throw new Error(`출발 지역을 찾을 수 없습니다: ${requestData.fromRegion}`);
+        }
+
+        if (toRegionId === undefined) {
+          throw new Error(`도착 지역을 찾을 수 없습니다: ${requestData.toRegion}`);
+        }
+
+        const estimateRequest = await tx.estimateRequest.create({
+          data: {
+            customerId,
+
+            moveType: requestData.moveType,
+            moveDate: addDays(now, requestData.moveDateOffsetDays),
+
+            fromZipCode: requestData.fromZipCode,
+            fromAddress: requestData.fromAddress,
+            fromDetailAddress: requestData.fromDetailAddress,
+            fromRegionId,
+
+            toZipCode: requestData.toZipCode,
+            toAddress: requestData.toAddress,
+            toDetailAddress: requestData.toDetailAddress,
+            toRegionId,
+
+            status: requestData.status,
+            isActive: requestData.isActive,
+            expiresAt: addDays(now, requestData.expiresInDays),
+          },
+        });
+
+        estimateRequestIdMap.set(requestData.key, estimateRequest.id);
+
+        console.log(`  ✅ 견적 요청 생성: ${requestData.customerEmail} / ${requestData.key}`);
       }
 
       /*
-       * 지정 견적이면 DesignatedMover 관계도 함께 생성합니다.
+       * 기사님 견적 생성
        */
-      if (estimateData.isDesignated) {
-        await tx.designatedMover.create({
+      for (const estimateData of ESTIMATES) {
+        const estimateRequestId = estimateRequestIdMap.get(estimateData.requestKey);
+
+        const moverId = moverIdMap.get(estimateData.moverEmail);
+
+        if (estimateRequestId === undefined) {
+          throw new Error(`견적 요청을 찾을 수 없습니다: ${estimateData.requestKey}`);
+        }
+
+        if (!moverId) {
+          throw new Error(`기사님을 찾을 수 없습니다: ${estimateData.moverEmail}`);
+        }
+
+        /*
+         * 지정 견적이면 DesignatedMover 관계도 함께 생성합니다.
+         */
+        if (estimateData.isDesignated) {
+          await tx.designatedMover.create({
+            data: {
+              estimateRequestId,
+              moverId,
+            },
+          });
+        }
+
+        const estimate = await tx.estimate.create({
           data: {
             estimateRequestId,
             moverId,
+            price: estimateData.price,
+            comment: estimateData.comment,
+            status: estimateData.status,
+            isDesignated: estimateData.isDesignated,
+
+            confirmedAt: estimateData.status === "CONFIRMED" ? now : null,
           },
         });
+
+        /*
+         * 확정 견적은 Estimate 상태뿐 아니라
+         * EstimateRequest.confirmedEstimateId도 연결합니다.
+         *
+         * 리뷰 시드 추가 후 변경점:
+         * - 요청 status가 COMPLETED면 CONFIRMED로 덮어쓰지 않음
+         *   (리뷰 작성 조건: Estimate CONFIRMED + Request COMPLETED)
+         * - 확정 견적 ref를 모아 seedReviews에 전달
+         */
+        if (estimateData.status === "CONFIRMED") {
+          const requestSeed = ESTIMATE_REQUESTS.find(
+            (request) => request.key === estimateData.requestKey,
+          );
+
+          if (!requestSeed) {
+            throw new Error(`견적 요청 시드를 찾을 수 없습니다: ${estimateData.requestKey}`);
+          }
+
+          const customerId = customerIdMap.get(requestSeed.customerEmail);
+
+          if (!customerId) {
+            throw new Error(`고객 ID를 찾을 수 없습니다: ${requestSeed.customerEmail}`);
+          }
+
+          const nextRequestStatus = requestSeed.status === "COMPLETED" ? "COMPLETED" : "CONFIRMED";
+
+          await tx.estimateRequest.update({
+            where: {
+              id: estimateRequestId,
+            },
+            data: {
+              status: nextRequestStatus,
+              isActive: false,
+              confirmedEstimateId: estimate.id,
+            },
+          });
+
+          confirmedEstimates.push({
+            requestKey: estimateData.requestKey,
+            estimateId: estimate.id,
+            customerId,
+            moverId,
+          });
+        }
+
+        console.log(`  ✅ 견적 생성: ${estimateData.moverEmail} → ${estimateData.requestKey}`);
       }
-
-      const estimate = await tx.estimate.create({
-        data: {
-          estimateRequestId,
-          moverId,
-          price: estimateData.price,
-          comment: estimateData.comment,
-          status: estimateData.status,
-          isDesignated: estimateData.isDesignated,
-
-          confirmedAt: estimateData.status === "CONFIRMED" ? now : null,
-        },
-      });
-
-      /*
-       * 확정 견적은 Estimate 상태뿐 아니라
-       * EstimateRequest.confirmedEstimateId도 연결합니다.
-       */
-      if (estimateData.status === "CONFIRMED") {
-        await tx.estimateRequest.update({
-          where: {
-            id: estimateRequestId,
-          },
-          data: {
-            status: "CONFIRMED",
-            isActive: false,
-            confirmedEstimateId: estimate.id,
-          },
-        });
-      }
-
-      console.log(`  ✅ 견적 생성: ${estimateData.moverEmail} → ${estimateData.requestKey}`);
-    }
-  });
+    },
+    {
+      maxWait: 15_000,
+      timeout: 120_000,
+    },
+  );
 
   console.log(`📦 견적 요청 ${ESTIMATE_REQUESTS.length}개, 견적 ${ESTIMATES.length}개 생성 완료`);
+
+  // 리뷰 시드(seedReviews)에서 estimateId 연결용
+  return confirmedEstimates;
 }

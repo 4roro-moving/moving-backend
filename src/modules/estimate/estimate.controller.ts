@@ -124,22 +124,18 @@ const rejectEstimate: RequestHandler = async (req, res, next) => {
 
 // 2026.07.27 add 김성현
 // 대기 중인 견적 목록 요청 처리
-const getPendingEstimateRequests: RequestHandler = async (req, res, next) => {
-  try {
-    const query = res.locals.query as PendingEstimateQuery;
-    const result = await receivedEstimateService.getPendingEstimateRequests(
-      getCustomerId(req),
-      query,
-    );
+const getPendingEstimateRequests: RequestHandler = async (req, res) => {
+  const query = res.locals.query as PendingEstimateQuery;
+  const result = await receivedEstimateService.getPendingEstimateRequests(
+    getCustomerId(req),
+    query,
+  );
 
-    res.status(200).json({
-      success: true,
-      data: result.sections,
-      pagination: result.pagination,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.status(200).json({
+    success: true,
+    data: result.sections,
+    pagination: result.pagination,
+  });
 };
 
 // 2026.07.24 정슬기 - [추가] 받은 견적 패널 목록 요청 처리

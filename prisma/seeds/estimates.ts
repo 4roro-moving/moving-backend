@@ -1,5 +1,11 @@
 import type { EstimateRequestSeedKey } from "./estimateRequests.js";
+import { toReviewEstimates } from "./reviewSeeds.js";
 
+/*
+ * 기존 SENT/CONFIRMED 견적은 BASE에 유지하고,
+ * 리뷰 시드용 CONFIRMED 견적은 reviewSeeds에서 합칩니다.
+ * (리뷰 1개 = 확정 견적 1개 unique)
+ */
 interface EstimateSeed {
   requestKey: EstimateRequestSeedKey;
   moverEmail: string;
@@ -9,7 +15,7 @@ interface EstimateSeed {
   isDesignated: boolean;
 }
 
-export const ESTIMATES: readonly EstimateSeed[] = [
+const BASE_ESTIMATES: readonly EstimateSeed[] = [
   /*
    * customer1: 받은 견적 목록 확인용
    * 아직 확정되지 않은 OPEN 견적 요청
@@ -88,3 +94,6 @@ export const ESTIMATES: readonly EstimateSeed[] = [
     isDesignated: true,
   },
 ];
+
+/** 기존 견적 + 리뷰용 CONFIRMED 견적 */
+export const ESTIMATES: readonly EstimateSeed[] = [...BASE_ESTIMATES, ...toReviewEstimates()];

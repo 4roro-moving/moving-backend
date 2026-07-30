@@ -2,6 +2,7 @@
 
 import { authenticate, authorize } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
+import { asyncHandler } from "../../utils/async-handler.util";
 import { estimateController } from "./estimate.controller";
 import {
   moverEstimateRequestListQuerySchema,
@@ -59,7 +60,7 @@ estimateRouter.get(
   authenticate,
   authorize("CUSTOMER"),
   validate({ query: pendingEstimateQuerySchema }),
-  estimateController.getPendingEstimateRequests,
+  asyncHandler(estimateController.getPendingEstimateRequests),
 );
 
 /* 

@@ -1,6 +1,8 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import type { MoverListSort, FindManyMoversParams } from "./mover.type";
+
+type Db = PrismaClient | Prisma.TransactionClient;
 
 // 기사 목록 조회 시 DB에서 가져올 필드 목록
 const MOVER_LIST_SELECT = {
@@ -117,6 +119,19 @@ export const moverRepository = {
         },
       },
       select: MOVER_DETAIL_SELECT,
+    });
+  },
+
+  // 기사님 리뷰 별점 분포 (트랜잭션 재사용을 위해 db 주입)
+  countRatingDistributionByMoverId(moverId: string, db: Db = prisma) {
+    return db.review.groupBy({
+      by: ["rating"],
+      where: {
+        moverId,
+      },
+      _count: {
+        _all: true,
+      },
     });
   },
 };

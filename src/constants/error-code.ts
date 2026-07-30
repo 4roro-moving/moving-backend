@@ -120,6 +120,20 @@ export const ERROR_CODES = {
     code: "ESTIMATE_NOT_CONFIRMABLE",
     message: "확정할 수 없는 견적입니다.",
   },
+
+  // 2026.07.28 심현수 - [추가]관리자 공지사항
+  NOTICE_NOT_FOUND: {
+    status: 404,
+    code: "NOTICE_NOT_FOUND",
+    message: "공지를 찾을 수 없습니다.",
+  },
+
+  // 2026.07.29 심현수 - [추가]관리자 FAQ
+  FAQ_NOT_FOUND: {
+    status: 404,
+    code: "FAQ_NOT_FOUND",
+    message: "FAQ를 찾을 수 없습니다.",
+  },
 } as const;
 
 // ErrorCode의 key 타입

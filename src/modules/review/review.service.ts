@@ -1,7 +1,7 @@
 import { EstimateRequestStatus, EstimateStatus, Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
-import type { Pagination } from "../../types/response.type";
+import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
 import { reviewRepository } from "./review.repository";
 
@@ -28,18 +28,6 @@ type CreateReviewParams = {
   rating: number;
   content: string;
 };
-
-function buildPagination(totalCount: number, page: number, limit: number): Pagination {
-  const totalPages = Math.ceil(totalCount / limit);
-
-  return {
-    page,
-    limit,
-    totalCount,
-    totalPages,
-    hasNext: page < totalPages,
-  };
-}
 
 // 리뷰 작성자 이메일 로컬 파트 마스킹
 function maskEmailLocalPart(email: string) {
