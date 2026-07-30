@@ -405,8 +405,8 @@ export const moverEstimateRequestRepository = {
   },
 
   //기사 견적 반려 내역 조회
-  findRejections(moverId: string, query: MoverEstimateRejectionListQuery) {
-    return prisma.estimateRequestRejection.findMany({
+  findRejections(moverId: string, query: MoverEstimateRejectionListQuery, db: DbClient = prisma) {
+    return db.estimateRequestRejection.findMany({
       where: { moverId },
       select: {
         id: true,
