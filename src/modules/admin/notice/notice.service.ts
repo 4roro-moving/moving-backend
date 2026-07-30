@@ -1,9 +1,9 @@
 import type { Prisma } from "@prisma/client";
 
-import { prisma } from "../../../lib/prisma";
 import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
 
+import { runTransaction } from "../../../utils/transaction";
 import { noticeRepository } from "./notice.repository";
 import type { CreateNoticeInput, ListNoticeQuery, UpdateNoticeInput } from "./notice.type";
 
@@ -48,7 +48,7 @@ export const noticeService = {
   async createNotice({ authorId, input }: CreateParams) {
     const { sendNotification, ...noticeData } = input;
 
-    return prisma.$transaction(async (tx) => {
+    return runTransaction(async (tx) => {
       const notice = await noticeRepository.create(
         { ...noticeData, sendNotification, authorId },
         tx,
