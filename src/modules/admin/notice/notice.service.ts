@@ -117,7 +117,29 @@ export const noticeService = {
   async updateNotice({ noticeId, input }: UpdateParams) {
     await noticeService.getNoticeById(noticeId);
 
-    return noticeRepository.update(noticeId, input);
+    const data: Prisma.NoticeUncheckedUpdateInput = {};
+
+    if (input.title !== undefined) {
+      data.title = input.title;
+    }
+
+    if (input.content !== undefined) {
+      data.content = input.content;
+    }
+
+    if (input.audience !== undefined) {
+      data.audience = input.audience;
+    }
+
+    if (input.isPinned !== undefined) {
+      data.isPinned = input.isPinned;
+    }
+
+    if (input.isVisible !== undefined) {
+      data.isVisible = input.isVisible;
+    }
+
+    return noticeRepository.update(noticeId, data);
   },
 
   /**
