@@ -399,6 +399,48 @@ export const moverEstimateRequestRepository = {
       },
     });
   },
+
+  //기사 견적 반려 내역 조회
+  findRejections(moverId: string) {
+    return prisma.estimateRequestRejection.findMany({
+      where: { moverId },
+      select: {
+        id: true,
+        reason: true,
+        createdAt: true,
+        estimateRequest: {
+          select: {
+            id: true,
+            moveType: true,
+            moveDate: true,
+            fromAddress: true,
+            toAddress: true,
+            customer: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            fromRegion: {
+              select: {
+                name: true,
+              },
+            },
+            toRegion: {
+              select: {
+                name: true,
+              },
+            },
+            designatedMovers: {
+              where: { moverId },
+              select: { id: true },
+            },
+          },
+        },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    });
+  },
 };
 
 // =============================================================================

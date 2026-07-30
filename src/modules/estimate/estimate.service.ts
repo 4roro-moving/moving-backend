@@ -136,6 +136,31 @@ export const moverEstimateRequestService = {
     };
   },
 
+  /* 
+- 2026.07.30 add 윤소정
+기사 견적 반려 내역 조회
+ */
+  async getRejections(moverId: string) {
+    const rows = await moverEstimateRequestRepository.findRejections(moverId);
+
+    return rows.map((row) => ({
+      id: row.id,
+      reason: row.reason,
+      rejectedAt: row.createdAt.toISOString(),
+      request: {
+        id: row.estimateRequest.id,
+        customer: row.estimateRequest.customer,
+        moveType: row.estimateRequest.moveType,
+        moveDate: row.estimateRequest.moveDate.toISOString(),
+        fromAddress: row.estimateRequest.fromAddress,
+        toAddress: row.estimateRequest.toAddress,
+        fromRegion: row.estimateRequest.fromRegion.name,
+        toRegion: row.estimateRequest.toRegion.name,
+        isDesignated: row.estimateRequest.designatedMovers.length > 0,
+      },
+    }));
+  },
+
   //견적 제안
   async sendEstimate({ estimateRequestId, moverId, input }: SendEstimateParams) {
     return runTransaction(async (tx) => {

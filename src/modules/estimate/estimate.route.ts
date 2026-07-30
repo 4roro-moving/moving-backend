@@ -27,6 +27,17 @@ estimateRouter.get(
 );
 
 /* 
+- 2026.07.30 add 윤소정
+기사 견적 반려 내역 조회
+*/
+estimateRouter.get(
+  "/rejections",
+  authenticate,
+  authorize("MOVER"),
+  estimateController.getRejections,
+);
+
+/* 
 - 2026.07.24 add 윤소정
 기사 견적 제안
 */
