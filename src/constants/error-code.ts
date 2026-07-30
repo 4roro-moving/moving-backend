@@ -134,6 +134,18 @@ export const ERROR_CODES = {
     code: "FAQ_NOT_FOUND",
     message: "FAQ를 찾을 수 없습니다.",
   },
+
+  // 2026.07.30 심현수 - [추가] 1:1 문의(QNA)
+  INQUIRY_NOT_FOUND: {
+    status: 404,
+    code: "INQUIRY_NOT_FOUND",
+    message: "문의를 찾을 수 없습니다.",
+  },
+  INQUIRY_CLOSED: {
+    status: 409,
+    code: "INQUIRY_CLOSED",
+    message: "이미 종료된 문의입니다. 새 문의를 등록해 주세요.",
+  },
 } as const;
 
 // ErrorCode의 key 타입
