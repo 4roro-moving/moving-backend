@@ -56,12 +56,7 @@ export const favoriteService = {
   },
 
   async deleteFavoriteMover({ customerId, moverId }: FavoriteMoverParams) {
-    const mover = await favoriteRepository.findMoverById(moverId);
-
-    if (!mover) {
-      throw new AppError("MOVER_NOT_FOUND");
-    }
-
+    // deleteMany는 멱등 처리이므로 비활성·삭제된 기사 찜도 해제 가능해야 함
     await favoriteRepository.deleteFavoriteMover({ customerId, moverId });
 
     return {
