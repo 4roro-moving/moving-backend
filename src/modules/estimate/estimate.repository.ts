@@ -654,6 +654,11 @@ export const receivedEstimateRepository = {
             id: true,
             customerId: true,
             moveDate: true,
+            customer: {
+              select: {
+                name: true,
+              },
+            },
             status: true,
             confirmedEstimateId: true,
           },

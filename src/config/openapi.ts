@@ -20,24 +20,20 @@ async function registerModuleDocs(): Promise<void> {
 
   // 2026.07.24 정슬기 - [추가] 받은 견적·확정 API 문서를 OpenAPI에 등록
   await import("../modules/estimate/estimate.docs");
-
   // 2026.07.28 심현수 - [추가] 관리자 공지사항 API 문서 등록
   await import("../modules/admin/notice/notice.docs");
-
   // 2026.07.30 장민주 - [추가] 인증 API 문서 등록
   await import("../modules/auth/auth.docs");
-
   // 2026.07.29 장민주 - [추가] 알림 API 문서 등록
   await import("../modules/notification/notification.docs");
-
   // 2026.07.29 장민주 - [추가] 알림 SSE API 문서 등록
   await import("../modules/notification/notification-sse.docs");
-
-  // 2026.07.30 장민주 - [추가] 프로필 API 문서 등록
-  await import("../modules/profile/profile.docs");
-
   // 2026.07.29 심현수 - [추가] 관리자 FAQ API 문서 등록
   await import("../modules/admin/faq/faq.docs");
+  // 2026.07.30 심현수 - [추가] QNA API 문서 등록
+  await import("../modules/inquiry/inquiry.docs");
+  // 2026.07.30 장민주 - [추가] 프로필 API 문서 등록
+  await import("../modules/profile/profile.docs");
 }
 
 export async function generateOpenApiDocument(): Promise<OpenAPIObject> {
