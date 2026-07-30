@@ -1,6 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import { MOVER_LIST_SELECT } from "./mover.select";
+import { buildActiveMoverUserWhere } from "./mover.where";
 import type { MoverListSort, FindManyMoversParams } from "./mover.type";
 
 type Db = PrismaClient | Prisma.TransactionClient;
@@ -30,12 +31,7 @@ const sortMap = {
 // 검색어, 지역, 이사 유형 필터를 Prisma where 조건으로 변환
 function buildWhere(params: FindManyMoversParams): Prisma.MoverProfileWhereInput {
   return {
-    user: {
-      role: "MOVER",
-      isActive: true,
-      isProfileCompleted: true,
-      deletedAt: null,
-    },
+    user: buildActiveMoverUserWhere(),
     ...(params.keyword && {
       nickname: {
         contains: params.keyword,
@@ -84,12 +80,7 @@ export const moverRepository = {
     return prisma.moverProfile.findFirst({
       where: {
         userId: moverUserId,
-        user: {
-          role: "MOVER",
-          isActive: true,
-          isProfileCompleted: true,
-          deletedAt: null,
-        },
+        user: buildActiveMoverUserWhere(),
       },
       select: MOVER_DETAIL_SELECT,
     });

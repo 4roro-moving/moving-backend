@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import { MOVER_LIST_SELECT } from "../mover/mover.select";
+import { buildActiveMoverUserWhere } from "../mover/mover.where";
 import type {
   FavoriteMoverParams,
   FindFavoriteMoverListParams,
@@ -12,12 +13,7 @@ import type {
 function buildFavoriteMoverListWhere(customerId: string): Prisma.FavoriteMoverWhereInput {
   return {
     customerId,
-    mover: {
-      role: "MOVER",
-      isActive: true,
-      isProfileCompleted: true,
-      deletedAt: null,
-    },
+    mover: buildActiveMoverUserWhere(),
   };
 }
 
@@ -26,10 +22,7 @@ export const favoriteRepository = {
     return prisma.user.findFirst({
       where: {
         id: moverId,
-        role: "MOVER",
-        isActive: true,
-        isProfileCompleted: true,
-        deletedAt: null,
+        ...buildActiveMoverUserWhere(),
       },
       select: {
         id: true,
