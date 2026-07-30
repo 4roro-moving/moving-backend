@@ -1,7 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 import { prisma } from "../../../lib/prisma";
-import type { UpdateFaqInput } from "./faq.type";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -65,7 +64,6 @@ export const faqRepository = {
   /**
    * 사용자 공개 목록 조회.
    * 공개(isVisible=true) FAQ만, sortOrder 순으로 정렬해 전부 반환한다.
-   * (FAQ는 보통 건수가 많지 않아 페이지네이션 없이 전체를 내려준다.)
    */
   findPublicList(db: Db = prisma) {
     return db.faq.findMany({
@@ -75,7 +73,7 @@ export const faqRepository = {
     });
   },
 
-  update(faqId: number, data: UpdateFaqInput, db: Db = prisma) {
+  update(faqId: number, data: Prisma.FaqUpdateInput, db: Db = prisma) {
     return db.faq.update({
       where: { id: faqId },
       data,

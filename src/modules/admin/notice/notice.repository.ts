@@ -1,7 +1,6 @@
 import type { NoticeAudience, Prisma, PrismaClient } from "@prisma/client";
 
 import { prisma } from "../../../lib/prisma";
-import type { UpdateNoticeInput } from "./notice.type";
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
@@ -61,7 +60,7 @@ export const noticeRepository = {
     return { notices, totalCount };
   },
 
-  update(noticeId: number, data: UpdateNoticeInput, db: Db = prisma) {
+  update(noticeId: number, data: Prisma.FaqUpdateInput, db: Db = prisma) {
     return db.notice.update({
       where: { id: noticeId },
       data,
