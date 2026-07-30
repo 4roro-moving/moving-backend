@@ -24,12 +24,13 @@ export const profileRouter = Router();
 /*
  * 프로필 이미지 업로드 URL을 발급한다.
  *
- * 고객과 무버 모두 사용할 수 있으며,
+ * 고객(CUSTOMER)과 무버(MOVER)만 접근할 수 있으며,
  * 요청 Body를 검증한 뒤 업로드 URL 정보를 반환한다.
  */
 profileRouter.post(
   "/image/upload-url",
   authenticate,
+  authorize(UserRole.CUSTOMER, UserRole.MOVER),
   validate({
     body: createProfileImageUploadUrlSchema,
   }),
