@@ -30,6 +30,8 @@ async function registerModuleDocs(): Promise<void> {
   await import("../modules/admin/faq/faq.docs");
   // 2026.07.30 심현수 - [추가] QNA API 문서 등록
   await import("../modules/inquiry/inquiry.docs");
+  // 2026.07.30 장민주 - [추가] 프로필 API 문서 등록
+  await import("../modules/profile/profile.docs");
 }
 
 export async function generateOpenApiDocument(): Promise<OpenAPIObject> {

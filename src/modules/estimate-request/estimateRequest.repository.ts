@@ -1,4 +1,4 @@
-import type { MoveType, Prisma, PrismaClient } from "@prisma/client";
+import type { EstimateRequestStatus, MoveType, Prisma, PrismaClient } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 
@@ -53,6 +53,17 @@ export type EstimateRequestDetail = Prisma.EstimateRequestGetPayload<{
   select: typeof estimateRequestDetailSelect;
 }>;
 
+/** 목록·count에 동일하게 쓰는 where (status는 선택) */
+export function buildFindManyByCustomerWhere(params: {
+  customerId: string;
+  status?: EstimateRequestStatus;
+}): Prisma.EstimateRequestWhereInput {
+  return {
+    customerId: params.customerId,
+    ...(params.status !== undefined ? { status: params.status } : {}),
+  };
+}
+
 export const estimateRequestRepository = {
   // 지역
 
@@ -104,18 +115,25 @@ export const estimateRequestRepository = {
   },
 
   async findManyByCustomerId(
-    params: { customerId: string; skip: number; take: number },
+    params: {
+      customerId: string;
+      skip: number;
+      take: number;
+      status?: EstimateRequestStatus;
+    },
     db: Db = prisma,
   ) {
-    const where: Prisma.EstimateRequestWhereInput = {
+    const where = buildFindManyByCustomerWhere({
       customerId: params.customerId,
-    };
+      ...(params.status !== undefined ? { status: params.status } : {}),
+    });
 
     const [items, totalCount] = await Promise.all([
       db.estimateRequest.findMany({
         where,
         select: estimateRequestDetailSelect,
-        orderBy: { createdAt: "desc" },
+        // createdAt 동일 시 id로 안정 정렬
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         skip: params.skip,
         take: params.take,
       }),

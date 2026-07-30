@@ -3,6 +3,7 @@
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
+import { notificationService } from "../notification/notification.service";
 import { moverEstimateRequestRepository, receivedEstimateRepository } from "./estimate.repository";
 import type {
   ConfirmReceivedEstimateParams,
@@ -11,6 +12,9 @@ import type {
   MoverEstimateRequestListItem,
   MoverEstimateRequestListQuery,
   MoverEstimateRequestListResult,
+  MoverEstimateRejectionListQuery,
+  MoverEstimateRejectionListItem,
+  MoverEstimateRejectionListResult,
   PendingEstimateQuery,
   RejectEstimateParams,
   SendEstimateParams,
@@ -24,16 +28,34 @@ import type {
 -DB 결과 API 응답 형태로 가공
 */
 
-/* 
+/*
 2026.07.23 add 김성현
 - 받은 견적 목록 비즈니스 로직
 - 받은 견적 상세 비즈니스 로직
 - 받은 견적 확정 비즈니스 로직
 */
 
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 // =============================================================================
 // 기사: 고객의 견적 요청 목록 조회
 // =============================================================================
+
+function getKstEndOfDay(date: Date): Date {
+  const kstDate = new Date(date.getTime() + KST_OFFSET_MS);
+
+  return new Date(
+    Date.UTC(
+      kstDate.getUTCFullYear(),
+      kstDate.getUTCMonth(),
+      kstDate.getUTCDate(),
+      14,
+      59,
+      59,
+      999,
+    ),
+  );
+}
 
 function getCursorId(cursor: string | undefined) {
   if (!cursor) {
@@ -140,10 +162,14 @@ export const moverEstimateRequestService = {
 - 2026.07.30 add 윤소정
 기사 견적 반려 내역 조회
  */
-  async getRejections(moverId: string) {
-    const rows = await moverEstimateRequestRepository.findRejections(moverId);
-
-    return rows.map((row) => ({
+  async getRejections(
+    moverId: string,
+    query: MoverEstimateRejectionListQuery,
+  ): Promise<MoverEstimateRejectionListResult> {
+    const rows = await moverEstimateRequestRepository.findRejections(moverId, query);
+    const hasNextPage = rows.length > query.limit;
+    const pageRows = rows.slice(0, query.limit);
+    const items: MoverEstimateRejectionListItem[] = pageRows.map((row) => ({
       id: row.id,
       reason: row.reason,
       rejectedAt: row.createdAt.toISOString(),
@@ -159,6 +185,14 @@ export const moverEstimateRequestService = {
         isDesignated: row.estimateRequest.designatedMovers.length > 0,
       },
     }));
+
+    return {
+      items,
+      pagination: {
+        nextCursor: hasNextPage ? String(items.at(-1)?.id) : null,
+        hasNextPage,
+      },
+    };
   },
 
   //견적 제안
@@ -625,7 +659,7 @@ export const receivedEstimateService = {
     estimateId,
     customerId,
   }: ConfirmReceivedEstimateParams) {
-    return runTransaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       //확정 대상 견적 조회
       const estimate = await receivedEstimateRepository.findReceivedEstimateForConfirm(
         estimateRequestId,
@@ -726,6 +760,8 @@ export const receivedEstimateService = {
       //확정 응답 형태 가공
       return {
         estimateRequest: confirmedEstimateRequest,
+        moveDate: estimate.estimateRequest.moveDate,
+        customerName: estimate.estimateRequest.customer.name,
         estimate: {
           id: confirmedEstimate.id,
           price: confirmedEstimate.price,
@@ -741,5 +777,16 @@ export const receivedEstimateService = {
         expiredEstimateCount: expiredEstimates.count,
       };
     });
+
+    await notificationService.createNotification({
+      userId: result.estimate.mover.id,
+      type: "ESTIMATE_CONFIRMED",
+      title: "견적 확정",
+      content: `${result.customerName}님의`,
+      linkUrl: "/estimate/received-requests",
+      expiresAt: getKstEndOfDay(result.moveDate),
+    });
+
+    return result;
   },
 };

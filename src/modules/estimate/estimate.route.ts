@@ -6,6 +6,7 @@ import { asyncHandler } from "../../utils/async-handler.util";
 import { estimateController } from "./estimate.controller";
 import {
   moverEstimateRequestListQuerySchema,
+  moverEstimateRejectionListQuerySchema,
   pendingEstimateQuerySchema,
   rejectEstimateBodySchema,
   sendEstimateBodySchema,
@@ -35,7 +36,8 @@ estimateRouter.get(
   "/rejections",
   authenticate,
   authorize("MOVER"),
-  estimateController.getRejections,
+  validate({ query: moverEstimateRejectionListQuerySchema }),
+  asyncHandler(estimateController.getRejections),
 );
 
 /* 

@@ -13,6 +13,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
+    "test": "tsx --test \"src/**/*.test.ts\"",
     "prisma:seed": "tsx --tsconfig prisma/tsconfig.json prisma/seed.ts"
   },
   "prisma": {
