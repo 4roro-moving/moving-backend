@@ -12,6 +12,9 @@ import type {
   MoverEstimateRequestListItem,
   MoverEstimateRequestListQuery,
   MoverEstimateRequestListResult,
+  MoverEstimateRejectionListQuery,
+  MoverEstimateRejectionListItem,
+  MoverEstimateRejectionListResult,
   PendingEstimateQuery,
   RejectEstimateParams,
   SendEstimateParams,
@@ -155,6 +158,43 @@ export const moverEstimateRequestService = {
     };
   },
 
+  /* 
+- 2026.07.30 add 윤소정
+기사 견적 반려 내역 조회
+ */
+  async getRejections(
+    moverId: string,
+    query: MoverEstimateRejectionListQuery,
+  ): Promise<MoverEstimateRejectionListResult> {
+    const rows = await moverEstimateRequestRepository.findRejections(moverId, query);
+    const hasNextPage = rows.length > query.limit;
+    const pageRows = rows.slice(0, query.limit);
+    const items: MoverEstimateRejectionListItem[] = pageRows.map((row) => ({
+      id: row.id,
+      reason: row.reason,
+      rejectedAt: row.createdAt.toISOString(),
+      request: {
+        id: row.estimateRequest.id,
+        customer: row.estimateRequest.customer,
+        moveType: row.estimateRequest.moveType,
+        moveDate: row.estimateRequest.moveDate.toISOString(),
+        fromAddress: row.estimateRequest.fromAddress,
+        toAddress: row.estimateRequest.toAddress,
+        fromRegion: row.estimateRequest.fromRegion.name,
+        toRegion: row.estimateRequest.toRegion.name,
+        isDesignated: row.estimateRequest.designatedMovers.length > 0,
+      },
+    }));
+
+    return {
+      items,
+      pagination: {
+        nextCursor: hasNextPage ? String(items.at(-1)?.id) : null,
+        hasNextPage,
+      },
+    };
+  },
+
   //견적 제안
   async sendEstimate({ estimateRequestId, moverId, input }: SendEstimateParams) {
     return runTransaction(async (tx) => {
@@ -258,13 +298,12 @@ export const moverEstimateRequestService = {
         throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
       }
 
-      //견적 요청이 OPEN이고, 활성 상태인지 확인
+      //요청이 open인지, 활성 상태인지, 확정된 견적 없는지 확인
       if (
         estimateRequest.status !== "OPEN" ||
         !estimateRequest.isActive ||
         estimateRequest.confirmedEstimateId !== null
       ) {
-        //이미 확정된 요청인지 확인
         throw new AppError("CONFLICT", {
           message: "현재 반려할 수 없는 견적 요청입니다.",
         });

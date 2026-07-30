@@ -6,6 +6,7 @@ import { asyncHandler } from "../../utils/async-handler.util";
 import { estimateController } from "./estimate.controller";
 import {
   moverEstimateRequestListQuerySchema,
+  moverEstimateRejectionListQuerySchema,
   pendingEstimateQuerySchema,
   rejectEstimateBodySchema,
   sendEstimateBodySchema,
@@ -25,6 +26,18 @@ estimateRouter.get(
   authorize("MOVER"),
   validate({ query: moverEstimateRequestListQuerySchema }),
   estimateController.getList,
+);
+
+/* 
+- 2026.07.30 add 윤소정
+기사 견적 반려 내역 조회
+*/
+estimateRouter.get(
+  "/rejections",
+  authenticate,
+  authorize("MOVER"),
+  validate({ query: moverEstimateRejectionListQuerySchema }),
+  asyncHandler(estimateController.getRejections),
 );
 
 /* 

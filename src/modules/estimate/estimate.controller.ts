@@ -5,6 +5,7 @@ import { moverEstimateRequestService, receivedEstimateService } from "./estimate
 import type {
   ConfirmReceivedEstimateParam,
   MoverEstimateRequestListQuery,
+  MoverEstimateRejectionListQuery,
   PendingEstimateQuery,
   ReceivedEstimateDetailParam,
   ReceivedEstimateIdParam,
@@ -60,6 +61,17 @@ const getList: RequestHandler = async (req, res, next) => {
   } catch (error) {
     next(error);
   }
+};
+
+//기사 견적 반려 내역 조회
+const getRejections: RequestHandler = async (req, res) => {
+  const query = res.locals.query as MoverEstimateRejectionListQuery;
+  const result = await moverEstimateRequestService.getRejections(getMoverId(req), query);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
 };
 
 // 기사가 고객의 견적 요청에 견적을 전송
@@ -243,6 +255,7 @@ const confirmReceivedEstimateById: RequestHandler = async (req, res, next) => {
 
 export const estimateController = {
   getList,
+  getRejections,
   getPendingEstimateRequests,
   getReceivedEstimatePanels,
   sendEstimate,

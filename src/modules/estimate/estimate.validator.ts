@@ -66,6 +66,18 @@ export const moverEstimateRequestListQuerySchema = z.object({
   sort: z.enum(["moveDate", "requestedAt"]).default("requestedAt"),
 });
 
+//기사 견적 반려 내역 조회
+export const moverEstimateRejectionListQuerySchema = z.object({
+  cursor: z.string().regex(/^\d+$/, "커서는 양의 정수 형식이어야 합니다.").optional(),
+
+  limit: z.coerce
+    .number("조회 개수는 숫자여야 합니다.")
+    .int("조회 개수는 정수여야 합니다.")
+    .positive("조회 개수는 1 이상이어야 합니다.")
+    .max(50, "조회 개수는 최대 50개까지 가능합니다.")
+    .default(10),
+});
+
 // 견적 제안 estimateRequestID 검증
 export const sendEstimateParamSchema = z.object({
   estimateRequestId: z.coerce.number().int().positive("올바른 견적 요청 ID가 아닙니다."),

@@ -3,7 +3,11 @@ import { EstimateStatus } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
-import type { MoverEstimateRequestListQuery, PendingEstimateQuery } from "./estimate.type";
+import type {
+  MoverEstimateRejectionListQuery,
+  MoverEstimateRequestListQuery,
+  PendingEstimateQuery,
+} from "./estimate.type";
 
 type FindManyParams = {
   moverId: string;
@@ -397,6 +401,55 @@ export const moverEstimateRequestRepository = {
         reason: true,
         createdAt: true,
       },
+    });
+  },
+
+  //기사 견적 반려 내역 조회
+  findRejections(moverId: string, query: MoverEstimateRejectionListQuery, db: DbClient = prisma) {
+    return db.estimateRequestRejection.findMany({
+      where: { moverId },
+      select: {
+        id: true,
+        reason: true,
+        createdAt: true,
+        estimateRequest: {
+          select: {
+            id: true,
+            moveType: true,
+            moveDate: true,
+            fromAddress: true,
+            toAddress: true,
+            customer: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
+            fromRegion: {
+              select: {
+                name: true,
+              },
+            },
+            toRegion: {
+              select: {
+                name: true,
+              },
+            },
+            designatedMovers: {
+              where: { moverId },
+              select: { id: true },
+            },
+          },
+        },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      take: query.limit + 1,
+      ...(query.cursor
+        ? {
+            cursor: { id: Number(query.cursor) },
+            skip: 1,
+          }
+        : {}),
     });
   },
 };
