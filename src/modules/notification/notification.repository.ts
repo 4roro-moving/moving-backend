@@ -1,4 +1,4 @@
-import { NotificationType, type Prisma } from "@prisma/client";
+import { NotificationType, type NoticeAudience, type Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
@@ -246,7 +246,6 @@ async function markAllAsRead(
  * 만료되는 알림은 실제 만료 시각을 전달하고,
  * 무기한 알림인 경우에만 명시적으로 null을 전달한다.
  */
-
 async function create(input: CreateNotificationInput, db: DbClient = prisma) {
   return db.notification.create({
     data: {
@@ -259,6 +258,78 @@ async function create(input: CreateNotificationInput, db: DbClient = prisma) {
     },
     select: notificationSelect,
   });
+}
+
+/*
+ * 역할별 대량 알림 발송 대상 사용자 ID를 조회한다.
+ *
+ * CUSTOMER는 활성 고객만 조회하고,
+ * MOVER는 활성 기사만 조회한다.
+ *
+ * ALL은 CUSTOMER와 MOVER를 모두 조회하며
+ * 관리자 계정은 알림 대상에서 제외한다.
+ *
+ * 비활성화되었거나 탈퇴 처리된 사용자는
+ * 알림 발송 대상에서 제외한다.
+ */
+async function findRecipientIdsByRole(
+  role: NoticeAudience,
+  db: DbClient = prisma,
+): Promise<string[]> {
+  const where: Prisma.UserWhereInput = {
+    isActive: true,
+    deletedAt: null,
+  };
+
+  if (role === "CUSTOMER") {
+    where.role = "CUSTOMER";
+  } else if (role === "MOVER") {
+    where.role = "MOVER";
+  } else {
+    where.role = {
+      in: ["CUSTOMER", "MOVER"],
+    };
+  }
+
+  const users = await db.user.findMany({
+    where,
+    select: {
+      id: true,
+    },
+  });
+
+  return users.map((user) => user.id);
+}
+
+/*
+ * 여러 사용자에게 동일하거나 서로 다른 알림을 일괄 생성한다.
+ *
+ * Prisma createMany를 사용하여 사용자별로 반복해서
+ * INSERT하는 대신 한 번의 쿼리로 알림을 저장한다.
+ *
+ * 전달된 알림이 없는 경우에는 쿼리를 실행하지 않고
+ * 생성 개수 0을 반환한다.
+ */
+async function createMany(
+  inputs: CreateNotificationInput[],
+  db: DbClient = prisma,
+): Promise<number> {
+  if (inputs.length === 0) {
+    return 0;
+  }
+
+  const result = await db.notification.createMany({
+    data: inputs.map((input) => ({
+      userId: input.userId,
+      type: input.type,
+      title: input.title,
+      content: input.content,
+      linkUrl: input.linkUrl ?? null,
+      expiresAt: input.expiresAt,
+    })),
+  });
+
+  return result.count;
 }
 
 /*
@@ -293,5 +364,7 @@ export const notificationRepository = {
   markAsRead,
   markAllAsRead,
   create,
+  findRecipientIdsByRole,
+  createMany,
   deleteExpiredNotifications,
 };
