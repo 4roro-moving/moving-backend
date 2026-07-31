@@ -5,6 +5,7 @@ export interface Pagination {
   totalCount: number;
   totalPages: number;
   hasNext: boolean;
+  nextCursor?: never;
 }
 
 export interface CursorPagination {
@@ -12,6 +13,8 @@ export interface CursorPagination {
   totalCount: number;
   hasNext: boolean;
   nextCursor: string | null;
+  page?: never;
+  totalPages?: never;
 }
 
 // 성공 응답 공통 타입
