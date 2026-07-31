@@ -1,11 +1,17 @@
 ﻿import type { Request, RequestHandler } from "express";
 
 import { AppError } from "../../lib/app-error";
-import { moverEstimateRequestService, receivedEstimateService } from "./estimate.service";
+import {
+  moverEstimateRequestService,
+  moverSentEstimateService,
+  receivedEstimateService,
+} from "./estimate.service";
 import type {
   ConfirmReceivedEstimateParam,
   MoverEstimateRequestListQuery,
   MoverEstimateRejectionListQuery,
+  MoverSentEstimateIdParam,
+  MoverSentEstimateListQuery,
   PendingEstimateQuery,
   ReceivedEstimateDetailParam,
   ReceivedEstimateIdParam,
@@ -67,6 +73,29 @@ const getList: RequestHandler = async (req, res, next) => {
 const getRejections: RequestHandler = async (req, res) => {
   const query = res.locals.query as MoverEstimateRejectionListQuery;
   const result = await moverEstimateRequestService.getRejections(getMoverId(req), query);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
+};
+
+//기사 보낸 견적 조회
+const getSentEstimates: RequestHandler = async (req, res) => {
+  const query = res.locals.query as MoverSentEstimateListQuery;
+  const result = await moverSentEstimateService.getList(getMoverId(req), query);
+
+  res.status(200).json({
+    success: true,
+    data: result.items,
+    pagination: result.pagination,
+  });
+};
+
+//기사 견적 상세
+const getSentEstimateDetail: RequestHandler = async (req, res) => {
+  const { estimateId } = res.locals.params as MoverSentEstimateIdParam;
+  const result = await moverSentEstimateService.getDetail(getMoverId(req), estimateId);
 
   res.status(200).json({
     success: true,
@@ -256,6 +285,8 @@ const confirmReceivedEstimateById: RequestHandler = async (req, res, next) => {
 export const estimateController = {
   getList,
   getRejections,
+  getSentEstimates,
+  getSentEstimateDetail,
   getPendingEstimateRequests,
   getReceivedEstimatePanels,
   sendEstimate,
