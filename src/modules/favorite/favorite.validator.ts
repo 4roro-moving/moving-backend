@@ -5,7 +5,11 @@ export const favoriteMoverParamSchema = z.object({
 });
 
 export const listFavoriteMoverQuerySchema = z.object({
-  cursor: z.string().min(1).max(500).optional(),
+  cursor: z
+    .string()
+    .min(1, "커서는 비어 있을 수 없습니다.")
+    .max(500, "커서는 최대 500자까지 입력할 수 있습니다.")
+    .optional(),
   limit: z.coerce.number().int().positive().max(50).default(10),
 });
 

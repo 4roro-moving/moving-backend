@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import { buildActiveMoverUserWhere, MOVER_LIST_SELECT } from "../mover/mover.shared";
@@ -8,6 +8,8 @@ import type {
   FindFavoriteMoverListParams,
   FindFavoriteMoversByCustomerIdParams,
 } from "./favorite.type";
+
+type Db = PrismaClient | Prisma.TransactionClient;
 
 // 찜 목록 조회와 전체 개수 조회에 동일하게 적용할 조건
 function buildFavoriteMoverListWhere(customerId: string): Prisma.FavoriteMoverWhereInput {
@@ -64,11 +66,10 @@ export const favoriteRepository = {
   },
 
   /** 찜 일괄 삭제. moverIds가 있으면 해당 id만, 없으면 excludedIds 제외 전체 */
-  deleteFavoriteMoversByCustomerId({
-    customerId,
-    moverIds,
-    excludedIds,
-  }: DeleteFavoriteMoversByCustomerIdParams) {
+  deleteFavoriteMoversByCustomerId(
+    { customerId, moverIds, excludedIds }: DeleteFavoriteMoversByCustomerIdParams,
+    db: Db = prisma,
+  ) {
     const where: Prisma.FavoriteMoverWhereInput = { customerId };
 
     if (moverIds && moverIds.length > 0) {
@@ -77,7 +78,7 @@ export const favoriteRepository = {
       where.moverId = { notIn: excludedIds };
     }
 
-    return prisma.favoriteMover.deleteMany({ where });
+    return db.favoriteMover.deleteMany({ where });
   },
 
   findFavoriteMoversByCustomerId({ customerId, moverIds }: FindFavoriteMoversByCustomerIdParams) {
