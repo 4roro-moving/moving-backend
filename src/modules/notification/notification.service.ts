@@ -15,6 +15,15 @@ import type {
   UnreadNotificationCountResponse,
 } from "./notification.type";
 
+/*
+ * notificationRepository.create()의 두 번째 인자인
+ * Prisma Client 또는 Transaction Client 타입을 가져온다.
+ *
+ * 별도의 DbClient import 경로에 의존하지 않기 위해
+ * Repository 메서드의 매개변수 타입에서 추출한다.
+ */
+type NotificationDbClient = Parameters<typeof notificationRepository.create>[1];
+
 const CHAT_READ_VISIBILITY_DAYS = 3;
 const NOTIFICATION_RETENTION_DAYS = 90;
 
@@ -38,7 +47,7 @@ const addDays = (date: Date, days: number): Date => {
 /*
  * 사용자의 유효한 알림 목록을 조회한다.
  *
- * 만료되지 않은 알림만 최신순으로 최대 5개 조회하는 조건은
+ * 만료되지 않은 알림만 최신순으로 조회하는 조건은
  * Repository에서 처리한다.
  */
 const getNotifications = async (
@@ -169,22 +178,33 @@ const readAllNotifications = async (userId: string): Promise<ReadAllNotification
  *
  * Controller에서 직접 요청받아 생성하는 API 용도가 아니다.
  *
- * 견적, 리뷰, 신고 등의 도메인 Service에서
- * 알림 발생 시점에 이 함수를 호출한다.
+ * 견적, 리뷰, 신고 등의 핵심 DB 작업과 같은 트랜잭션에
+ * 알림 저장을 포함할 수 있도록 db 인자를 전달받는다.
  *
- * 알림을 먼저 DB에 저장한 뒤,
- * 현재 SSE로 연결되어 있는 사용자에게
- * 실시간 알림 이벤트를 전송한다.
+ * 이 함수는 알림을 DB에 저장하는 역할만 담당하며,
+ * SSE 전송은 수행하지 않는다.
+ *
+ * 전달된 db가 Transaction Client인 경우
+ * 핵심 작업과 알림 저장이 함께 커밋되거나 롤백된다.
+ */
+const createNotification = async (
+  input: CreateNotificationInput,
+  db?: NotificationDbClient,
+): Promise<NotificationItem> => {
+  return notificationRepository.create(input, db);
+};
+
+/*
+ * DB에 저장된 알림을 SSE로 실시간 전송한다.
+ *
+ * 트랜잭션 내부에서 호출하지 않고,
+ * 핵심 작업과 알림 저장이 모두 커밋된 이후에 호출한다.
  *
  * 사용자가 SSE에 연결되어 있지 않더라도
- * DB에는 알림이 정상적으로 저장된다.
+ * 이미 저장된 알림 데이터에는 영향을 주지 않는다.
  */
-const createNotification = async (input: CreateNotificationInput): Promise<NotificationItem> => {
-  const notification = await notificationRepository.create(input);
-
-  notificationSseService.sendNotification(input.userId, notification);
-
-  return notification;
+const sendNotification = (userId: string, notification: NotificationItem): void => {
+  notificationSseService.sendNotification(userId, notification);
 };
 
 /*
@@ -199,7 +219,7 @@ const createNotification = async (input: CreateNotificationInput): Promise<Notif
  * expiresAt이 null인 무기한 알림은
  * Repository의 삭제 조건에 따라 자동 삭제 대상에서 제외된다.
  *
- * 이 함수는 추후 node-cron 배치 작업에서
+ * 이 함수는 node-cron 배치 작업에서
  * 하루에 한 번 호출한다.
  */
 const cleanupExpiredNotifications = async (): Promise<number> => {
@@ -214,5 +234,6 @@ export const notificationService = {
   readNotification,
   readAllNotifications,
   createNotification,
+  sendNotification,
   cleanupExpiredNotifications,
 };
