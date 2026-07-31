@@ -2,6 +2,7 @@ import { Router } from "express";
 
 import { authenticate, authorize } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
+import { asyncHandler } from "../../utils/async-handler.util";
 import { favoriteController } from "./favorite.controller";
 import { favoriteMoverParamSchema, listFavoriteMoverQuerySchema } from "./favorite.validator";
 
@@ -12,12 +13,18 @@ favoriteRouter.use(authenticate, authorize("CUSTOMER"));
 favoriteRouter.get(
   "/movers",
   validate({ query: listFavoriteMoverQuerySchema }),
-  favoriteController.getFavoriteMoverList,
+  asyncHandler(favoriteController.getFavoriteMoverList),
 );
 
 favoriteRouter
   .route("/movers/:moverId")
-  .post(validate({ params: favoriteMoverParamSchema }), favoriteController.createFavoriteMover)
-  .delete(validate({ params: favoriteMoverParamSchema }), favoriteController.deleteFavoriteMover);
+  .post(
+    validate({ params: favoriteMoverParamSchema }),
+    asyncHandler(favoriteController.createFavoriteMover),
+  )
+  .delete(
+    validate({ params: favoriteMoverParamSchema }),
+    asyncHandler(favoriteController.deleteFavoriteMover),
+  );
 
 export default favoriteRouter;

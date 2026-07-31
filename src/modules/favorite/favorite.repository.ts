@@ -1,50 +1,18 @@
 import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
+import { buildActiveMoverUserWhere, MOVER_LIST_SELECT } from "../mover/mover.shared";
 import type {
   FavoriteMoverParams,
   FindFavoriteMoverListParams,
   FindFavoriteMoversByCustomerIdParams,
 } from "./favorite.type";
 
-// 찜한 기사 목록 조회 시 DB에서 가져올 필드 목록
-const FAVORITE_MOVER_LIST_SELECT = {
-  id: true,
-  userId: true,
-  nickname: true,
-  imageUrl: true,
-  career: true,
-  shortIntro: true,
-  description: true,
-  confirmedCount: true,
-  averageRating: true,
-  reviewCount: true,
-  serviceTypes: {
-    select: {
-      moveType: true,
-    },
-  },
-  user: {
-    select: {
-      _count: {
-        select: {
-          favoritesReceived: true,
-        },
-      },
-    },
-  },
-} satisfies Prisma.MoverProfileSelect;
-
 // 찜 목록 조회와 전체 개수 조회에 동일하게 적용할 조건
 function buildFavoriteMoverListWhere(customerId: string): Prisma.FavoriteMoverWhereInput {
   return {
     customerId,
-    mover: {
-      role: "MOVER",
-      isActive: true,
-      isProfileCompleted: true,
-      deletedAt: null,
-    },
+    mover: buildActiveMoverUserWhere(),
   };
 }
 
@@ -53,10 +21,7 @@ export const favoriteRepository = {
     return prisma.user.findFirst({
       where: {
         id: moverId,
-        role: "MOVER",
-        isActive: true,
-        isProfileCompleted: true,
-        deletedAt: null,
+        ...buildActiveMoverUserWhere(),
       },
       select: {
         id: true,
@@ -115,7 +80,7 @@ export const favoriteRepository = {
         mover: {
           select: {
             moverProfile: {
-              select: FAVORITE_MOVER_LIST_SELECT,
+              select: MOVER_LIST_SELECT,
             },
           },
         },
