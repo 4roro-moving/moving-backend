@@ -4,7 +4,12 @@ import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
 import { notificationService } from "../notification/notification.service";
-import { moverEstimateRequestRepository, receivedEstimateRepository } from "./estimate.repository";
+import { getRejectionNotificationExpiresAt } from "./estimate.notification-policy";
+import {
+  moverEstimateRequestRepository,
+  moverSentEstimateRepository,
+  receivedEstimateRepository,
+} from "./estimate.repository";
 import type {
   ConfirmReceivedEstimateParams,
   GetReceivedEstimateDetailParams,
@@ -15,6 +20,7 @@ import type {
   MoverEstimateRejectionListQuery,
   MoverEstimateRejectionListItem,
   MoverEstimateRejectionListResult,
+  MoverSentEstimateListQuery,
   PendingEstimateQuery,
   RejectEstimateParams,
   SendEstimateParams,
@@ -379,17 +385,17 @@ export const moverEstimateRequestService = {
         rejection,
         customerId: estimateRequest.customerId,
         moverNickname: profile.nickname,
-        expiresAt: estimateRequest.expiresAt,
       };
     });
 
+    const notificationCreatedAt = new Date();
     await notificationService.createNotification({
       userId: result.customerId,
       type: "ESTIMATE_REQUEST_REJECTED",
       title: "견적 요청 반려",
       content: result.moverNickname,
       linkUrl: null,
-      expiresAt: result.expiresAt,
+      expiresAt: getRejectionNotificationExpiresAt(notificationCreatedAt),
     });
 
     return result.rejection;
