@@ -26,6 +26,13 @@ export const bulkDeleteFavoriteMoversSchema = z
   })
   .superRefine((value, ctx) => {
     if (value.all === true) {
+      if (value.moverIds !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["moverIds"],
+          message: "전체 해제 시 moverIds를 함께 보낼 수 없습니다.",
+        });
+      }
       return;
     }
 
@@ -34,6 +41,14 @@ export const bulkDeleteFavoriteMoversSchema = z
         code: "custom",
         path: ["moverIds"],
         message: "moverIds를 보내거나 all: true로 전체 해제를 요청해주세요.",
+      });
+    }
+
+    if (value.excludedIds !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["excludedIds"],
+        message: "선택 해제 시 excludedIds를 함께 보낼 수 없습니다.",
       });
     }
   });
