@@ -79,34 +79,25 @@ export const favoriteService = {
     const uniqueExcludedIds = excludedIds ? [...new Set(excludedIds)] : [];
 
     if (all === true) {
-      const targets = await favoriteRepository.findFavoriteMoverIdsByCustomerId({
+      const { count: deletedCount } = await favoriteRepository.deleteFavoriteMoversByCustomerId({
         customerId,
         excludedIds: uniqueExcludedIds,
       });
-      const deletedIds = targets.map((row) => row.moverId);
 
-      if (deletedIds.length > 0) {
-        await favoriteRepository.deleteFavoriteMoversByCustomerId({
-          customerId,
-          moverIds: deletedIds,
-        });
-      }
-
-      return { deletedIds, failedIds: [] as string[] };
+      return { deletedCount };
     }
 
     const ids = uniqueMoverIds ?? [];
     if (ids.length === 0) {
-      return { deletedIds: [] as string[], failedIds: [] as string[] };
+      return { deletedCount: 0 };
     }
 
-    await favoriteRepository.deleteFavoriteMoversByCustomerId({
+    const { count: deletedCount } = await favoriteRepository.deleteFavoriteMoversByCustomerId({
       customerId,
       moverIds: ids,
     });
 
-    // 단건 DELETE와 동일하게 멱등 — 요청한 id는 모두 해제된 것으로 응답
-    return { deletedIds: ids, failedIds: [] as string[] };
+    return { deletedCount };
   },
 
   async getFavoriteMoverList({ customerId, page, limit }: GetFavoriteMoverListParams) {

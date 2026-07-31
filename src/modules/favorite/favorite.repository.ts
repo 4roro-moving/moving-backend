@@ -63,7 +63,7 @@ export const favoriteRepository = {
     });
   },
 
-  /** 고객 찜 일괄 삭제. moverIds가 있으면 해당 id만, 없으면 excludedIds 제외 전체 */
+  /** 찜 일괄 삭제. moverIds가 있으면 해당 id만, 없으면 excludedIds 제외 전체 */
   deleteFavoriteMoversByCustomerId({
     customerId,
     moverIds,
@@ -80,25 +80,6 @@ export const favoriteRepository = {
     return prisma.favoriteMover.deleteMany({ where });
   },
 
-  /** 삭제 대상 moverId 목록 조회 (응답 deletedIds용) */
-  findFavoriteMoverIdsByCustomerId({
-    customerId,
-    moverIds,
-    excludedIds,
-  }: DeleteFavoriteMoversByCustomerIdParams) {
-    const where: Prisma.FavoriteMoverWhereInput = { customerId };
-
-    if (moverIds && moverIds.length > 0) {
-      where.moverId = { in: moverIds };
-    } else if (excludedIds && excludedIds.length > 0) {
-      where.moverId = { notIn: excludedIds };
-    }
-
-    return prisma.favoriteMover.findMany({
-      where,
-      select: { moverId: true },
-    });
-  },
   findFavoriteMoversByCustomerId({ customerId, moverIds }: FindFavoriteMoversByCustomerIdParams) {
     return prisma.favoriteMover.findMany({
       where: {
