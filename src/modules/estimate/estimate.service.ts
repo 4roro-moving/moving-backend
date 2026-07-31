@@ -402,6 +402,69 @@ export const moverEstimateRequestService = {
   },
 };
 
+function getSentEstimateDisplayStatus(
+  estimateStatus: EstimateStatus,
+  requestStatus: EstimateRequestStatus,
+) {
+  if (requestStatus === "COMPLETED") {
+    return "COMPLETED" as const;
+  }
+  if (estimateStatus === "CONFIRMED") {
+    return "CONFIRMED" as const;
+  }
+  return "SENT" as const;
+}
+
+function mapSentEstimate(row: Awaited<ReturnType<typeof moverSentEstimateRepository.findDetail>>) {
+  if (!row) {
+    throw new AppError("ESTIMATE_NOT_FOUND");
+  }
+
+  return {
+    id: row.id,
+    price: row.price,
+    comment: row.comment,
+    status: getSentEstimateDisplayStatus(row.status, row.estimateRequest.status),
+    estimateStatus: row.status,
+    isDesignated: row.isDesignated,
+    createdAt: row.createdAt.toISOString(),
+    updatedAt: row.updatedAt.toISOString(),
+    confirmedAt: row.confirmedAt?.toISOString() ?? null,
+    customer: row.estimateRequest.customer,
+    estimateRequest: {
+      id: row.estimateRequest.id,
+      moveType: row.estimateRequest.moveType,
+      moveDate: row.estimateRequest.moveDate.toISOString(),
+      fromZipCode: row.estimateRequest.fromZipCode,
+      fromAddress: row.estimateRequest.fromAddress,
+      fromDetailAddress: row.estimateRequest.fromDetailAddress,
+      fromRegion: row.estimateRequest.fromRegion,
+      toZipCode: row.estimateRequest.toZipCode,
+      toAddress: row.estimateRequest.toAddress,
+      toDetailAddress: row.estimateRequest.toDetailAddress,
+      toRegion: row.estimateRequest.toRegion,
+      status: row.estimateRequest.status,
+      requestedAt: row.estimateRequest.createdAt.toISOString(),
+      completedAt: row.estimateRequest.completedAt?.toISOString() ?? null,
+    },
+  };
+}
+
+export const moverSentEstimateService = {
+  async getList(moverId: string, query: MoverSentEstimateListQuery) {
+    const [rows, totalCount] = await moverSentEstimateRepository.findMany(moverId, query);
+    return {
+      items: rows.map((row) => mapSentEstimate(row)),
+      pagination: buildPagination(totalCount, query.page, query.limit),
+    };
+  },
+
+  async getDetail(moverId: string, estimateId: number) {
+    const row = await moverSentEstimateRepository.findDetail(moverId, estimateId);
+    return mapSentEstimate(row);
+  },
+};
+
 // =============================================================================
 // 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
 // =============================================================================

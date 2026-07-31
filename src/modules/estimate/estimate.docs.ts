@@ -18,6 +18,25 @@ registerRouterDocs(estimateRouter, {
     422: "입력값이 올바르지 않습니다.",
   },
   endpoints: {
+    "GET /sent": {
+      summary: "기사 본인이 보낸 견적 목록",
+      description:
+        "로그인한 기사가 보낸 견적을 최신순으로 조회합니다. page, limit과 화면 상태(SENT, CONFIRMED, COMPLETED) 필터를 지원합니다.",
+      responses: {
+        200: "조회 성공",
+      },
+    },
+
+    "GET /sent/:estimateId": {
+      summary: "기사 본인이 보낸 견적 상세",
+      description:
+        "로그인한 기사 본인이 보낸 견적만 조회합니다. 다른 기사의 견적은 404를 반환합니다.",
+      responses: {
+        200: "조회 성공",
+        404: "견적을 찾을 수 없습니다.",
+      },
+    },
+
     "GET /received": {
       summary: "받은 견적 패널 목록",
       description:

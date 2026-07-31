@@ -5,6 +5,8 @@ import type {
   confirmReceivedEstimateParamSchema,
   moverEstimateRequestListQuerySchema,
   moverEstimateRejectionListQuerySchema,
+  moverSentEstimateIdParamSchema,
+  moverSentEstimateListQuerySchema,
   pendingEstimateQuerySchema,
   rejectEstimateBodySchema,
   receivedEstimateDetailParamSchema,
@@ -19,8 +21,10 @@ import type {
 API에서 사용하는 데이터 형태 정의
 - 2026.07.24 add 윤소정
 기사 견적 제안 추가
-2026.07.27 add 윤소정
+- 2026.07.27 add 윤소정
 기사 견적 반려 추가
+- 2026.07.31 add 윤소정
+기사 내 견적 관리 및 견적 상세 추가
 */
 
 /* 
@@ -40,6 +44,8 @@ API에서 사용하는 데이터 형태 정의
 
 export type MoverEstimateRequestListQuery = z.infer<typeof moverEstimateRequestListQuerySchema>;
 export type MoverEstimateRejectionListQuery = z.infer<typeof moverEstimateRejectionListQuerySchema>;
+export type MoverSentEstimateListQuery = z.infer<typeof moverSentEstimateListQuerySchema>;
+export type MoverSentEstimateIdParam = z.infer<typeof moverSentEstimateIdParamSchema>;
 export type PendingEstimateQuery = z.infer<typeof pendingEstimateQuerySchema>;
 export type ReceivedEstimateRequestIdParam = z.infer<typeof receivedEstimateRequestIdParamSchema>;
 export type ReceivedEstimateDetailParam = z.infer<typeof receivedEstimateDetailParamSchema>;

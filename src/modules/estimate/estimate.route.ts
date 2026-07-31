@@ -7,6 +7,8 @@ import { estimateController } from "./estimate.controller";
 import {
   moverEstimateRequestListQuerySchema,
   moverEstimateRejectionListQuerySchema,
+  moverSentEstimateIdParamSchema,
+  moverSentEstimateListQuerySchema,
   pendingEstimateQuerySchema,
   rejectEstimateBodySchema,
   sendEstimateBodySchema,
@@ -38,6 +40,24 @@ estimateRouter.get(
   authorize("MOVER"),
   validate({ query: moverEstimateRejectionListQuerySchema }),
   asyncHandler(estimateController.getRejections),
+);
+
+// 기사 내 견적 관리: 보낸 견적 목록
+estimateRouter.get(
+  "/sent",
+  authenticate,
+  authorize("MOVER"),
+  validate({ query: moverSentEstimateListQuerySchema }),
+  asyncHandler(estimateController.getSentEstimates),
+);
+
+// 기사 내 견적 관리: 보낸 견적 상세
+estimateRouter.get(
+  "/sent/:estimateId",
+  authenticate,
+  authorize("MOVER"),
+  validate({ params: moverSentEstimateIdParamSchema }),
+  asyncHandler(estimateController.getSentEstimateDetail),
 );
 
 /* 
