@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 
+import { mapMoverBase } from "../mover/mover.shared";
 import { favoriteRepository } from "./favorite.repository";
 import type { FavoriteMoverParams, ListFavoriteMoverQuery } from "./favorite.type";
 
@@ -55,12 +56,7 @@ export const favoriteService = {
   },
 
   async deleteFavoriteMover({ customerId, moverId }: FavoriteMoverParams) {
-    const mover = await favoriteRepository.findMoverById(moverId);
-
-    if (!mover) {
-      throw new AppError("MOVER_NOT_FOUND");
-    }
-
+    // deleteMany는 멱등 처리이므로 비활성·삭제된 기사 찜도 해제 가능해야 함
     await favoriteRepository.deleteFavoriteMover({ customerId, moverId });
 
     return {
@@ -92,18 +88,7 @@ export const favoriteService = {
         }
 
         return {
-          id: mover.userId,
-          moverProfileId: mover.id,
-          nickname: mover.nickname,
-          profileImageUrl: mover.imageUrl,
-          shortIntro: mover.shortIntro,
-          description: mover.description,
-          career: mover.career,
-          rating: Number(mover.averageRating),
-          reviewCount: mover.reviewCount,
-          confirmedEstimateCount: mover.confirmedCount,
-          favoriteCount: mover.user._count.favoritesReceived,
-          moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
+          ...mapMoverBase(mover),
           isFavorite: true,
           favoritedAt: favorite.createdAt,
         };

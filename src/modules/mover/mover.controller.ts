@@ -1,4 +1,4 @@
-import type { Request, RequestHandler } from "express";
+import type { Request, Response } from "express";
 
 import { sendResponse } from "../../utils/response.util";
 import { moverService } from "./mover.service";
@@ -10,32 +10,24 @@ function getOptionalCustomerId(req: Request) {
 
 export const moverController = {
   // GET /api/movers
-  getMovers: (async (req, res, next) => {
-    try {
-      const query = res.locals.query as ListMoverQuery;
-      const customerId = getOptionalCustomerId(req);
+  getMovers: async (req: Request, res: Response) => {
+    const query = res.locals.query as ListMoverQuery;
+    const customerId = getOptionalCustomerId(req);
 
-      const result = await moverService.getMoverList(query, customerId);
+    const result = await moverService.getMoverList(query, customerId);
 
-      return sendResponse(res, 200, result.movers, {
-        pagination: result.pagination,
-      });
-    } catch (error) {
-      next(error);
-    }
-  }) satisfies RequestHandler,
+    return sendResponse(res, 200, result.movers, {
+      pagination: result.pagination,
+    });
+  },
 
   // GET /api/movers/:moverId
-  getMoverDetail: (async (req, res, next) => {
-    try {
-      const { moverId: moverUserId } = res.locals.params as MoverIdParam;
-      const customerId = getOptionalCustomerId(req);
+  getMoverDetail: async (req: Request, res: Response) => {
+    const { moverId: moverUserId } = res.locals.params as MoverIdParam;
+    const customerId = getOptionalCustomerId(req);
 
-      const mover = await moverService.getMoverDetail(moverUserId, customerId);
+    const mover = await moverService.getMoverDetail(moverUserId, customerId);
 
-      return sendResponse(res, 200, mover);
-    } catch (error) {
-      next(error);
-    }
-  }) satisfies RequestHandler,
+    return sendResponse(res, 200, mover);
+  },
 };
