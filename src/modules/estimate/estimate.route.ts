@@ -27,7 +27,7 @@ estimateRouter.get(
   authenticate,
   authorize("MOVER"),
   validate({ query: moverEstimateRequestListQuerySchema }),
-  estimateController.getList,
+  asyncHandler(estimateController.getList),
 );
 
 /* 
@@ -72,7 +72,7 @@ estimateRouter.post(
     params: sendEstimateParamSchema,
     body: sendEstimateBodySchema,
   }),
-  estimateController.sendEstimate,
+  asyncHandler(estimateController.sendEstimate),
 );
 
 // 2026.07.27 add 김성현
@@ -97,7 +97,7 @@ estimateRouter.post(
     params: sendEstimateParamSchema,
     body: rejectEstimateBodySchema,
   }),
-  estimateController.rejectEstimate,
+  asyncHandler(estimateController.rejectEstimate),
 );
 
 // 2026.07.24 정슬기 - [추가] 고객 받은 견적 패널 목록 API (요청 단위)
