@@ -1,9 +1,9 @@
 import type { Response } from "express";
-import type { ApiResponse, Pagination } from "../types/response.type";
+import type { ApiResponse, CursorPagination, Pagination } from "../types/response.type";
 
 type SendResponseOptions = {
   message?: string;
-  pagination?: Pagination;
+  pagination?: Pagination | CursorPagination;
 };
 
 // 성공 응답 전송

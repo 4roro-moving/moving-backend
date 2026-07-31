@@ -90,10 +90,24 @@ export const favoriteRepository = {
     });
   },
 
-  findFavoriteMoverList({ customerId, skip, take }: FindFavoriteMoverListParams) {
+  findFavoriteMoverList({ customerId, cursor, take }: FindFavoriteMoverListParams) {
     return prisma.favoriteMover.findMany({
-      where: buildFavoriteMoverListWhere(customerId),
+      where: {
+        ...buildFavoriteMoverListWhere(customerId),
+        ...(cursor
+          ? {
+              OR: [
+                { createdAt: { lt: cursor.createdAt } },
+                {
+                  createdAt: cursor.createdAt,
+                  id: { lt: cursor.id },
+                },
+              ],
+            }
+          : {}),
+      },
       select: {
+        id: true,
         createdAt: true,
         mover: {
           select: {
@@ -104,7 +118,6 @@ export const favoriteRepository = {
         },
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      skip,
       take,
     });
   },

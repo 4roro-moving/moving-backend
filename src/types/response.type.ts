@@ -7,11 +7,18 @@ export interface Pagination {
   hasNext: boolean;
 }
 
+export interface CursorPagination {
+  limit: number;
+  totalCount: number;
+  hasNext: boolean;
+  nextCursor: string | null;
+}
+
 // 성공 응답 공통 타입
 export interface ApiResponse<T = unknown> {
   message?: string;
   data?: T;
-  pagination?: Pagination;
+  pagination?: Pagination | CursorPagination;
 }
 
 // 에러 응답 공통 타입

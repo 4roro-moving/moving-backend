@@ -1,12 +1,12 @@
 import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
-import { buildPagination } from "../../utils/pagination.util";
 
 import { mapMoverBase } from "../mover/mover.shared";
 import { favoriteRepository } from "./favorite.repository";
 import type {
   BulkDeleteFavoriteMoversParams,
+  FavoriteMoverCursor,
   FavoriteMoverParams,
   ListFavoriteMoverQuery,
 } from "./favorite.type";
@@ -14,6 +14,49 @@ import type {
 type GetFavoriteMoverListParams = ListFavoriteMoverQuery & {
   customerId: string;
 };
+
+type SerializedFavoriteMoverCursor = {
+  createdAt: string;
+  id: number;
+};
+
+export function encodeFavoriteMoverCursor(cursor: FavoriteMoverCursor): string {
+  return Buffer.from(
+    JSON.stringify({
+      createdAt: cursor.createdAt.toISOString(),
+      id: cursor.id,
+    } satisfies SerializedFavoriteMoverCursor),
+  ).toString("base64url");
+}
+
+export function decodeFavoriteMoverCursor(
+  cursor: string | undefined,
+): FavoriteMoverCursor | undefined {
+  if (!cursor) {
+    return undefined;
+  }
+
+  try {
+    const decoded = JSON.parse(
+      Buffer.from(cursor, "base64url").toString("utf8"),
+    ) as Partial<SerializedFavoriteMoverCursor>;
+    const createdAt = new Date(decoded.createdAt ?? "");
+
+    if (
+      Number.isNaN(createdAt.getTime()) ||
+      !Number.isInteger(decoded.id) ||
+      (decoded.id ?? 0) <= 0
+    ) {
+      throw new Error("Invalid cursor");
+    }
+
+    return { createdAt, id: decoded.id as number };
+  } catch {
+    throw new AppError("VALIDATION_ERROR", {
+      message: "유효하지 않은 찜 목록 커서입니다.",
+    });
+  }
+}
 
 function isFavoriteMoverUniqueError(error: unknown) {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
@@ -100,20 +143,24 @@ export const favoriteService = {
     return { deletedCount };
   },
 
-  async getFavoriteMoverList({ customerId, page, limit }: GetFavoriteMoverListParams) {
-    const skip = (page - 1) * limit;
+  async getFavoriteMoverList({ customerId, cursor, limit }: GetFavoriteMoverListParams) {
+    const decodedCursor = decodeFavoriteMoverCursor(cursor);
 
     const [favorites, totalCount] = await Promise.all([
       favoriteRepository.findFavoriteMoverList({
         customerId,
-        skip,
-        take: limit,
+        ...(decodedCursor ? { cursor: decodedCursor } : {}),
+        take: limit + 1,
       }),
       favoriteRepository.countFavoriteMoversByCustomerId(customerId),
     ]);
 
+    const hasNext = favorites.length > limit;
+    const pageFavorites = favorites.slice(0, limit);
+    const lastFavorite = pageFavorites.at(-1);
+
     return {
-      movers: favorites.map((favorite) => {
+      movers: pageFavorites.map((favorite) => {
         const mover = favorite.mover.moverProfile;
 
         if (!mover) {
@@ -128,7 +175,18 @@ export const favoriteService = {
           favoritedAt: favorite.createdAt,
         };
       }),
-      pagination: buildPagination(totalCount, page, limit),
+      pagination: {
+        limit,
+        totalCount,
+        hasNext,
+        nextCursor:
+          hasNext && lastFavorite
+            ? encodeFavoriteMoverCursor({
+                createdAt: lastFavorite.createdAt,
+                id: lastFavorite.id,
+              })
+            : null,
+      },
     };
   },
 };

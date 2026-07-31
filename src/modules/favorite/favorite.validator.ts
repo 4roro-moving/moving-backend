@@ -5,7 +5,7 @@ export const favoriteMoverParamSchema = z.object({
 });
 
 export const listFavoriteMoverQuerySchema = z.object({
-  page: z.coerce.number().int().positive().default(1),
+  cursor: z.string().min(1).max(500).optional(),
   limit: z.coerce.number().int().positive().max(50).default(10),
 });
 

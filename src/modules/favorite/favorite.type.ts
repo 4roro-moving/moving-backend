@@ -19,11 +19,16 @@ export type BulkDeleteFavoriteMoversParams = BulkDeleteFavoriteMoversBody & {
   customerId: string;
 };
 
+export type FavoriteMoverCursor = {
+  createdAt: Date;
+  id: number;
+};
+
 // 찜한 기사 목록 DB 조회 시 필요한 파라미터
 export type FindFavoriteMoverListParams = {
   customerId: string;
-  skip: number;
   take: number;
+  cursor?: FavoriteMoverCursor;
 };
 
 // 찜한 기사 ID 조회 시 필요한 파라미터

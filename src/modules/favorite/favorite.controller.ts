@@ -24,7 +24,7 @@ export const favoriteController = {
 
     const result = await favoriteService.getFavoriteMoverList({
       customerId: getCustomerId(req),
-      page: query.page,
+      cursor: query.cursor,
       limit: query.limit,
     });
 
