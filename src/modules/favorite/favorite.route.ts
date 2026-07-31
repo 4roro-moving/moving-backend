@@ -4,7 +4,11 @@ import { authenticate, authorize } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
 import { asyncHandler } from "../../utils/async-handler.util";
 import { favoriteController } from "./favorite.controller";
-import { favoriteMoverParamSchema, listFavoriteMoverQuerySchema } from "./favorite.validator";
+import {
+  bulkDeleteFavoriteMoversSchema,
+  favoriteMoverParamSchema,
+  listFavoriteMoverQuerySchema,
+} from "./favorite.validator";
 
 const favoriteRouter = Router();
 
@@ -14,6 +18,12 @@ favoriteRouter.get(
   "/movers",
   validate({ query: listFavoriteMoverQuerySchema }),
   asyncHandler(favoriteController.getFavoriteMoverList),
+);
+
+favoriteRouter.delete(
+  "/movers",
+  validate({ body: bulkDeleteFavoriteMoversSchema }),
+  asyncHandler(favoriteController.deleteFavoriteMovers),
 );
 
 favoriteRouter
