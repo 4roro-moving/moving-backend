@@ -409,7 +409,10 @@ export const moverEstimateRequestRepository = {
   //기사 견적 반려 내역 조회
   findRejections(moverId: string, query: MoverEstimateRejectionListQuery, db: DbClient = prisma) {
     return db.estimateRequestRejection.findMany({
-      where: { moverId },
+      where: {
+        moverId,
+        estimateRequest: { status: { not: "CANCELED" } },
+      },
       select: {
         id: true,
         reason: true,
@@ -490,16 +493,19 @@ function buildMoverSentEstimateWhere(
   moverId: string,
   query: MoverSentEstimateListQuery,
 ): Prisma.EstimateWhereInput {
-  const where: Prisma.EstimateWhereInput = { moverId };
+  const where: Prisma.EstimateWhereInput = {
+    moverId,
+    estimateRequest: { status: { not: "CANCELED" } },
+  };
 
   if (query.status === "COMPLETED") {
     where.estimateRequest = { status: "COMPLETED" };
   } else if (query.status === "CONFIRMED") {
     where.status = "CONFIRMED";
-    where.estimateRequest = { status: { not: "COMPLETED" } };
+    where.estimateRequest = { status: { notIn: ["COMPLETED", "CANCELED"] } };
   } else if (query.status === "SENT") {
     where.status = { not: "CONFIRMED" };
-    where.estimateRequest = { status: { not: "COMPLETED" } };
+    where.estimateRequest = { status: { notIn: ["COMPLETED", "CANCELED"] } };
   }
 
   return where;
