@@ -3,7 +3,11 @@ import type { Request, Response } from "express";
 import { AppError } from "../../lib/app-error";
 import { sendResponse } from "../../utils/response.util";
 import { favoriteService } from "./favorite.service";
-import type { FavoriteMoverParam, ListFavoriteMoverQuery } from "./favorite.type";
+import type {
+  BulkDeleteFavoriteMoversBody,
+  FavoriteMoverParam,
+  ListFavoriteMoverQuery,
+} from "./favorite.type";
 
 function getCustomerId(req: Request): string {
   if (!req.user) {
@@ -20,13 +24,27 @@ export const favoriteController = {
 
     const result = await favoriteService.getFavoriteMoverList({
       customerId: getCustomerId(req),
-      page: query.page,
+      cursor: query.cursor,
       limit: query.limit,
     });
 
     return sendResponse(res, 200, result.movers, {
       pagination: result.pagination,
     });
+  },
+
+  // DELETE /api/favorites/movers
+  deleteFavoriteMovers: async (req: Request, res: Response) => {
+    const body = req.body as BulkDeleteFavoriteMoversBody;
+
+    const result = await favoriteService.deleteFavoriteMovers({
+      customerId: getCustomerId(req),
+      moverIds: body.moverIds,
+      all: body.all,
+      excludedIds: body.excludedIds,
+    });
+
+    return sendResponse(res, 200, result);
   },
 
   // POST /api/favorites/movers/:moverId
