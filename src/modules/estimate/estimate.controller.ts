@@ -54,19 +54,15 @@ function getCustomerId(req: Request) {
 // =============================================================================
 // 기사: 고객의 견적 요청 목록 조회
 // =============================================================================
-const getList: RequestHandler = async (req, res, next) => {
-  try {
-    const moverId = getMoverId(req);
-    const query = res.locals.query as MoverEstimateRequestListQuery;
-    const result = await moverEstimateRequestService.getList(moverId, query);
+const getList: RequestHandler = async (req, res) => {
+  const moverId = getMoverId(req);
+  const query = res.locals.query as MoverEstimateRequestListQuery;
+  const result = await moverEstimateRequestService.getList(moverId, query);
 
-    res.status(200).json({
-      success: true,
-      data: result,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
 };
 
 //기사 견적 반려 내역 조회
@@ -104,45 +100,37 @@ const getSentEstimateDetail: RequestHandler = async (req, res) => {
 };
 
 // 기사가 고객의 견적 요청에 견적을 전송
-const sendEstimate: RequestHandler = async (req, res, next) => {
-  try {
-    const { estimateRequestId } = res.locals.params as SendEstimateParam;
-    const input = req.body as SendEstimateInput;
+const sendEstimate: RequestHandler = async (req, res) => {
+  const { estimateRequestId } = res.locals.params as SendEstimateParam;
+  const input = req.body as SendEstimateInput;
 
-    const estimate = await moverEstimateRequestService.sendEstimate({
-      estimateRequestId,
-      moverId: getMoverId(req),
-      input,
-    });
+  const estimate = await moverEstimateRequestService.sendEstimate({
+    estimateRequestId,
+    moverId: getMoverId(req),
+    input,
+  });
 
-    res.status(201).json({
-      success: true,
-      data: estimate,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.status(201).json({
+    success: true,
+    data: estimate,
+  });
 };
 
 // 기사가 고객의 견적 요청을 반려
-const rejectEstimate: RequestHandler = async (req, res, next) => {
-  try {
-    const { estimateRequestId } = res.locals.params as SendEstimateParam;
-    const input = req.body as RejectEstimateInput;
+const rejectEstimate: RequestHandler = async (req, res) => {
+  const { estimateRequestId } = res.locals.params as SendEstimateParam;
+  const input = req.body as RejectEstimateInput;
 
-    const rejection = await moverEstimateRequestService.rejectEstimate({
-      estimateRequestId,
-      moverId: getMoverId(req),
-      input,
-    });
+  const rejection = await moverEstimateRequestService.rejectEstimate({
+    estimateRequestId,
+    moverId: getMoverId(req),
+    input,
+  });
 
-    res.status(201).json({
-      success: true,
-      data: rejection,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.status(201).json({
+    success: true,
+    data: rejection,
+  });
 };
 
 // =============================================================================
