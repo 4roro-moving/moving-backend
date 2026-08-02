@@ -7,23 +7,27 @@ import logger from "../config/logger";
 import { socketAuthenticate } from "../middlewares/socket-auth";
 import { registerChatSocketHandlers } from "../modules/chat/chat.socket";
 
+let io: SocketIOServer | null = null;
+
 export const initializeSocket = (httpServer: HttpServer): SocketIOServer => {
-  const io = new SocketIOServer(httpServer, {
+  const socketServer = new SocketIOServer(httpServer, {
     cors: {
       origin: env.CLIENT_URL,
       credentials: true,
     },
   });
 
-  io.use(socketAuthenticate);
+  io = socketServer;
 
-  io.on("connection", (socket) => {
+  socketServer.use(socketAuthenticate);
+
+  socketServer.on("connection", (socket) => {
     logger.info("Socket connected.", {
       socketId: socket.id,
       userId: socket.data.user?.id,
     });
 
-    registerChatSocketHandlers(io, socket);
+    registerChatSocketHandlers(socketServer, socket);
 
     socket.on("disconnect", (reason) => {
       logger.info("Socket disconnected.", {
@@ -34,5 +38,21 @@ export const initializeSocket = (httpServer: HttpServer): SocketIOServer => {
     });
   });
 
-  return io;
+  return socketServer;
+};
+
+export const closeSocketServer = (): Promise<void> => {
+  if (!io) {
+    return Promise.resolve();
+  }
+
+  const socketServer = io;
+
+  return new Promise((resolve) => {
+    socketServer.close(() => {
+      logger.info("Socket.IO server closed successfully.");
+      io = null;
+      resolve();
+    });
+  });
 };

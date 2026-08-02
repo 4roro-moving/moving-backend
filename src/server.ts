@@ -6,7 +6,7 @@ import logger from "./config/logger";
 import { startNotificationCleanupJob } from "./jobs/notification-cleanup.job";
 import { prisma } from "./lib/prisma";
 import { notificationSseService } from "./modules/notification/notification-sse.service";
-import { initializeSocket } from "./socket";
+import { closeSocketServer, initializeSocket } from "./socket";
 
 let server: Server | null = null;
 let isShuttingDown = false;
@@ -30,6 +30,7 @@ const shutdown = async (signal: string): Promise<void> => {
   logger.info(`${signal} 신호를 수신하여 서버 종료를 시작합니다.`);
 
   notificationSseService.closeAllConnections();
+  await closeSocketServer();
 
   if (!server) {
     await prisma.$disconnect();
