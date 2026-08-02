@@ -81,6 +81,27 @@ export const moverEstimateRejectionListQuerySchema = z.object({
     .default(10),
 });
 
+// 기사 본인이 보낸 견적 목록
+export const moverSentEstimateListQuerySchema = z.object({
+  page: z.coerce
+    .number("페이지는 숫자여야 합니다.")
+    .int("페이지는 정수여야 합니다.")
+    .positive("페이지는 1 이상이어야 합니다.")
+    .max(1000, "페이지는 최대 1000까지 조회할 수 있습니다.")
+    .default(1),
+  limit: z.coerce
+    .number("조회 개수는 숫자여야 합니다.")
+    .int("조회 개수는 정수여야 합니다.")
+    .positive("조회 개수는 1 이상이어야 합니다.")
+    .max(50, "조회 개수는 최대 50개까지 가능합니다.")
+    .default(10),
+  status: z
+    .enum(["SENT", "CONFIRMED", "COMPLETED"], {
+      error: "상태는 SENT, CONFIRMED, COMPLETED 중 하나여야 합니다.",
+    })
+    .optional(),
+});
+
 // 견적 제안 estimateRequestID 검증
 export const sendEstimateParamSchema = z.object({
   estimateRequestId: z.coerce.number().int().positive("올바른 견적 요청 ID가 아닙니다."),
@@ -148,3 +169,5 @@ export const confirmReceivedEstimateParamSchema = receivedEstimateDetailParamSch
 export const receivedEstimateIdParamSchema = z.object({
   estimateId: z.coerce.number().int().positive(),
 });
+
+export const moverSentEstimateIdParamSchema = receivedEstimateIdParamSchema;

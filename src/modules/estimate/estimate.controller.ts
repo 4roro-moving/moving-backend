@@ -1,11 +1,17 @@
 ﻿import type { Request, RequestHandler } from "express";
 
 import { AppError } from "../../lib/app-error";
-import { moverEstimateRequestService, receivedEstimateService } from "./estimate.service";
+import {
+  moverEstimateRequestService,
+  moverSentEstimateService,
+  receivedEstimateService,
+} from "./estimate.service";
 import type {
   ConfirmReceivedEstimateParam,
   MoverEstimateRequestListQuery,
   MoverEstimateRejectionListQuery,
+  MoverSentEstimateIdParam,
+  MoverSentEstimateListQuery,
   PendingEstimateQuery,
   ReceivedEstimateDetailParam,
   ReceivedEstimateIdParam,
@@ -48,19 +54,15 @@ function getCustomerId(req: Request) {
 // =============================================================================
 // 기사: 고객의 견적 요청 목록 조회
 // =============================================================================
-const getList: RequestHandler = async (req, res, next) => {
-  try {
-    const moverId = getMoverId(req);
-    const query = res.locals.query as MoverEstimateRequestListQuery;
-    const result = await moverEstimateRequestService.getList(moverId, query);
+const getList: RequestHandler = async (req, res) => {
+  const moverId = getMoverId(req);
+  const query = res.locals.query as MoverEstimateRequestListQuery;
+  const result = await moverEstimateRequestService.getList(moverId, query);
 
-    res.status(200).json({
-      success: true,
-      data: result,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
 };
 
 //기사 견적 반려 내역 조회
@@ -74,46 +76,61 @@ const getRejections: RequestHandler = async (req, res) => {
   });
 };
 
+//기사 보낸 견적 조회
+const getSentEstimates: RequestHandler = async (req, res) => {
+  const query = res.locals.query as MoverSentEstimateListQuery;
+  const result = await moverSentEstimateService.getList(getMoverId(req), query);
+
+  res.status(200).json({
+    success: true,
+    data: result.items,
+    pagination: result.pagination,
+  });
+};
+
+//기사 견적 상세
+const getSentEstimateDetail: RequestHandler = async (req, res) => {
+  const { estimateId } = res.locals.params as MoverSentEstimateIdParam;
+  const result = await moverSentEstimateService.getDetail(getMoverId(req), estimateId);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
+};
+
 // 기사가 고객의 견적 요청에 견적을 전송
-const sendEstimate: RequestHandler = async (req, res, next) => {
-  try {
-    const { estimateRequestId } = res.locals.params as SendEstimateParam;
-    const input = req.body as SendEstimateInput;
+const sendEstimate: RequestHandler = async (req, res) => {
+  const { estimateRequestId } = res.locals.params as SendEstimateParam;
+  const input = req.body as SendEstimateInput;
 
-    const estimate = await moverEstimateRequestService.sendEstimate({
-      estimateRequestId,
-      moverId: getMoverId(req),
-      input,
-    });
+  const estimate = await moverEstimateRequestService.sendEstimate({
+    estimateRequestId,
+    moverId: getMoverId(req),
+    input,
+  });
 
-    res.status(201).json({
-      success: true,
-      data: estimate,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.status(201).json({
+    success: true,
+    data: estimate,
+  });
 };
 
 // 기사가 고객의 견적 요청을 반려
-const rejectEstimate: RequestHandler = async (req, res, next) => {
-  try {
-    const { estimateRequestId } = res.locals.params as SendEstimateParam;
-    const input = req.body as RejectEstimateInput;
+const rejectEstimate: RequestHandler = async (req, res) => {
+  const { estimateRequestId } = res.locals.params as SendEstimateParam;
+  const input = req.body as RejectEstimateInput;
 
-    const rejection = await moverEstimateRequestService.rejectEstimate({
-      estimateRequestId,
-      moverId: getMoverId(req),
-      input,
-    });
+  const rejection = await moverEstimateRequestService.rejectEstimate({
+    estimateRequestId,
+    moverId: getMoverId(req),
+    input,
+  });
 
-    res.status(201).json({
-      success: true,
-      data: rejection,
-    });
-  } catch (error) {
-    next(error);
-  }
+  res.status(201).json({
+    success: true,
+    data: rejection,
+  });
 };
 
 // =============================================================================
@@ -256,6 +273,8 @@ const confirmReceivedEstimateById: RequestHandler = async (req, res, next) => {
 export const estimateController = {
   getList,
   getRejections,
+  getSentEstimates,
+  getSentEstimateDetail,
   getPendingEstimateRequests,
   getReceivedEstimatePanels,
   sendEstimate,

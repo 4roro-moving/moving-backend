@@ -7,6 +7,8 @@ import { estimateController } from "./estimate.controller";
 import {
   moverEstimateRequestListQuerySchema,
   moverEstimateRejectionListQuerySchema,
+  moverSentEstimateIdParamSchema,
+  moverSentEstimateListQuerySchema,
   pendingEstimateQuerySchema,
   rejectEstimateBodySchema,
   sendEstimateBodySchema,
@@ -25,7 +27,7 @@ estimateRouter.get(
   authenticate,
   authorize("MOVER"),
   validate({ query: moverEstimateRequestListQuerySchema }),
-  estimateController.getList,
+  asyncHandler(estimateController.getList),
 );
 
 /* 
@@ -40,6 +42,24 @@ estimateRouter.get(
   asyncHandler(estimateController.getRejections),
 );
 
+// 기사 내 견적 관리: 보낸 견적 목록
+estimateRouter.get(
+  "/sent",
+  authenticate,
+  authorize("MOVER"),
+  validate({ query: moverSentEstimateListQuerySchema }),
+  asyncHandler(estimateController.getSentEstimates),
+);
+
+// 기사 내 견적 관리: 보낸 견적 상세
+estimateRouter.get(
+  "/sent/:estimateId",
+  authenticate,
+  authorize("MOVER"),
+  validate({ params: moverSentEstimateIdParamSchema }),
+  asyncHandler(estimateController.getSentEstimateDetail),
+);
+
 /* 
 - 2026.07.24 add 윤소정
 기사 견적 제안
@@ -52,7 +72,7 @@ estimateRouter.post(
     params: sendEstimateParamSchema,
     body: sendEstimateBodySchema,
   }),
-  estimateController.sendEstimate,
+  asyncHandler(estimateController.sendEstimate),
 );
 
 // 2026.07.27 add 김성현
@@ -77,7 +97,7 @@ estimateRouter.post(
     params: sendEstimateParamSchema,
     body: rejectEstimateBodySchema,
   }),
-  estimateController.rejectEstimate,
+  asyncHandler(estimateController.rejectEstimate),
 );
 
 // 2026.07.24 정슬기 - [추가] 고객 받은 견적 패널 목록 API (요청 단위)

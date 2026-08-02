@@ -6,6 +6,7 @@ import type { DbClient } from "../../utils/transaction";
 import type {
   MoverEstimateRejectionListQuery,
   MoverEstimateRequestListQuery,
+  MoverSentEstimateListQuery,
   PendingEstimateQuery,
 } from "./estimate.type";
 
@@ -408,7 +409,10 @@ export const moverEstimateRequestRepository = {
   //기사 견적 반려 내역 조회
   findRejections(moverId: string, query: MoverEstimateRejectionListQuery, db: DbClient = prisma) {
     return db.estimateRequestRejection.findMany({
-      where: { moverId },
+      where: {
+        moverId,
+        estimateRequest: { status: { not: "CANCELED" } },
+      },
       select: {
         id: true,
         reason: true,
@@ -451,6 +455,81 @@ export const moverEstimateRequestRepository = {
             skip: 1,
           }
         : {}),
+    });
+  },
+};
+
+const moverSentEstimateSelect = {
+  id: true,
+  price: true,
+  comment: true,
+  status: true,
+  isDesignated: true,
+  createdAt: true,
+  updatedAt: true,
+  confirmedAt: true,
+  estimateRequest: {
+    select: {
+      id: true,
+      moveType: true,
+      moveDate: true,
+      fromZipCode: true,
+      fromAddress: true,
+      fromDetailAddress: true,
+      fromRegion: { select: { id: true, name: true } },
+      toZipCode: true,
+      toAddress: true,
+      toDetailAddress: true,
+      toRegion: { select: { id: true, name: true } },
+      status: true,
+      createdAt: true,
+      completedAt: true,
+      customer: { select: { id: true, name: true } },
+    },
+  },
+} satisfies Prisma.EstimateSelect;
+
+function buildMoverSentEstimateWhere(
+  moverId: string,
+  query: MoverSentEstimateListQuery,
+): Prisma.EstimateWhereInput {
+  const where: Prisma.EstimateWhereInput = {
+    moverId,
+    estimateRequest: { status: { not: "CANCELED" } },
+  };
+
+  if (query.status === "COMPLETED") {
+    where.estimateRequest = { status: "COMPLETED" };
+  } else if (query.status === "CONFIRMED") {
+    where.status = "CONFIRMED";
+    where.estimateRequest = { status: { notIn: ["COMPLETED", "CANCELED"] } };
+  } else if (query.status === "SENT") {
+    where.status = { not: "CONFIRMED" };
+    where.estimateRequest = { status: { notIn: ["COMPLETED", "CANCELED"] } };
+  }
+
+  return where;
+}
+
+export const moverSentEstimateRepository = {
+  findMany(moverId: string, query: MoverSentEstimateListQuery, db: DbClient = prisma) {
+    const where = buildMoverSentEstimateWhere(moverId, query);
+    return Promise.all([
+      db.estimate.findMany({
+        where,
+        select: moverSentEstimateSelect,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (query.page - 1) * query.limit,
+        take: query.limit,
+      }),
+      db.estimate.count({ where }),
+    ]);
+  },
+
+  findDetail(moverId: string, estimateId: number, db: DbClient = prisma) {
+    return db.estimate.findFirst({
+      where: { id: estimateId, moverId },
+      select: moverSentEstimateSelect,
     });
   },
 };
