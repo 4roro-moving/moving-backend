@@ -2,6 +2,7 @@ import type { Server as HttpServer } from "node:http";
 
 import { Server as SocketIOServer } from "socket.io";
 
+import { env } from "../config/env";
 import logger from "../config/logger";
 import { socketAuthenticate } from "../middlewares/socket-auth";
 import { registerChatSocketHandlers } from "../modules/chat/chat.socket";
@@ -9,7 +10,7 @@ import { registerChatSocketHandlers } from "../modules/chat/chat.socket";
 export const initializeSocket = (httpServer: HttpServer): SocketIOServer => {
   const io = new SocketIOServer(httpServer, {
     cors: {
-      origin: process.env.CLIENT_URL,
+      origin: env.CLIENT_URL,
       credentials: true,
     },
   });
