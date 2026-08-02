@@ -114,6 +114,43 @@ export const estimateRequestRepository = {
     });
   },
 
+  /**
+   * 취소 가능 상태(PENDING|OPEN + isActive)인 요청만 soft cancel로 선점한다.
+   * count === 0 이면 이미 종료되었거나 동시 취소가 선점한 경우다.
+   * // 2026.08.03 정슬기 - [추가]
+   */
+  claimCancelEstimateRequest(estimateRequestId: number, canceledAt: Date, db: Db = prisma) {
+    return db.estimateRequest.updateMany({
+      where: {
+        id: estimateRequestId,
+        isActive: true,
+        status: { in: ["PENDING", "OPEN"] },
+      },
+      data: {
+        status: "CANCELED",
+        isActive: false,
+        canceledAt,
+      },
+    });
+  },
+
+  /**
+   * 요청 취소 시 미확정(SENT) 견적만 CANCELED 로 맞춘다. hard delete 금지.
+   * // 2026.08.03 정슬기 - [추가]
+   */
+  cancelSentEstimatesForRequest(estimateRequestId: number, canceledAt: Date, db: Db = prisma) {
+    return db.estimate.updateMany({
+      where: {
+        estimateRequestId,
+        status: "SENT",
+      },
+      data: {
+        status: "CANCELED",
+        canceledAt,
+      },
+    });
+  },
+
   async findManyByCustomerId(
     params: {
       customerId: string;

@@ -27,11 +27,29 @@ const MIN_EXPIRATION_HOURS = 24;
 const MS_PER_HOUR = 60 * 60 * 1000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 
-// 수정/취소가 가능한 상태
+// 수정/취소가 가능한 상태 (생성 직후 OPEN, 스키마상 PENDING 임시저장도 포함)
 const EDITABLE_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
 
-// 이미 종료되어 취소할 수 없는 상태
-const CLOSED_STATUSES: EstimateRequestStatus[] = ["CANCELED", "COMPLETED", "EXPIRED"];
+/** 고객이 soft cancel 가능한 요청 상태 — CONFIRMED 이상은 불가 */
+// 2026.08.03 정슬기 - [추가] 취소 허용 상태를 명시적으로 분리
+export const CANCELABLE_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
+
+/**
+ * 취소 가능 여부를 검증한다.
+ * // 2026.08.03 정슬기 - [추가] cancel 정책 단일화 (단위 테스트용 export)
+ */
+export function assertCancelable(request: {
+  status: EstimateRequestStatus;
+  isActive: boolean;
+}): void {
+  if (request.status === "CANCELED") {
+    throw new AppError("ESTIMATE_REQUEST_ALREADY_CANCELED");
+  }
+
+  if (!request.isActive || !CANCELABLE_STATUSES.includes(request.status)) {
+    throw new AppError("ESTIMATE_REQUEST_CANCEL_NOT_ALLOWED");
+  }
+}
 
 const MOVE_TYPE_LABEL: Record<MoveType, string> = {
   SMALL: "소형이사",
@@ -380,6 +398,14 @@ export const estimateRequestService = {
     });
   },
 
+  /**
+   * 견적 요청 soft cancel (hard delete 금지)
+   * - PENDING|OPEN + isActive 만 허용
+   * - CONFIRMED|COMPLETED|EXPIRED|CANCELED 및 isActive=false 는 거부
+   * - 미확정(SENT) 견적은 CANCELED 로 맞춤. 지정 기사 이력은 보존
+   * - 동시 취소는 claimCancel(updateMany)로 선점
+   * // 2026.08.03 정슬기 - [수정] CONFIRMED 차단·SENT 견적 처리·에러 코드 세분화
+   */
   async cancelEstimateRequest(
     estimateRequestId: number,
     customerId: string,
@@ -387,19 +413,25 @@ export const estimateRequestService = {
     return prisma.$transaction(async (tx) => {
       const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
-      if (CLOSED_STATUSES.includes(request.status)) {
-        throw new AppError("REQUEST_NOT_EDITABLE", {
-          message: "이미 종료된 견적 요청입니다.",
-        });
+      assertCancelable(request);
+
+      const canceledAt = new Date();
+      const claimed = await estimateRequestRepository.claimCancelEstimateRequest(
+        estimateRequestId,
+        canceledAt,
+        tx,
+      );
+
+      // 동시 요청으로 상태가 바뀐 경우 — 최신 상태로 재검증해 동일 에러를 반환
+      if (claimed.count === 0) {
+        const latest = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
+        assertCancelable(latest);
+        throw new AppError("ESTIMATE_REQUEST_CANCEL_NOT_ALLOWED");
       }
 
-      const canceled = await estimateRequestRepository.update(
+      await estimateRequestRepository.cancelSentEstimatesForRequest(
         estimateRequestId,
-        {
-          status: "CANCELED",
-          isActive: false,
-          canceledAt: new Date(),
-        },
+        canceledAt,
         tx,
       );
 
@@ -408,11 +440,21 @@ export const estimateRequestService = {
           estimateRequestId,
           changedBy: customerId,
           type: "CANCELED",
-          previousData: { status: request.status },
-          changedData: { status: canceled.status },
+          previousData: { status: request.status, isActive: request.isActive },
+          changedData: {
+            status: "CANCELED",
+            isActive: false,
+            canceledAt: canceledAt.toISOString(),
+          },
         },
         tx,
       );
+
+      const canceled = await estimateRequestRepository.findById(estimateRequestId, tx);
+
+      if (!canceled) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+      }
 
       return canceled;
     });

@@ -84,6 +84,19 @@ export const ERROR_CODES = {
     message: "견적이 도착한 요청은 수정할 수 없습니다.",
   },
 
+  // 2026.08.03 정슬기 - [추가] 견적 요청 취소 API 에러
+  ESTIMATE_REQUEST_ALREADY_CANCELED: {
+    status: 409,
+    code: "ESTIMATE_REQUEST_ALREADY_CANCELED",
+    message: "이미 취소된 견적 요청입니다.",
+  },
+
+  ESTIMATE_REQUEST_CANCEL_NOT_ALLOWED: {
+    status: 409,
+    code: "ESTIMATE_REQUEST_CANCEL_NOT_ALLOWED",
+    message: "현재 상태에서는 견적 요청을 취소할 수 없습니다.",
+  },
+
   MOVER_NOT_FOUND: {
     status: 404,
     code: "MOVER_NOT_FOUND",

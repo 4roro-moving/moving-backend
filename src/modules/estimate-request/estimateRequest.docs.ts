@@ -105,11 +105,27 @@ registerRouterDocs(estimateRequestRouter, {
     },
 
     "DELETE /:estimateRequestId": {
-      summary: "견적 요청 취소",
+      summary: "견적 요청 취소 (soft cancel)",
+      description: [
+        "고객이 본인의 견적 요청을 soft cancel 합니다. 레코드는 삭제하지 않습니다.",
+        "",
+        "- 인증: CUSTOMER",
+        "- 본인 요청만 취소 가능 (그 외 403)",
+        "- 취소 가능 상태: `PENDING`, `OPEN` (및 `isActive=true`)",
+        "- 취소 불가: `CONFIRMED`, `COMPLETED`, `EXPIRED`, `CANCELED`, `isActive=false`",
+        "- 반영 값: `status=CANCELED`, `isActive=false`, `canceledAt=now`",
+        "- 미확정(`SENT`) 견적은 `CANCELED`로 맞춥니다. 지정 기사 이력은 보존합니다.",
+        "- 취소 후 활성 요청이 없어져 새 견적 요청을 생성할 수 있습니다.",
+        "",
+        "기존 라우트 컨벤션상 `DELETE`를 사용합니다. hard delete가 아닙니다.",
+      ].join("\n"),
       responses: {
-        200: "취소 성공",
+        200: "취소 성공 (soft cancel)",
+        400: "잘못된 요청입니다.",
+        401: "인증이 필요합니다.",
+        403: "본인의 견적 요청이 아닙니다.",
         404: "견적 요청을 찾을 수 없습니다.",
-        409: "이미 종료된 견적 요청입니다.",
+        409: "이미 취소되었거나 취소할 수 없는 상태입니다.",
       },
     },
 

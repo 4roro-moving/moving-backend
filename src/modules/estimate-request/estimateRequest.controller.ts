@@ -95,6 +95,8 @@ export const estimateRequestController = {
 
   /**
    * DELETE /api/estimate-requests/:estimateRequestId
+   * soft cancel — status=CANCELED, isActive=false, canceledAt 설정
+   * // 2026.08.03 정슬기 - [수정] soft cancel 정책 주석 보강
    */
   cancelEstimateRequest: async (req: Request, res: Response) => {
     const { estimateRequestId } = res.locals.params as EstimateRequestIdParam;
