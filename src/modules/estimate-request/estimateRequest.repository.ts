@@ -5,6 +5,12 @@ import { prisma } from "../../lib/prisma";
 type Db = PrismaClient | Prisma.TransactionClient;
 
 /**
+ * soft cancel 허용 상태 (service assertCancelable 와 claimCancel where 가 동일 소스를 사용)
+ * // 2026.08.03 정슬기 - [추가]
+ */
+export const CANCELABLE_ESTIMATE_REQUEST_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
+
+/**
  * 견적 요청 조회에 공통으로 사용하는 select
  */
 const estimateRequestDetailSelect = {
@@ -115,16 +121,23 @@ export const estimateRequestRepository = {
   },
 
   /**
-   * 취소 가능 상태(PENDING|OPEN + isActive)인 요청만 soft cancel로 선점한다.
+   * 취소 가능 상태(PENDING|OPEN + isActive)인 본인 요청만 soft cancel로 선점한다.
    * count === 0 이면 이미 종료되었거나 동시 취소가 선점한 경우다.
    * // 2026.08.03 정슬기 - [추가]
+   * // 2026.08.03 정슬기 - [수정] customerId·CANCELABLE 상수로 선점 조건 정렬
    */
-  claimCancelEstimateRequest(estimateRequestId: number, canceledAt: Date, db: Db = prisma) {
+  claimCancelEstimateRequest(
+    estimateRequestId: number,
+    customerId: string,
+    canceledAt: Date,
+    db: Db = prisma,
+  ) {
     return db.estimateRequest.updateMany({
       where: {
         id: estimateRequestId,
+        customerId,
         isActive: true,
-        status: { in: ["PENDING", "OPEN"] },
+        status: { in: CANCELABLE_ESTIMATE_REQUEST_STATUSES },
       },
       data: {
         status: "CANCELED",

@@ -27,6 +27,14 @@ describe("assertCancelable", () => {
     );
   });
 
+  it("CANCELED + isActive=true 이더라도 ALREADY_CANCELED", () => {
+    assert.throws(
+      () => assertCancelable({ status: "CANCELED", isActive: true }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "ESTIMATE_REQUEST_ALREADY_CANCELED",
+    );
+  });
+
   it("CONFIRMED는 ESTIMATE_REQUEST_CANCEL_NOT_ALLOWED", () => {
     assert.throws(
       () => assertCancelable({ status: "CONFIRMED", isActive: true }),

@@ -4,8 +4,11 @@ import { prisma } from "../../lib/prisma";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 
-import { estimateRequestRepository } from "./estimateRequest.repository";
-import type { EstimateRequestDetail } from "./estimateRequest.repository";
+import {
+  CANCELABLE_ESTIMATE_REQUEST_STATUSES,
+  estimateRequestRepository,
+  type EstimateRequestDetail,
+} from "./estimateRequest.repository";
 import type {
   AddressInput,
   CreateEstimateRequestInput,
@@ -27,12 +30,13 @@ const MIN_EXPIRATION_HOURS = 24;
 const MS_PER_HOUR = 60 * 60 * 1000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 
-// 수정/취소가 가능한 상태 (생성 직후 OPEN, 스키마상 PENDING 임시저장도 포함)
+// 수정이 가능한 상태 (생성 직후 OPEN, 스키마상 PENDING 임시저장도 포함)
 const EDITABLE_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
 
-/** 고객이 soft cancel 가능한 요청 상태 — CONFIRMED 이상은 불가 */
+/** 고객이 soft cancel 가능한 요청 상태 — repository claim 조건과 동일 소스 */
 // 2026.08.03 정슬기 - [추가] 취소 허용 상태를 명시적으로 분리
-export const CANCELABLE_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
+// 2026.08.03 정슬기 - [수정] repository 상수와 단일화
+export const CANCELABLE_STATUSES = CANCELABLE_ESTIMATE_REQUEST_STATUSES;
 
 /**
  * 취소 가능 여부를 검증한다.
@@ -418,6 +422,7 @@ export const estimateRequestService = {
       const canceledAt = new Date();
       const claimed = await estimateRequestRepository.claimCancelEstimateRequest(
         estimateRequestId,
+        customerId,
         canceledAt,
         tx,
       );
