@@ -11,6 +11,19 @@ import { closeSocketServer, initializeSocket } from "./socket";
 let server: Server | null = null;
 let isShuttingDown = false;
 
+const closeHttpServer = (httpServer: Server): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    httpServer.close((error) => {
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      resolve();
+    });
+  });
+};
+
 /*
  * 서버 종료 시 SSE 연결과 DB 연결을 안전하게 정리한다.
  *
@@ -29,26 +42,13 @@ const shutdown = async (signal: string): Promise<void> => {
 
   logger.info(`${signal} 신호를 수신하여 서버 종료를 시작합니다.`);
 
-  notificationSseService.closeAllConnections();
-  await closeSocketServer();
+  try {
+    notificationSseService.closeAllConnections();
 
-  if (!server) {
-    await prisma.$disconnect();
+    const isHttpServerClosedBySocket = await closeSocketServer();
 
-    logger.info("Server shutdown completed.");
-
-    process.exit(0);
-  }
-
-  server.close(async (error) => {
-    if (error) {
-      logger.error("HTTP 서버 종료 중 오류가 발생했습니다.", {
-        error,
-      });
-
-      await prisma.$disconnect();
-
-      process.exit(1);
+    if (server && !isHttpServerClosedBySocket) {
+      await closeHttpServer(server);
     }
 
     await prisma.$disconnect();
@@ -57,7 +57,15 @@ const shutdown = async (signal: string): Promise<void> => {
     logger.info("Server shutdown completed.");
 
     process.exit(0);
-  });
+  } catch (error) {
+    logger.error("서버 종료 중 오류가 발생했습니다.", {
+      error,
+    });
+
+    await prisma.$disconnect();
+
+    process.exit(1);
+  }
 };
 
 async function bootstrap() {

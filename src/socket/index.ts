@@ -41,18 +41,24 @@ export const initializeSocket = (httpServer: HttpServer): SocketIOServer => {
   return socketServer;
 };
 
-export const closeSocketServer = (): Promise<void> => {
+export const closeSocketServer = (): Promise<boolean> => {
   if (!io) {
-    return Promise.resolve();
+    return Promise.resolve(false);
   }
 
   const socketServer = io;
 
-  return new Promise((resolve) => {
-    socketServer.close(() => {
-      logger.info("Socket.IO server closed successfully.");
+  return new Promise((resolve, reject) => {
+    socketServer.close((error) => {
       io = null;
-      resolve();
+
+      if (error) {
+        reject(error);
+        return;
+      }
+
+      logger.info("Socket.IO server closed successfully.");
+      resolve(true);
     });
   });
 };
