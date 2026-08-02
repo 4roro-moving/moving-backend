@@ -6,6 +6,7 @@ import logger from "./config/logger";
 import { startNotificationCleanupJob } from "./jobs/notification-cleanup.job";
 import { prisma } from "./lib/prisma";
 import { notificationSseService } from "./modules/notification/notification-sse.service";
+import { initializeSocket } from "./socket";
 
 let server: Server | null = null;
 let isShuttingDown = false;
@@ -75,6 +76,8 @@ async function bootstrap() {
        */
       startNotificationCleanupJob();
     });
+
+    initializeSocket(server);
   } catch (error: unknown) {
     if (error instanceof Error) {
       logger.error(error);
