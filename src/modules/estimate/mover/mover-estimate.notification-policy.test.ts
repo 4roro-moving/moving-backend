@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { getRejectionNotificationExpiresAt } from "./estimate.notification-policy";
+import { getRejectionNotificationExpiresAt } from "./mover-estimate.notification-policy";
 
 describe("반려 알림 만료 정책", () => {
   it("알림 생성 시점부터 7일 후에 만료합니다.", () => {

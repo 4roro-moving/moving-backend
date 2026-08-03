@@ -2,12 +2,12 @@ import { Router } from "express";
 import { asyncHandler } from "../../utils/async-handler.util";
 import { authenticate, authorize } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
-import { estimateController } from "../estimate/estimate.controller";
+import { customerEstimateController } from "../estimate/customer/customer-estimate.controller";
 import {
   confirmReceivedEstimateParamSchema,
   receivedEstimateDetailParamSchema,
   receivedEstimateRequestIdParamSchema,
-} from "../estimate/estimate.validator";
+} from "../estimate/customer/customer-estimate.validator";
 import { estimateRequestController } from "./estimateRequest.controller";
 import {
   createEstimateRequestSchema,
@@ -58,7 +58,7 @@ estimateRequestRouter
 estimateRequestRouter.get(
   "/:estimateRequestId/estimates",
   validate({ params: receivedEstimateRequestIdParamSchema }),
-  estimateController.getReceivedEstimateList,
+  asyncHandler(customerEstimateController.getReceivedEstimateList),
 );
 
 /*
@@ -68,7 +68,7 @@ estimateRequestRouter.get(
 estimateRequestRouter.get(
   "/:estimateRequestId/estimates/:estimateId",
   validate({ params: receivedEstimateDetailParamSchema }),
-  estimateController.getReceivedEstimateDetail,
+  asyncHandler(customerEstimateController.getReceivedEstimateDetail),
 );
 
 /*
@@ -78,7 +78,7 @@ estimateRequestRouter.get(
 estimateRequestRouter.patch(
   "/:estimateRequestId/estimates/:estimateId/confirm",
   validate({ params: confirmReceivedEstimateParamSchema }),
-  estimateController.confirmReceivedEstimate,
+  asyncHandler(customerEstimateController.confirmReceivedEstimate),
 );
 
 estimateRequestRouter.post(
