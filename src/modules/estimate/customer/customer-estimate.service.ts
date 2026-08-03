@@ -440,11 +440,24 @@ export const receivedEstimateService = {
         tx,
       );
 
+      const notification = await notificationService.createNotification(
+        {
+          userId: confirmedEstimate.mover.id,
+          type: "ESTIMATE_CONFIRMED",
+          title: "견적 확정",
+          content: `${estimate.estimateRequest.customer.name}님의`,
+          linkUrl: "/estimate/received-requests",
+          expiresAt: getKstEndOfDay(estimate.estimateRequest.moveDate),
+        },
+        tx,
+      );
+
       //확정 응답 형태 가공
       return {
         estimateRequest: confirmedEstimateRequest,
         moveDate: estimate.estimateRequest.moveDate,
         customerName: estimate.estimateRequest.customer.name,
+        notification,
         estimate: {
           id: confirmedEstimate.id,
           price: confirmedEstimate.price,
@@ -461,15 +474,10 @@ export const receivedEstimateService = {
       };
     });
 
-    await notificationService.createNotification({
-      userId: result.estimate.mover.id,
-      type: "ESTIMATE_CONFIRMED",
-      title: "견적 확정",
-      content: `${result.customerName}님의`,
-      linkUrl: "/estimate/received-requests",
-      expiresAt: getKstEndOfDay(result.moveDate),
-    });
+    notificationService.sendNotification(result.estimate.mover.id, result.notification);
 
-    return result;
+    const { notification: _, ...response } = result;
+
+    return response;
   },
 };

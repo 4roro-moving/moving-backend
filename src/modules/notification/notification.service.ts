@@ -6,6 +6,7 @@ import { runTransaction } from "../../utils/transaction";
 import { notificationRepository } from "./notification.repository";
 import { notificationSseService } from "./notification-sse.service";
 
+import type { Prisma } from "@prisma/client";
 import type {
   CreateNotificationInput,
   NotificationItem,
@@ -179,12 +180,15 @@ const readAllNotifications = async (userId: string): Promise<ReadAllNotification
  * 사용자가 SSE에 연결되어 있지 않더라도
  * DB에는 알림이 정상적으로 저장된다.
  */
-const createNotification = async (input: CreateNotificationInput): Promise<NotificationItem> => {
-  const notification = await notificationRepository.create(input);
+const createNotification = async (
+  input: CreateNotificationInput,
+  tx: Prisma.TransactionClient,
+): Promise<NotificationItem> => {
+  return notificationRepository.create(input, tx);
+};
 
-  notificationSseService.sendNotification(input.userId, notification);
-
-  return notification;
+const sendNotification = (userId: string, notification: NotificationItem): void => {
+  notificationSseService.sendNotification(userId, notification);
 };
 
 /*
@@ -214,5 +218,6 @@ export const notificationService = {
   readNotification,
   readAllNotifications,
   createNotification,
+  sendNotification,
   cleanupExpiredNotifications,
 };
