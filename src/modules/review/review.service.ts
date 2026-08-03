@@ -224,7 +224,7 @@ export const reviewService = {
 
     try {
       // 리뷰 생성과 기사님 리뷰 통계 갱신은 하나의 작성 유스케이스이므로 Service에서 트랜잭션 경계를 관리
-      const review = await runTransaction(
+      const result = await runTransaction(
         async (tx) => {
           const createdReview = await reviewRepository.createReview(
             {
@@ -253,7 +253,22 @@ export const reviewService = {
             tx,
           );
 
-          return createdReview;
+          const notification = await notificationService.createNotification(
+            {
+              userId: estimate.moverId,
+              type: "REVIEW_RECEIVED",
+              title: "리뷰 도착",
+              content: "고객님이",
+              linkUrl: null,
+              expiresAt: null,
+            },
+            tx,
+          );
+
+          return {
+            review: createdReview,
+            notification,
+          };
         },
         {
           // 같은 기사님에게 여러 리뷰가 동시에 등록될 때 통계 재계산 결과가 덮어써지는 것을 방지
@@ -261,17 +276,10 @@ export const reviewService = {
         },
       );
 
-      await notificationService.createNotification({
-        userId: estimate.moverId,
-        type: "REVIEW_RECEIVED",
-        title: "리뷰 도착",
-        content: "고객님이",
-        linkUrl: null,
-        expiresAt: null,
-      });
+      notificationService.sendNotification(estimate.moverId, result.notification);
 
       return {
-        review,
+        review: result.review,
       };
     } catch (error) {
       if (isReviewEstimateUniqueConstraintError(error)) {
