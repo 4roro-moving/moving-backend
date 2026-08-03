@@ -256,23 +256,26 @@ export const moverEstimateRequestService = {
         tx,
       );
 
+      const notification = await notificationService.createNotification(
+        {
+          userId: estimateRequest.customerId,
+          type: "ESTIMATE_RECEIVED",
+          title: "견적 도착",
+          content: `${profile.nickname} 기사님의 ${MOVE_TYPE_LABEL[estimateRequest.moveType]} 견적`,
+          linkUrl: null,
+          expiresAt: estimateRequest.expiresAt,
+        },
+        tx,
+      );
+
       return {
         estimate,
         customerId: estimateRequest.customerId,
-        moverNickname: profile.nickname,
-        moveType: estimateRequest.moveType,
-        expiresAt: estimateRequest.expiresAt,
+        notification,
       };
     });
 
-    await notificationService.createNotification({
-      userId: result.customerId,
-      type: "ESTIMATE_RECEIVED",
-      title: "견적 도착",
-      content: `${result.moverNickname} 기사님의 ${MOVE_TYPE_LABEL[result.moveType]} 견적`,
-      linkUrl: null,
-      expiresAt: result.expiresAt,
-    });
+    notificationService.sendNotification(result.customerId, result.notification);
 
     return result.estimate;
   },
@@ -352,22 +355,27 @@ export const moverEstimateRequestService = {
         tx,
       );
 
+      const notificationCreatedAt = new Date();
+      const notification = await notificationService.createNotification(
+        {
+          userId: estimateRequest.customerId,
+          type: "ESTIMATE_REQUEST_REJECTED",
+          title: "견적 요청 반려",
+          content: profile.nickname,
+          linkUrl: null,
+          expiresAt: getRejectionNotificationExpiresAt(notificationCreatedAt),
+        },
+        tx,
+      );
+
       return {
         rejection,
         customerId: estimateRequest.customerId,
-        moverNickname: profile.nickname,
+        notification,
       };
     });
 
-    const notificationCreatedAt = new Date();
-    await notificationService.createNotification({
-      userId: result.customerId,
-      type: "ESTIMATE_REQUEST_REJECTED",
-      title: "견적 요청 반려",
-      content: result.moverNickname,
-      linkUrl: null,
-      expiresAt: getRejectionNotificationExpiresAt(notificationCreatedAt),
-    });
+    notificationService.sendNotification(result.customerId, result.notification);
 
     return result.rejection;
   },
