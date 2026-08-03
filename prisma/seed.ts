@@ -11,6 +11,7 @@ import { seedEstimateData } from "./seeds/seedEstimateData.js";
 import { seedMovers } from "./seeds/seedMovers.js";
 import { seedRegions } from "./seeds/seedRegions.js";
 import { seedReviews } from "./seeds/seedReviews.js";
+import { seedTerms } from "./seeds/seedTerms.js";
 
 const prisma = new PrismaClient();
 
@@ -49,6 +50,10 @@ async function main(): Promise<void> {
   console.log("");
 
   await seedAdminContents(prisma, adminIds);
+
+  console.log("");
+
+  await seedTerms(prisma, adminIds);
 
   console.log("");
   console.log("🎉 시드 데이터 생성이 완료되었습니다.");
