@@ -1,16 +1,17 @@
 import type { NextFunction, Request, Response } from "express";
 
+import { env } from "../config/env";
 import { AppError } from "../lib/app-error";
 
-const allowedOrigins = [process.env.CLIENT_URL, process.env.CLIENT_DEV_URL].filter(
-  (origin): origin is string => Boolean(origin),
+const allowedOrigins = [env.CLIENT_URL, env.CLIENT_DEV_URL].filter((origin): origin is string =>
+  Boolean(origin),
 );
 
 export const csrfProtection = (req: Request, _res: Response, next: NextFunction): void => {
   const origin = req.get("origin");
 
   if (!origin) {
-    if (process.env.NODE_ENV !== "production") {
+    if (env.NODE_ENV !== "production") {
       next();
       return;
     }
