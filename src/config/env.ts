@@ -11,6 +11,16 @@ const envSchema = z.object({
     error: "DATABASE_URL is required",
   }),
 
+  CLIENT_URL: z.url({
+    error: "CLIENT_URL must be a valid URL",
+  }),
+
+  CLIENT_DEV_URL: z
+    .url({
+      error: "CLIENT_DEV_URL must be a valid URL",
+    })
+    .optional(),
+
   LOG_LEVEL: z.enum(["error", "warn", "info", "http", "verbose", "debug", "silly"]).default("info"),
 
   GOOGLE_CLIENT_ID: z.string().min(1, {
