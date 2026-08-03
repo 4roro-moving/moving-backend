@@ -36,6 +36,21 @@ interface FindManyByUserIdInput {
 }
 
 /*
+ * 역할별 대량 알림 수신자를 cursor 방식으로 조회할 때
+ * 필요한 값을 정의한다.
+ *
+ * cursorId가 없는 경우 첫 번째 대상부터 조회하고,
+ * cursorId가 있으면 해당 사용자 다음부터 조회한다.
+ *
+ * take는 한 번에 조회할 최대 사용자 수이다.
+ */
+interface FindRecipientIdsByRoleInput {
+  role: NoticeAudience;
+  cursorId?: string;
+  take: number;
+}
+
+/*
  * 사용자의 유효한 알림 목록과 전체 개수를 조회한다.
  *
  * expiresAt이 null인 무기한 알림과
@@ -261,7 +276,8 @@ async function create(input: CreateNotificationInput, db: DbClient = prisma) {
 }
 
 /*
- * 역할별 대량 알림 발송 대상 사용자 ID를 조회한다.
+ * 역할별 대량 알림 발송 대상 사용자 ID를
+ * cursor 방식으로 일정 개수씩 조회한다.
  *
  * CUSTOMER는 활성 고객만 조회하고,
  * MOVER는 활성 기사만 조회한다.
@@ -271,9 +287,15 @@ async function create(input: CreateNotificationInput, db: DbClient = prisma) {
  *
  * 비활성화되었거나 탈퇴 처리된 사용자는
  * 알림 발송 대상에서 제외한다.
+ *
+ * 사용자 ID를 오름차순으로 정렬하고,
+ * cursorId가 전달된 경우 해당 사용자 다음부터 조회한다.
+ *
+ * 전체 사용자 ID를 한 번에 메모리에 올리지 않고
+ * take만큼 나누어 처리할 수 있도록 한다.
  */
 async function findRecipientIdsByRole(
-  role: NoticeAudience,
+  input: FindRecipientIdsByRoleInput,
   db: DbClient = prisma,
 ): Promise<string[]> {
   const where: Prisma.UserWhereInput = {
@@ -281,9 +303,9 @@ async function findRecipientIdsByRole(
     deletedAt: null,
   };
 
-  if (role === "CUSTOMER") {
+  if (input.role === "CUSTOMER") {
     where.role = "CUSTOMER";
-  } else if (role === "MOVER") {
+  } else if (input.role === "MOVER") {
     where.role = "MOVER";
   } else {
     where.role = {
@@ -296,6 +318,16 @@ async function findRecipientIdsByRole(
     select: {
       id: true,
     },
+    orderBy: {
+      id: "asc",
+    },
+    take: input.take,
+    ...(input.cursorId !== undefined && {
+      cursor: {
+        id: input.cursorId,
+      },
+      skip: 1,
+    }),
   });
 
   return users.map((user) => user.id);

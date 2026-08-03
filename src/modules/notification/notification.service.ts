@@ -7,6 +7,7 @@ import { notificationRepository } from "./notification.repository";
 import { notificationSseService } from "./notification-sse.service";
 
 import type {
+  CreateBulkNotificationInput,
   CreateNotificationInput,
   NotificationItem,
   NotificationListResponse,
@@ -26,6 +27,7 @@ type NotificationDbClient = Parameters<typeof notificationRepository.create>[1];
 
 const CHAT_READ_VISIBILITY_DAYS = 3;
 const NOTIFICATION_RETENTION_DAYS = 90;
+const BULK_NOTIFICATION_BATCH_SIZE = 500;
 
 /*
  * 전달받은 날짜를 기준으로 원하는 일수만큼 더하거나 뺀
@@ -195,6 +197,88 @@ const createNotification = async (
 };
 
 /*
+ * 역할에 해당하는 활성 사용자에게
+ * 동일한 알림을 일정 개수씩 나누어 생성한다.
+ *
+ * 전체 사용자 ID를 한 번에 조회하지 않고,
+ * 마지막으로 조회한 사용자 ID를 cursor로 사용하여
+ * BULK_NOTIFICATION_BATCH_SIZE만큼 반복 조회한다.
+ *
+ * 각 배치에서는 Prisma createMany를 사용하여
+ * 사용자별 알림을 한 번에 저장한다.
+ *
+ * 해당 배치의 DB 저장이 성공한 이후에는
+ * 현재 SSE에 연결된 대상 사용자에게
+ * notification-refresh 이벤트를 전송한다.
+ *
+ * 각 배치는 별도의 DB 작업으로 처리되므로,
+ * 중간 배치에서 실패하면 이미 완료된 이전 배치는 유지될 수 있다.
+ *
+ * 현재는 중복 방지를 위한 원본 식별자와 복합 unique 제약이 없으므로,
+ * 실패 후 전체 작업을 재실행하면 일부 알림이 중복 생성될 수 있다.
+ *
+ * 반환값은 실제로 생성된 전체 알림 개수이다.
+ */
+const createBulkNotification = async (input: CreateBulkNotificationInput): Promise<number> => {
+  let cursorId: string | undefined;
+  let createdCount = 0;
+
+  while (true) {
+    const recipientIds = await notificationRepository.findRecipientIdsByRole({
+      role: input.role,
+      take: BULK_NOTIFICATION_BATCH_SIZE,
+      ...(cursorId !== undefined && {
+        cursorId,
+      }),
+    });
+
+    if (recipientIds.length === 0) {
+      break;
+    }
+
+    const notifications: CreateNotificationInput[] = recipientIds.map((userId) => ({
+      userId,
+      type: input.type,
+      title: input.title,
+      content: input.content,
+      expiresAt: input.expiresAt,
+      ...(input.linkUrl !== undefined && {
+        linkUrl: input.linkUrl,
+      }),
+    }));
+
+    const batchCreatedCount = await notificationRepository.createMany(notifications);
+
+    createdCount += batchCreatedCount;
+
+    /*
+     * 해당 배치의 알림 저장이 성공한 이후에만
+     * 현재 SSE에 연결된 대상 사용자에게
+     * 알림 목록 갱신 이벤트를 전송한다.
+     */
+    notificationSseService.sendNotificationRefresh(recipientIds);
+
+    const lastRecipientId = recipientIds[recipientIds.length - 1];
+
+    if (lastRecipientId === undefined) {
+      break;
+    }
+
+    cursorId = lastRecipientId;
+
+    /*
+     * 조회된 사용자 수가 배치 크기보다 작으면
+     * 마지막 배치이므로 다음 조회 없이 종료한다.
+     */
+    if (recipientIds.length < BULK_NOTIFICATION_BATCH_SIZE) {
+      break;
+    }
+  }
+
+  return createdCount;
+};
+
+/*
  * DB에 저장된 알림을 SSE로 실시간 전송한다.
  *
  * 트랜잭션 내부에서 호출하지 않고,
@@ -234,6 +318,7 @@ export const notificationService = {
   readNotification,
   readAllNotifications,
   createNotification,
+  createBulkNotification,
   sendNotification,
   cleanupExpiredNotifications,
 };
