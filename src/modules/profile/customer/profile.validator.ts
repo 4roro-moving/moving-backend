@@ -62,6 +62,12 @@ const serviceTypesSchema = z
     message: "중복된 이용 서비스를 선택할 수 없습니다.",
   });
 
+/*
+ * 고객 프로필 등록 요청
+ *
+ * phone은 기존 User.phone이 없는 경우에만
+ * Service에서 필수 여부를 판단한다.
+ */
 export const createProfileSchema = z.strictObject({
   phone: phoneSchema.optional(),
   imageUrl: imageUrlSchema.optional(),
@@ -69,7 +75,15 @@ export const createProfileSchema = z.strictObject({
   serviceTypes: serviceTypesSchema,
 });
 
-export const updateProfileSchema = z
+/*
+ * 고객 기본정보 수정 요청
+ *
+ * User 테이블:
+ * - name
+ * - phone
+ * - password
+ */
+export const updateBasicInfoSchema = z
   .strictObject({
     name: nameSchema.optional(),
     phone: phoneSchema.optional(),
@@ -77,10 +91,6 @@ export const updateProfileSchema = z
     currentPassword: passwordSchema.optional(),
     newPassword: passwordSchema.optional(),
     newPasswordConfirm: passwordSchema.optional(),
-
-    imageUrl: imageUrlSchema.nullable().optional(),
-    regionIds: regionIdsSchema.optional(),
-    serviceTypes: serviceTypesSchema.optional(),
   })
   .superRefine((data, ctx) => {
     const hasCurrentPassword = data.currentPassword !== undefined;
@@ -131,19 +141,38 @@ export const updateProfileSchema = z
       }
     }
 
-    const hasUpdateField =
-      data.name !== undefined ||
-      data.phone !== undefined ||
-      data.imageUrl !== undefined ||
-      data.regionIds !== undefined ||
-      data.serviceTypes !== undefined ||
-      isPasswordChangeRequested;
+    const hasBasicInfoUpdate =
+      data.name !== undefined || data.phone !== undefined || isPasswordChangeRequested;
 
-    if (!hasUpdateField) {
+    if (!hasBasicInfoUpdate) {
       ctx.addIssue({
         code: "custom",
         path: [],
-        message: "수정할 정보를 한 개 이상 입력해주세요.",
+        message: "수정할 기본정보를 한 개 이상 입력해주세요.",
       });
     }
   });
+
+/*
+ * 고객 프로필 정보 수정 요청
+ *
+ * CustomerProfile 및 관계 테이블:
+ * - imageUrl
+ * - regionIds
+ * - serviceTypes
+ */
+export const updateProfileSchema = z
+  .strictObject({
+    imageUrl: imageUrlSchema.nullable().optional(),
+    regionIds: regionIdsSchema.optional(),
+    serviceTypes: serviceTypesSchema.optional(),
+  })
+  .refine(
+    (data) =>
+      data.imageUrl !== undefined ||
+      data.regionIds !== undefined ||
+      data.serviceTypes !== undefined,
+    {
+      message: "수정할 프로필 정보를 한 개 이상 입력해주세요.",
+    },
+  );
