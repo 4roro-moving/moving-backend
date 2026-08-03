@@ -3,6 +3,7 @@ import type { EstimateRequestStatus, MoveType, NotificationType, Prisma } from "
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
+import { lockEstimateRequestForUpdate } from "../../utils/estimate-request-lock.util";
 
 import {
   CANCELABLE_ESTIMATE_REQUEST_STATUSES,
@@ -408,13 +409,21 @@ export const estimateRequestService = {
    * - CONFIRMED|COMPLETED|EXPIRED|CANCELED 및 isActive=false 는 거부
    * - 미확정(SENT) 견적은 CANCELED 로 맞춤. 지정 기사 이력은 보존
    * - 동시 취소는 claimCancel(updateMany)로 선점
+   * - sendEstimate 와의 교차는 요청 행 FOR UPDATE 로 직렬화
    * // 2026.08.03 정슬기 - [수정] CONFIRMED 차단·SENT 견적 처리·에러 코드 세분화
+   * // 2026.08.03 정슬기 - [수정] 견적 전송과 원자적 직렬화를 위한 행 잠금
    */
   async cancelEstimateRequest(
     estimateRequestId: number,
     customerId: string,
   ): Promise<EstimateRequestDetail> {
     return prisma.$transaction(async (tx) => {
+      const locked = await lockEstimateRequestForUpdate(tx, estimateRequestId);
+
+      if (!locked) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+      }
+
       const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
       assertCancelable(request);

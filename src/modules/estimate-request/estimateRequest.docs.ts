@@ -117,6 +117,7 @@ registerRouterDocs(estimateRequestRouter, {
         "- 미확정(`SENT`) 견적은 `CANCELED`로 맞춥니다. 지정 기사 이력은 보존합니다.",
         "- 취소 후 활성 요청이 없어져 새 견적 요청을 생성할 수 있습니다.",
         "- 동시 취소는 `updateMany` 선점으로 한 번만 성공합니다.",
+        "- 기사 견적 전송(`sendEstimate`)과 교차 시 요청 행 `FOR UPDATE`로 직렬화합니다.",
         "",
         "기존 라우트 컨벤션상 `DELETE`를 사용합니다. hard delete가 아닙니다.",
         "",

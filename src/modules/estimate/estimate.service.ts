@@ -2,6 +2,7 @@
 
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
+import { lockEstimateRequestForUpdate } from "../../utils/estimate-request-lock.util";
 import { runTransaction } from "../../utils/transaction";
 import { notificationService } from "../notification/notification.service";
 import { getRejectionNotificationExpiresAt } from "./estimate.notification-policy";
@@ -207,6 +208,7 @@ export const moverEstimateRequestService = {
   },
 
   //견적 제안
+  // 2026.08.03 정슬기 - [수정] 요청 행 FOR UPDATE 후 상태 재검증 (취소와 교차 시 SENT 잔존 방지)
   async sendEstimate({ estimateRequestId, moverId, input }: SendEstimateParams) {
     const result = await runTransaction(async (tx) => {
       const profile = await moverEstimateRequestRepository.findMoverProfile(moverId, tx);
@@ -216,7 +218,14 @@ export const moverEstimateRequestService = {
         throw new AppError("MOVER_NOT_FOUND");
       }
 
-      //견적 요청 존재 확인
+      // 취소 트랜잭션과 직렬화 — 잠금 후 OPEN 여부를 다시 확인한다.
+      const locked = await lockEstimateRequestForUpdate(tx, estimateRequestId);
+
+      if (!locked) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+      }
+
+      //견적 요청 존재 확인 (잠금 이후 최신 상태)
       const estimateRequest =
         await moverEstimateRequestRepository.findEstimateRequestForMoverAction(
           estimateRequestId,
