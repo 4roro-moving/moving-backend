@@ -237,21 +237,29 @@ enum NoticeAudience {
 /// 활동 로그의 동작 종류
 ///
 /// ActivityLog.action 에 저장되며 targetType 과 조합해
-/// "리뷰 삭제", "공지 수정" 같은 표현을 만듭니다.
+/// "리뷰 삭제", "공지 수정", "리뷰 숨김" 같은 표현을 만듭니다.
+/// HIDE / UNHIDE 는 관리자 콘텐츠 모더레이션(숨김/복구)에 사용합니다.
+/// HIDE 기록 시 memo(처리 사유)를 필수로 남깁니다.
 enum LogAction {
   CREATE
   UPDATE
   DELETE
+  HIDE
+  UNHIDE
 }
 
 /// 활동 로그 대상 테이블
 ///
 /// 로그로 남길 가치가 있는 도메인만 열거합니다.
 /// 알림/채팅/토큰처럼 양이 많고 추적 가치가 낮은 테이블은 제외했습니다.
+/// RESIDENCE_REVIEW / SHARING_POST 는 콘텐츠 관리(숨김/복구) 이력을 위해 추가합니다.
+/// (해당 테이블은 추후 생성 예정이지만, 로그 enum 은 먼저 확장합니다.)
 enum LogTargetType {
   USER
   MOVER_PROFILE
   REVIEW
+  RESIDENCE_REVIEW
+  SHARING_POST
   ESTIMATE_REQUEST
   ESTIMATE
   NOTICE
@@ -1374,6 +1382,7 @@ model Faq {
 /// 변경 상세는 저장하지 않습니다. targetType + action 조합으로
 /// "리뷰 수정" 수준의 표현이 가능하고, 상세를 남기면 용량이 빠르게 커집니다.
 /// 사유가 필요한 관리자 조치에만 memo 를 사용합니다.
+/// 콘텐츠 숨김(HIDE) 시 memo 에 처리 사유를 필수로 저장합니다.
 ///
 /// targetId 는 대상 테이블마다 PK 타입이 달라 String 으로 둡니다.
 /// 외래키가 없으므로 대상이 삭제되면 로그만 남습니다.
@@ -1384,13 +1393,13 @@ model ActivityLog {
   actorId    String        @map("actor_id") @db.Uuid
   /// 조회 시 관리자/일반 구분에 사용합니다. 행위 시점의 역할을 보존합니다.
   actorRole  UserRole      @map("actor_role")
-  /// 동작 종류(생성/수정/삭제).
+  /// 동작 종류(생성/수정/삭제/숨김/복구).
   action     LogAction
   /// 대상 테이블 종류.
   targetType LogTargetType @map("target_type")
   /// 대상 식별자. 대상별 PK 타입이 달라 String 으로 저장합니다.
   targetId   String        @map("target_id")
-  /// 관리자 조치 사유 등 필요한 경우에만 기록합니다.
+  /// 관리자 조치 사유 등 필요한 경우에만 기록합니다. (HIDE 시 필수)
   memo       String?       @db.Text
 
   /// 행위자 관계. 계정 삭제 시 함께 삭제(Cascade).
