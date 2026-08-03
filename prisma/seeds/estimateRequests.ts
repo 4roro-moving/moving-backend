@@ -66,6 +66,46 @@ const BASE_ESTIMATE_REQUESTS = [
     status: "OPEN",
     isActive: true,
   },
+  {
+    key: "customer1-pending-request",
+    customerEmail: "customer1@test.com",
+    moveType: "SMALL",
+    moveDateOffsetDays: 18,
+    expiresInDays: 7,
+
+    fromRegion: "서울",
+    fromZipCode: "07327",
+    fromAddress: "서울특별시 영등포구 여의대로 108",
+    fromDetailAddress: "1505호",
+
+    toRegion: "서울",
+    toZipCode: "03925",
+    toAddress: "서울특별시 마포구 월드컵북로 396",
+    toDetailAddress: "702호",
+
+    status: "PENDING",
+    isActive: true,
+  },
+  {
+    key: "customer3-pending-office-request",
+    customerEmail: "customer3@test.com",
+    moveType: "OFFICE",
+    moveDateOffsetDays: 25,
+    expiresInDays: 9,
+
+    fromRegion: "경기",
+    fromZipCode: "13487",
+    fromAddress: "경기도 성남시 분당구 대왕판교로 660",
+    fromDetailAddress: "유스페이스1 A동 5층",
+
+    toRegion: "서울",
+    toZipCode: "06168",
+    toAddress: "서울특별시 강남구 삼성로 511",
+    toDetailAddress: "3층 301호",
+
+    status: "PENDING",
+    isActive: true,
+  },
 ] as const;
 
 const REVIEW_ESTIMATE_REQUESTS = toReviewEstimateRequests();
