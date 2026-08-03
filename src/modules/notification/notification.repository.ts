@@ -51,6 +51,7 @@ interface FindRecipientIdsByRoleInput {
   role: NoticeAudience;
   cursorId?: string;
   take: number;
+  snapshotAt: Date;
 }
 
 /*
@@ -295,6 +296,9 @@ async function create(input: CreateNotificationInput, db: DbClient = prisma) {
  * 비활성화되었거나 탈퇴 처리된 사용자는
  * 알림 발송 대상에서 제외한다.
  *
+ * snapshotAt 이전에 생성된 사용자만 조회하여
+ * 배치 시작 이후 가입한 사용자는 이번 발송 대상에서 제외한다.
+ *
  * 사용자 ID를 오름차순으로 정렬하고,
  * cursorId가 전달된 경우 해당 사용자 다음부터 조회한다.
  *
@@ -308,6 +312,9 @@ async function findRecipientIdsByRole(
   const where: Prisma.UserWhereInput = {
     isActive: true,
     deletedAt: null,
+    createdAt: {
+      lte: input.snapshotAt,
+    },
   };
 
   if (input.role === "CUSTOMER") {

@@ -200,6 +200,9 @@ const createNotification = async (
  * 역할에 해당하는 활성 사용자에게
  * 동일한 알림을 일정 개수씩 나누어 생성한다.
  *
+ * 대량 알림 작업을 시작할 때 snapshotAt을 한 번 생성하고,
+ * 해당 시각 이전에 가입한 사용자만 전체 배치의 대상으로 고정한다.
+ *
  * 전체 사용자 ID를 한 번에 조회하지 않고,
  * 마지막으로 조회한 사용자 ID를 cursor로 사용하여
  * BULK_NOTIFICATION_BATCH_SIZE만큼 반복 조회한다.
@@ -215,7 +218,7 @@ const createNotification = async (
  * 동일한 대량 알림 작업이 재실행되더라도
  * 이미 생성된 사용자 알림은 중복 저장하지 않는다.
  *
- * 해당 배치의 DB 저장이 성공한 이후에는
+ * 해당 배치에서 실제로 생성된 알림이 있을 때만
  * 현재 SSE에 연결된 대상 사용자에게
  * notification-refresh 이벤트를 전송한다.
  *
@@ -229,6 +232,15 @@ const createNotification = async (
  * 실제로 생성된 전체 알림 개수이다.
  */
 const createBulkNotification = async (input: CreateBulkNotificationInput): Promise<number> => {
+  /*
+   * 대량 알림 작업이 시작된 시점을 기준으로
+   * 이번 발송 대상 사용자 집합을 고정한다.
+   *
+   * 배치 처리 중 새로 가입한 사용자는
+   * 이번 발송 대상에서 제외된다.
+   */
+  const snapshotAt = new Date();
+
   let cursorId: string | undefined;
   let createdCount = 0;
 
@@ -236,6 +248,7 @@ const createBulkNotification = async (input: CreateBulkNotificationInput): Promi
     const recipientIds = await notificationRepository.findRecipientIdsByRole({
       role: input.role,
       take: BULK_NOTIFICATION_BATCH_SIZE,
+      snapshotAt,
       ...(cursorId !== undefined && {
         cursorId,
       }),
@@ -262,11 +275,15 @@ const createBulkNotification = async (input: CreateBulkNotificationInput): Promi
     createdCount += batchCreatedCount;
 
     /*
-     * 해당 배치의 DB 저장이 성공한 이후에만
-     * 현재 SSE에 연결된 대상 사용자에게
-     * 알림 목록 갱신 이벤트를 전송한다.
+     * skipDuplicates로 모두 건너뛴 배치는
+     * 불필요한 클라이언트 refetch를 막기 위해 SSE를 전송하지 않는다.
+     *
+     * 실제로 새 알림이 insert된 배치만
+     * 현재 SSE에 연결된 대상 사용자에게 갱신 이벤트를 전송한다.
      */
-    notificationSseService.sendNotificationRefresh(recipientIds);
+    if (batchCreatedCount > 0) {
+      notificationSseService.sendNotificationRefresh(recipientIds);
+    }
 
     const lastRecipientId = recipientIds[recipientIds.length - 1];
 
