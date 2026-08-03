@@ -164,6 +164,30 @@ export const estimateRequestRepository = {
     });
   },
 
+  /**
+   * 취소 알림 대상: 아직 SENT 인 견적을 보낸 기사 ID 목록
+   * (cancelSentEstimates 호출 전에 조회해야 한다)
+   * // 2026.08.03 정슬기 - [추가]
+   */
+  async findSentEstimateMoverIds(estimateRequestId: number, db: Db = prisma): Promise<string[]> {
+    const estimates = await db.estimate.findMany({
+      where: {
+        estimateRequestId,
+        status: "SENT",
+      },
+      select: { moverId: true },
+    });
+
+    return estimates.map((estimate) => estimate.moverId);
+  },
+
+  findCustomerName(customerId: string, db: Db = prisma) {
+    return db.user.findUnique({
+      where: { id: customerId },
+      select: { name: true },
+    });
+  },
+
   async findManyByCustomerId(
     params: {
       customerId: string;

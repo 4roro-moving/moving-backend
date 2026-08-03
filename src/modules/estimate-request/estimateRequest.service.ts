@@ -1,9 +1,11 @@
 import type { EstimateRequestStatus, MoveType, NotificationType, Prisma } from "@prisma/client";
 
+import logger from "../../config/logger";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { lockEstimateRequestForUpdate } from "../../utils/estimate-request-lock.util";
+import { notificationService } from "../notification/notification.service";
 
 import {
   CANCELABLE_ESTIMATE_REQUEST_STATUSES,
@@ -410,14 +412,16 @@ export const estimateRequestService = {
    * - 미확정(SENT) 견적은 CANCELED 로 맞춤. 지정 기사 이력은 보존
    * - 동시 취소는 claimCancel(updateMany)로 선점
    * - sendEstimate 와의 교차는 요청 행 FOR UPDATE 로 직렬화
+   * - SENT·지정 기사에게 ESTIMATE_REQUEST_CANCELED 알림 (커밋 후, 실패 격리)
    * // 2026.08.03 정슬기 - [수정] CONFIRMED 차단·SENT 견적 처리·에러 코드 세분화
    * // 2026.08.03 정슬기 - [수정] 견적 전송과 원자적 직렬화를 위한 행 잠금
+   * // 2026.08.03 정슬기 - [추가] 취소 알림 연결
    */
   async cancelEstimateRequest(
     estimateRequestId: number,
     customerId: string,
   ): Promise<EstimateRequestDetail> {
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const locked = await lockEstimateRequestForUpdate(tx, estimateRequestId);
 
       if (!locked) {
@@ -427,6 +431,18 @@ export const estimateRequestService = {
       const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
       assertCancelable(request);
+
+      // cancelSentEstimates 전에 SENT 기사 ID를 확보한다
+      const sentMoverIds = await estimateRequestRepository.findSentEstimateMoverIds(
+        estimateRequestId,
+        tx,
+      );
+      const notifyMoverIds = [
+        ...new Set([...sentMoverIds, ...request.designatedMovers.map((item) => item.moverId)]),
+      ];
+
+      const customer = await estimateRequestRepository.findCustomerName(customerId, tx);
+      const customerName = customer?.name ?? "고객";
 
       const canceledAt = new Date();
       const claimed = await estimateRequestRepository.claimCancelEstimateRequest(
@@ -470,8 +486,37 @@ export const estimateRequestService = {
         throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
       }
 
-      return canceled;
+      return {
+        canceled,
+        notifyMoverIds,
+        customerName,
+      };
     });
+
+    // 알림 실패가 취소 성공 응답을 덮지 않도록 격리
+    await Promise.all(
+      result.notifyMoverIds.map(async (moverId) => {
+        try {
+          await notificationService.createNotification({
+            userId: moverId,
+            type: "ESTIMATE_REQUEST_CANCELED",
+            title: "견적 요청 취소",
+            // FE: content + " 님이 견적 요청을 취소했어요"
+            content: result.customerName,
+            linkUrl: null,
+            expiresAt: null,
+          });
+        } catch (error) {
+          logger.error("Failed to create ESTIMATE_REQUEST_CANCELED notification.", {
+            error,
+            estimateRequestId,
+            moverId,
+          });
+        }
+      }),
+    );
+
+    return result.canceled;
   },
 
   /**

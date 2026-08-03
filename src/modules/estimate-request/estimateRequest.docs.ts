@@ -118,6 +118,7 @@ registerRouterDocs(estimateRequestRouter, {
         "- 취소 후 활성 요청이 없어져 새 견적 요청을 생성할 수 있습니다.",
         "- 동시 취소는 `updateMany` 선점으로 한 번만 성공합니다.",
         "- 기사 견적 전송(`sendEstimate`)과 교차 시 요청 행 `FOR UPDATE`로 직렬화합니다.",
+        "- 알림: SENT 견적을 보낸 기사 + 지정 기사에게 `ESTIMATE_REQUEST_CANCELED` (알림 실패는 취소 성공과 분리).",
         "",
         "기존 라우트 컨벤션상 `DELETE`를 사용합니다. hard delete가 아닙니다.",
         "",
