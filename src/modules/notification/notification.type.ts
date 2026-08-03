@@ -8,6 +8,17 @@ export interface CreateNotificationInput {
   linkUrl?: string | null;
 
   /*
+   * 알림의 원본 이벤트 식별자다.
+   *
+   * 단건 알림에서는 선택값이며,
+   * 전달하지 않으면 null로 저장한다.
+   *
+   * 대량 알림처럼 재실행 시 중복 방지가 필요한 경우에는
+   * 원본 엔티티의 ID를 전달한다.
+   */
+  sourceId?: string | null;
+
+  /*
    * 알림 생성 시 만료 정책을 반드시 명시한다.
    *
    * 만료되는 알림은 실제 만료 시각을 전달하고,
@@ -29,6 +40,16 @@ export interface CreateBulkNotificationInput {
   title: string;
   content: string;
   linkUrl?: string | null;
+
+  /*
+   * 대량 알림의 원본 이벤트 식별자다.
+   *
+   * 동일한 원본 이벤트로 대량 알림 작업이 재실행되더라도
+   * 사용자별 중복 알림이 생성되지 않도록 하는 데 사용한다.
+   *
+   * 공지 알림에서는 notice.id를 문자열로 전달한다.
+   */
+  sourceId: string;
 
   /*
    * 알림 생성 시 만료 정책을 반드시 명시한다.

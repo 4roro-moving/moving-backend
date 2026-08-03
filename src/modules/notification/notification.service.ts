@@ -207,17 +207,26 @@ const createNotification = async (
  * 각 배치에서는 Prisma createMany를 사용하여
  * 사용자별 알림을 한 번에 저장한다.
  *
+ * 동일한 원본 이벤트에서 생성된 대량 알림에는
+ * sourceId를 함께 저장한다.
+ *
+ * Repository의 복합 unique 제약과
+ * createMany의 skipDuplicates 옵션을 이용해
+ * 동일한 대량 알림 작업이 재실행되더라도
+ * 이미 생성된 사용자 알림은 중복 저장하지 않는다.
+ *
  * 해당 배치의 DB 저장이 성공한 이후에는
  * 현재 SSE에 연결된 대상 사용자에게
  * notification-refresh 이벤트를 전송한다.
  *
  * 각 배치는 별도의 DB 작업으로 처리되므로,
- * 중간 배치에서 실패하면 이미 완료된 이전 배치는 유지될 수 있다.
+ * 중간 배치에서 실패하면 이미 완료된 이전 배치는 유지된다.
  *
- * 현재는 중복 방지를 위한 원본 식별자와 복합 unique 제약이 없으므로,
- * 실패 후 전체 작업을 재실행하면 일부 알림이 중복 생성될 수 있다.
+ * 이후 동일한 sourceId로 작업을 재실행하면
+ * 기존 알림은 건너뛰고 생성되지 않은 사용자 알림만 저장한다.
  *
- * 반환값은 실제로 생성된 전체 알림 개수이다.
+ * 반환값은 중복으로 건너뛴 데이터를 제외하고
+ * 실제로 생성된 전체 알림 개수이다.
  */
 const createBulkNotification = async (input: CreateBulkNotificationInput): Promise<number> => {
   let cursorId: string | undefined;
@@ -241,6 +250,7 @@ const createBulkNotification = async (input: CreateBulkNotificationInput): Promi
       type: input.type,
       title: input.title,
       content: input.content,
+      sourceId: input.sourceId,
       expiresAt: input.expiresAt,
       ...(input.linkUrl !== undefined && {
         linkUrl: input.linkUrl,
@@ -252,7 +262,7 @@ const createBulkNotification = async (input: CreateBulkNotificationInput): Promi
     createdCount += batchCreatedCount;
 
     /*
-     * 해당 배치의 알림 저장이 성공한 이후에만
+     * 해당 배치의 DB 저장이 성공한 이후에만
      * 현재 SSE에 연결된 대상 사용자에게
      * 알림 목록 갱신 이벤트를 전송한다.
      */

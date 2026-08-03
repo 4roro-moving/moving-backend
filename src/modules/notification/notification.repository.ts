@@ -10,6 +10,9 @@ import type { CreateNotificationInput } from "./notification.type";
  *
  * userId는 알림 소유권 확인이 필요한 findById에서만
  * 별도로 추가하여 조회한다.
+ *
+ * sourceId는 중복 생성 방지를 위한 내부 식별자이므로
+ * 사용자에게 반환하는 알림 응답에는 포함하지 않는다.
  */
 const notificationSelect = {
   id: true,
@@ -253,9 +256,12 @@ async function markAllAsRead(
  * 새로운 알림을 생성한다.
  *
  * 다른 도메인의 Service에서 전달받은 사용자, 알림 타입,
- * 제목, 내용, 이동 경로, 만료일을 저장한다.
+ * 제목, 내용, 이동 경로, 원본 식별자, 만료일을 저장한다.
  *
  * linkUrl은 선택값이므로 전달되지 않으면 null로 저장한다.
+ *
+ * sourceId는 선택값이며,
+ * 기존 단건 알림처럼 전달되지 않으면 null로 저장한다.
  *
  * expiresAt은 알림 생성 시 반드시 전달해야 한다.
  * 만료되는 알림은 실제 만료 시각을 전달하고,
@@ -269,6 +275,7 @@ async function create(input: CreateNotificationInput, db: DbClient = prisma) {
       title: input.title,
       content: input.content,
       linkUrl: input.linkUrl ?? null,
+      sourceId: input.sourceId ?? null,
       expiresAt: input.expiresAt,
     },
     select: notificationSelect,
@@ -339,6 +346,16 @@ async function findRecipientIdsByRole(
  * Prisma createMany를 사용하여 사용자별로 반복해서
  * INSERT하는 대신 한 번의 쿼리로 알림을 저장한다.
  *
+ * sourceId가 있는 알림은 userId, type, sourceId의
+ * 복합 unique 제약을 기준으로 중복 여부를 판단한다.
+ *
+ * skipDuplicates를 사용하여 동일한 원본 알림이
+ * 이미 생성된 사용자는 건너뛰고,
+ * 아직 생성되지 않은 사용자 알림만 저장한다.
+ *
+ * 반환값은 중복으로 건너뛴 데이터를 제외하고
+ * 실제로 생성된 알림 개수이다.
+ *
  * 전달된 알림이 없는 경우에는 쿼리를 실행하지 않고
  * 생성 개수 0을 반환한다.
  */
@@ -357,8 +374,10 @@ async function createMany(
       title: input.title,
       content: input.content,
       linkUrl: input.linkUrl ?? null,
+      sourceId: input.sourceId ?? null,
       expiresAt: input.expiresAt,
     })),
+    skipDuplicates: true,
   });
 
   return result.count;
