@@ -129,6 +129,7 @@ enum NotificationType {
   ESTIMATE_RECEIVED            // (고객) 기사님이 견적을 보냄
   ESTIMATE_CONFIRMED           // (기사) 내 견적이 확정됨
   ESTIMATE_REQUEST_REJECTED    // (고객) 기사님이 요청을 반려함
+  ESTIMATE_REQUEST_CANCELED    // (기사) 고객이 견적 요청을 취소함
   MOVE_DAY_REMINDER            // 이사 당일 리마인더
   ESTIMATE_EXPIRATION_REMINDER // 견적 요청 만료 임박 리마인더
   REVIEW_AVAILABLE             // (고객) 리뷰 작성 가능 안내

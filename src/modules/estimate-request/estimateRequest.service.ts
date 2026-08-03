@@ -1,11 +1,17 @@
 import type { EstimateRequestStatus, MoveType, NotificationType, Prisma } from "@prisma/client";
 
+import logger from "../../config/logger";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
+import { lockEstimateRequestForUpdate } from "../../utils/estimate-request-lock.util";
+import { notificationService } from "../notification/notification.service";
 
-import { estimateRequestRepository } from "./estimateRequest.repository";
-import type { EstimateRequestDetail } from "./estimateRequest.repository";
+import {
+  CANCELABLE_ESTIMATE_REQUEST_STATUSES,
+  estimateRequestRepository,
+  type EstimateRequestDetail,
+} from "./estimateRequest.repository";
 import type {
   AddressInput,
   CreateEstimateRequestInput,
@@ -27,11 +33,30 @@ const MIN_EXPIRATION_HOURS = 24;
 const MS_PER_HOUR = 60 * 60 * 1000;
 const MS_PER_DAY = 24 * MS_PER_HOUR;
 
-// 수정/취소가 가능한 상태
+// 수정이 가능한 상태 (생성 직후 OPEN, 스키마상 PENDING 임시저장도 포함)
 const EDITABLE_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
 
-// 이미 종료되어 취소할 수 없는 상태
-const CLOSED_STATUSES: EstimateRequestStatus[] = ["CANCELED", "COMPLETED", "EXPIRED"];
+/** 고객이 soft cancel 가능한 요청 상태 — repository claim 조건과 동일 소스 */
+// 2026.08.03 정슬기 - [추가] 취소 허용 상태를 명시적으로 분리
+// 2026.08.03 정슬기 - [수정] repository 상수와 단일화
+export const CANCELABLE_STATUSES = CANCELABLE_ESTIMATE_REQUEST_STATUSES;
+
+/**
+ * 취소 가능 여부를 검증한다.
+ * // 2026.08.03 정슬기 - [추가] cancel 정책 단일화 (단위 테스트용 export)
+ */
+export function assertCancelable(request: {
+  status: EstimateRequestStatus;
+  isActive: boolean;
+}): void {
+  if (request.status === "CANCELED") {
+    throw new AppError("ESTIMATE_REQUEST_ALREADY_CANCELED");
+  }
+
+  if (!request.isActive || !CANCELABLE_STATUSES.includes(request.status)) {
+    throw new AppError("ESTIMATE_REQUEST_CANCEL_NOT_ALLOWED");
+  }
+}
 
 const MOVE_TYPE_LABEL: Record<MoveType, string> = {
   SMALL: "소형이사",
@@ -380,26 +405,63 @@ export const estimateRequestService = {
     });
   },
 
+  /**
+   * 견적 요청 soft cancel (hard delete 금지)
+   * - PENDING|OPEN + isActive 만 허용
+   * - CONFIRMED|COMPLETED|EXPIRED|CANCELED 및 isActive=false 는 거부
+   * - 미확정(SENT) 견적은 CANCELED 로 맞춤. 지정 기사 이력은 보존
+   * - 동시 취소는 claimCancel(updateMany)로 선점
+   * - sendEstimate 와의 교차는 요청 행 FOR UPDATE 로 직렬화
+   * - SENT·지정 기사에게 ESTIMATE_REQUEST_CANCELED 알림 (커밋 후, 실패 격리)
+   * // 2026.08.03 정슬기 - [수정] CONFIRMED 차단·SENT 견적 처리·에러 코드 세분화
+   * // 2026.08.03 정슬기 - [수정] 견적 전송과 원자적 직렬화를 위한 행 잠금
+   * // 2026.08.03 정슬기 - [추가] 취소 알림 연결
+   */
   async cancelEstimateRequest(
     estimateRequestId: number,
     customerId: string,
   ): Promise<EstimateRequestDetail> {
-    return prisma.$transaction(async (tx) => {
-      const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
+    const result = await prisma.$transaction(async (tx) => {
+      const locked = await lockEstimateRequestForUpdate(tx, estimateRequestId);
 
-      if (CLOSED_STATUSES.includes(request.status)) {
-        throw new AppError("REQUEST_NOT_EDITABLE", {
-          message: "이미 종료된 견적 요청입니다.",
-        });
+      if (!locked) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
       }
 
-      const canceled = await estimateRequestRepository.update(
+      const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
+
+      assertCancelable(request);
+
+      // cancelSentEstimates 전에 SENT 기사 ID를 확보한다
+      const sentMoverIds = await estimateRequestRepository.findSentEstimateMoverIds(
         estimateRequestId,
-        {
-          status: "CANCELED",
-          isActive: false,
-          canceledAt: new Date(),
-        },
+        tx,
+      );
+      const notifyMoverIds = [
+        ...new Set([...sentMoverIds, ...request.designatedMovers.map((item) => item.moverId)]),
+      ];
+
+      const customer = await estimateRequestRepository.findCustomerName(customerId, tx);
+      const customerName = customer?.name ?? "고객";
+
+      const canceledAt = new Date();
+      const claimed = await estimateRequestRepository.claimCancelEstimateRequest(
+        estimateRequestId,
+        customerId,
+        canceledAt,
+        tx,
+      );
+
+      // 동시 요청으로 상태가 바뀐 경우 — 최신 상태로 재검증해 동일 에러를 반환
+      if (claimed.count === 0) {
+        const latest = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
+        assertCancelable(latest);
+        throw new AppError("ESTIMATE_REQUEST_CANCEL_NOT_ALLOWED");
+      }
+
+      await estimateRequestRepository.cancelSentEstimatesForRequest(
+        estimateRequestId,
+        canceledAt,
         tx,
       );
 
@@ -408,14 +470,53 @@ export const estimateRequestService = {
           estimateRequestId,
           changedBy: customerId,
           type: "CANCELED",
-          previousData: { status: request.status },
-          changedData: { status: canceled.status },
+          previousData: { status: request.status, isActive: request.isActive },
+          changedData: {
+            status: "CANCELED",
+            isActive: false,
+            canceledAt: canceledAt.toISOString(),
+          },
         },
         tx,
       );
 
-      return canceled;
+      const canceled = await estimateRequestRepository.findById(estimateRequestId, tx);
+
+      if (!canceled) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+      }
+
+      return {
+        canceled,
+        notifyMoverIds,
+        customerName,
+      };
     });
+
+    // 알림 실패가 취소 성공 응답을 덮지 않도록 격리
+    await Promise.all(
+      result.notifyMoverIds.map(async (moverId) => {
+        try {
+          await notificationService.createNotification({
+            userId: moverId,
+            type: "ESTIMATE_REQUEST_CANCELED",
+            title: "견적 요청 취소",
+            // FE: content + " 님이 견적 요청을 취소했어요"
+            content: result.customerName,
+            linkUrl: null,
+            expiresAt: null,
+          });
+        } catch (error) {
+          logger.error("Failed to create ESTIMATE_REQUEST_CANCELED notification.", {
+            error,
+            estimateRequestId,
+            moverId,
+          });
+        }
+      }),
+    );
+
+    return result.canceled;
   },
 
   /**

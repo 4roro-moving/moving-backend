@@ -5,6 +5,12 @@ import { prisma } from "../../lib/prisma";
 type Db = PrismaClient | Prisma.TransactionClient;
 
 /**
+ * soft cancel 허용 상태 (service assertCancelable 와 claimCancel where 가 동일 소스를 사용)
+ * // 2026.08.03 정슬기 - [추가]
+ */
+export const CANCELABLE_ESTIMATE_REQUEST_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
+
+/**
  * 견적 요청 조회에 공통으로 사용하는 select
  */
 const estimateRequestDetailSelect = {
@@ -111,6 +117,74 @@ export const estimateRequestRepository = {
       where: { id: estimateRequestId },
       data,
       select: estimateRequestDetailSelect,
+    });
+  },
+
+  /**
+   * 취소 가능 상태(PENDING|OPEN + isActive)인 본인 요청만 soft cancel로 선점한다.
+   * count === 0 이면 이미 종료되었거나 동시 취소가 선점한 경우다.
+   * // 2026.08.03 정슬기 - [추가]
+   * // 2026.08.03 정슬기 - [수정] customerId·CANCELABLE 상수로 선점 조건 정렬
+   */
+  claimCancelEstimateRequest(
+    estimateRequestId: number,
+    customerId: string,
+    canceledAt: Date,
+    db: Db = prisma,
+  ) {
+    return db.estimateRequest.updateMany({
+      where: {
+        id: estimateRequestId,
+        customerId,
+        isActive: true,
+        status: { in: CANCELABLE_ESTIMATE_REQUEST_STATUSES },
+      },
+      data: {
+        status: "CANCELED",
+        isActive: false,
+        canceledAt,
+      },
+    });
+  },
+
+  /**
+   * 요청 취소 시 미확정(SENT) 견적만 CANCELED 로 맞춘다. hard delete 금지.
+   * // 2026.08.03 정슬기 - [추가]
+   */
+  cancelSentEstimatesForRequest(estimateRequestId: number, canceledAt: Date, db: Db = prisma) {
+    return db.estimate.updateMany({
+      where: {
+        estimateRequestId,
+        status: "SENT",
+      },
+      data: {
+        status: "CANCELED",
+        canceledAt,
+      },
+    });
+  },
+
+  /**
+   * 취소 알림 대상: 아직 SENT 인 견적을 보낸 기사 ID 목록
+   * (cancelSentEstimates 호출 전에 조회해야 한다)
+   * // 2026.08.03 정슬기 - [추가]
+   */
+  async findSentEstimateMoverIds(estimateRequestId: number, db: Db = prisma): Promise<string[]> {
+    const estimates = await db.estimate.findMany({
+      where: {
+        estimateRequestId,
+        status: "SENT",
+      },
+      select: { moverId: true },
+    });
+
+    return estimates.map((estimate) => estimate.moverId);
+  },
+
+  findCustomerName(customerId: string, db: Db = prisma) {
+    return db.user.findUnique({
+      where: { id: customerId },
+      select: { name: true },
     });
   },
 

@@ -1,5 +1,6 @@
 import { EstimateRequestStatus, EstimateStatus, Prisma } from "@prisma/client";
 
+import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
@@ -253,22 +254,7 @@ export const reviewService = {
             tx,
           );
 
-          const notification = await notificationService.createNotification(
-            {
-              userId: estimate.moverId,
-              type: "REVIEW_RECEIVED",
-              title: "리뷰 도착",
-              content: "고객님이",
-              linkUrl: null,
-              expiresAt: null,
-            },
-            tx,
-          );
-
-          return {
-            review: createdReview,
-            notification,
-          };
+          return createdReview;
         },
         {
           // 같은 기사님에게 여러 리뷰가 동시에 등록될 때 통계 재계산 결과가 덮어써지는 것을 방지
@@ -276,10 +262,26 @@ export const reviewService = {
         },
       );
 
-      notificationService.sendNotification(estimate.moverId, result.notification);
+      // 2026.08.03 정슬기 - [수정] 알림 실패가 리뷰 등록 성공 응답을 덮지 않도록 격리
+      try {
+        await notificationService.createNotification({
+          userId: estimate.moverId,
+          type: "REVIEW_RECEIVED",
+          title: "리뷰 도착",
+          content: "고객님이",
+          linkUrl: null,
+          expiresAt: null,
+        });
+      } catch (notificationError) {
+        logger.error("Failed to create REVIEW_RECEIVED notification.", {
+          error: notificationError,
+          reviewId: result.id,
+          moverId: estimate.moverId,
+        });
+      }
 
       return {
-        review: result.review,
+        review: result,
       };
     } catch (error) {
       if (isReviewEstimateUniqueConstraintError(error)) {

@@ -1,5 +1,6 @@
 import type { EstimateRequestStatus, EstimateStatus, Prisma } from "@prisma/client";
 
+import logger from "../../../config/logger";
 import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
 import { runTransaction } from "../../../utils/transaction";
@@ -440,24 +441,23 @@ export const receivedEstimateService = {
         tx,
       );
 
-      const notification = await notificationService.createNotification(
-        {
-          userId: confirmedEstimate.mover.id,
-          type: "ESTIMATE_CONFIRMED",
-          title: "견적 확정",
-          content: `${estimate.estimateRequest.customer.name}님의`,
-          linkUrl: "/estimate/received-requests",
-          expiresAt: getKstEndOfDay(estimate.estimateRequest.moveDate),
-        },
-        tx,
-      );
+      const notificationPayload = {
+        userId: confirmedEstimate.mover.id,
+        type: "ESTIMATE_CONFIRMED" as const,
+        title: "견적 확정",
+        // FE 템플릿: content + "이 확정되었어요" → "OO님의 견적이 확정되었어요"
+        // 2026.08.03 정슬기 - [수정] 미완성 "님의" → 완결된 강조 문구
+        content: `${estimate.estimateRequest.customer.name}님의 견적`,
+        linkUrl: "/estimate/received-requests",
+        expiresAt: getKstEndOfDay(estimate.estimateRequest.moveDate),
+      };
 
       //확정 응답 형태 가공
       return {
         estimateRequest: confirmedEstimateRequest,
         moveDate: estimate.estimateRequest.moveDate,
         customerName: estimate.estimateRequest.customer.name,
-        notification,
+        notificationPayload,
         estimate: {
           id: confirmedEstimate.id,
           price: confirmedEstimate.price,
@@ -474,9 +474,18 @@ export const receivedEstimateService = {
       };
     });
 
-    notificationService.sendNotification(result.estimate.mover.id, result.notification);
+    // 2026.08.03 정슬기 - [수정] 알림 실패가 확정 성공 응답을 덮지 않도록 격리
+    try {
+      await notificationService.createNotification(result.notificationPayload);
+    } catch (error) {
+      logger.error("Failed to create ESTIMATE_CONFIRMED notification.", {
+        error,
+        estimateId: result.estimate.id,
+        userId: result.notificationPayload.userId,
+      });
+    }
 
-    const { notification: _, ...response } = result;
+    const { notificationPayload: _, ...response } = result;
 
     return response;
   },
