@@ -1383,6 +1383,8 @@ model Faq {
 /// "리뷰 수정" 수준의 표현이 가능하고, 상세를 남기면 용량이 빠르게 커집니다.
 /// 사유가 필요한 관리자 조치에만 memo 를 사용합니다.
 /// 콘텐츠 숨김(HIDE) 시 memo 에 처리 사유를 필수로 저장합니다.
+/// DB 제약(activity_logs_hide_memo_required_check): action=HIDE 이면
+/// memo 가 NULL/빈 문자열/공백이면 INSERT/UPDATE 가 거부됩니다.
 ///
 /// targetId 는 대상 테이블마다 PK 타입이 달라 String 으로 둡니다.
 /// 외래키가 없으므로 대상이 삭제되면 로그만 남습니다.
@@ -1399,7 +1401,7 @@ model ActivityLog {
   targetType LogTargetType @map("target_type")
   /// 대상 식별자. 대상별 PK 타입이 달라 String 으로 저장합니다.
   targetId   String        @map("target_id")
-  /// 관리자 조치 사유 등 필요한 경우에만 기록합니다. (HIDE 시 필수)
+  /// 관리자 조치 사유 등 필요한 경우에만 기록합니다. (HIDE 시 필수, DB CHECK 보장)
   memo       String?       @db.Text
 
   /// 행위자 관계. 계정 삭제 시 함께 삭제(Cascade).
