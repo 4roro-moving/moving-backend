@@ -1,5 +1,6 @@
 import { EstimateRequestStatus, EstimateStatus, Prisma } from "@prisma/client";
 
+import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
@@ -261,14 +262,23 @@ export const reviewService = {
         },
       );
 
-      await notificationService.createNotification({
-        userId: estimate.moverId,
-        type: "REVIEW_RECEIVED",
-        title: "리뷰 도착",
-        content: "고객님이",
-        linkUrl: null,
-        expiresAt: null,
-      });
+      // 2026.08.03 정슬기 - [수정] 알림 실패가 리뷰 등록 성공 응답을 덮지 않도록 격리
+      try {
+        await notificationService.createNotification({
+          userId: estimate.moverId,
+          type: "REVIEW_RECEIVED",
+          title: "리뷰 도착",
+          content: "고객님이",
+          linkUrl: null,
+          expiresAt: null,
+        });
+      } catch (notificationError) {
+        logger.error("Failed to create REVIEW_RECEIVED notification.", {
+          error: notificationError,
+          reviewId: result.id,
+          moverId: estimate.moverId,
+        });
+      }
 
       return {
         review: result,

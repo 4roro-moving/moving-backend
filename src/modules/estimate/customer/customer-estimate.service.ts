@@ -1,5 +1,6 @@
 import type { EstimateRequestStatus, EstimateStatus, Prisma } from "@prisma/client";
 
+import logger from "../../../config/logger";
 import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
 import { runTransaction } from "../../../utils/transaction";
@@ -444,7 +445,9 @@ export const receivedEstimateService = {
         userId: confirmedEstimate.mover.id,
         type: "ESTIMATE_CONFIRMED" as const,
         title: "견적 확정",
-        content: `${estimate.estimateRequest.customer.name}님의`,
+        // FE 템플릿: content + "이 확정되었어요" → "OO님의 견적이 확정되었어요"
+        // 2026.08.03 정슬기 - [수정] 미완성 "님의" → 완결된 강조 문구
+        content: `${estimate.estimateRequest.customer.name}님의 견적`,
         linkUrl: "/estimate/received-requests",
         expiresAt: getKstEndOfDay(estimate.estimateRequest.moveDate),
       };
@@ -471,7 +474,16 @@ export const receivedEstimateService = {
       };
     });
 
-    await notificationService.createNotification(result.notificationPayload);
+    // 2026.08.03 정슬기 - [수정] 알림 실패가 확정 성공 응답을 덮지 않도록 격리
+    try {
+      await notificationService.createNotification(result.notificationPayload);
+    } catch (error) {
+      logger.error("Failed to create ESTIMATE_CONFIRMED notification.", {
+        error,
+        estimateId: result.estimate.id,
+        userId: result.notificationPayload.userId,
+      });
+    }
 
     const { notificationPayload: _, ...response } = result;
 
