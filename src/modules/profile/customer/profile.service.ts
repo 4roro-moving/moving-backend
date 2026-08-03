@@ -1,8 +1,8 @@
 import bcrypt from "bcrypt";
 import { Prisma, UserRole } from "@prisma/client";
 
-import { runTransaction } from "../../../utils/transaction";
 import { AppError } from "../../../lib/app-error";
+import { runTransaction } from "../../../utils/transaction";
 
 import { profileRepository } from "./profile.repository";
 import type { CreateProfileInput, ProfileResponse, UpdateProfileInput } from "./profile.type";
@@ -17,6 +17,9 @@ const isUniqueConstraintError = (error: unknown): error is Prisma.PrismaClientKn
   return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
 };
 
+/*
+ * 고객 계정이 존재하며 활성 상태인지 확인한다.
+ */
 const validateActiveCustomer = <
   T extends {
     isActive: boolean;
@@ -47,6 +50,9 @@ const validateActiveCustomer = <
   return user;
 };
 
+/*
+ * 요청에 포함된 지역 ID가 모두 존재하는지 확인한다.
+ */
 const validateRegions = async (regionIds: number[]): Promise<void> => {
   const regionCount = await profileRepository.countRegionsByIds(regionIds);
 
@@ -57,6 +63,12 @@ const validateRegions = async (regionIds: number[]): Promise<void> => {
   }
 };
 
+/*
+ * Repository 조회 결과를 고객 프로필 응답 형식으로 변환한다.
+ *
+ * 비밀번호 해시 자체는 응답에 포함하지 않고,
+ * 비밀번호 보유 여부만 hasPassword 값으로 반환한다.
+ */
 const mapProfileResponse = (profile: CustomerProfileWithRelations): ProfileResponse => {
   return {
     id: profile.id,
@@ -65,6 +77,7 @@ const mapProfileResponse = (profile: CustomerProfileWithRelations): ProfileRespo
     name: profile.user.name,
     email: profile.user.email,
     phone: profile.user.phone,
+    hasPassword: profile.user.password !== null,
 
     imageUrl: profile.imageUrl,
 
@@ -80,6 +93,12 @@ const mapProfileResponse = (profile: CustomerProfileWithRelations): ProfileRespo
   };
 };
 
+/*
+ * 고객 프로필을 생성한다.
+ *
+ * 기존 User.phone이 없는 경우 프로필 생성 요청의
+ * phone을 필수로 검증한 뒤 User 테이블에 함께 저장한다.
+ */
 const createProfile = async (
   userId: string,
   input: CreateProfileInput,
@@ -94,11 +113,66 @@ const createProfile = async (
     });
   }
 
+  /*
+   * 전화번호가 없는 사용자는 프로필 생성 시
+   * 전화번호를 반드시 입력해야 한다.
+   */
+  if (user.phone === null && input.phone === undefined) {
+    throw new AppError("BAD_REQUEST", {
+      message: "휴대전화 번호를 입력해주세요.",
+    });
+  }
+
+  /*
+   * 기존 전화번호가 있는 사용자의 전화번호 변경은
+   * 프로필 생성 API에서 처리하지 않는다.
+   */
+  if (user.phone !== null && input.phone !== undefined && input.phone !== user.phone) {
+    throw new AppError("BAD_REQUEST", {
+      message: "이미 등록된 휴대전화 번호는 프로필 생성 과정에서 변경할 수 없습니다.",
+    });
+  }
+
+  const phoneToSave = user.phone === null ? input.phone : undefined;
+
+  if (phoneToSave !== undefined) {
+    const phoneOwner = await profileRepository.findUserByPhoneExcludingUser(phoneToSave, user.id);
+
+    if (phoneOwner) {
+      throw new AppError("CONFLICT", {
+        message: "이미 사용 중인 전화번호입니다.",
+      });
+    }
+  }
+
   await validateRegions(input.regionIds);
+
+  /*
+   * phone은 User 테이블의 필드이므로
+   * CustomerProfile 생성 데이터와 분리한다.
+   */
+  const profileInput = {
+    ...(input.imageUrl !== undefined && {
+      imageUrl: input.imageUrl,
+    }),
+
+    regionIds: input.regionIds,
+    serviceTypes: input.serviceTypes,
+  };
 
   try {
     const profile = await runTransaction(async (tx) => {
-      const createdProfile = await profileRepository.createProfile(user.id, input, tx);
+      if (phoneToSave !== undefined) {
+        await profileRepository.updateUser(
+          user.id,
+          {
+            phone: phoneToSave,
+          },
+          tx,
+        );
+      }
+
+      const createdProfile = await profileRepository.createProfile(user.id, profileInput, tx);
 
       await profileRepository.markProfileCompleted(user.id, tx);
 
@@ -108,6 +182,15 @@ const createProfile = async (
     return mapProfileResponse(profile);
   } catch (error) {
     if (isUniqueConstraintError(error)) {
+      const target = error.meta?.target;
+      const fields = Array.isArray(target) ? target.map(String) : [String(target)];
+
+      if (fields.some((field) => field.includes("phone"))) {
+        throw new AppError("CONFLICT", {
+          message: "이미 사용 중인 전화번호입니다.",
+        });
+      }
+
       throw new AppError("CONFLICT", {
         message: "이미 등록된 프로필 정보입니다.",
       });
@@ -117,6 +200,9 @@ const createProfile = async (
   }
 };
 
+/*
+ * 현재 로그인한 고객의 프로필을 조회한다.
+ */
 const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
   const user = validateActiveCustomer(await profileRepository.findUserById(userId));
 
@@ -131,10 +217,15 @@ const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
   return mapProfileResponse(profile);
 };
 
+/*
+ * 고객의 프로필 등록 상태와
+ * 전화번호 보유 여부를 조회한다.
+ */
 const getProfileStatus = async (
   userId: string,
 ): Promise<{
   isProfileCompleted: boolean;
+  hasPhone: boolean;
 }> => {
   const user = validateActiveCustomer(await profileRepository.findUserById(userId));
 
@@ -142,9 +233,13 @@ const getProfileStatus = async (
 
   return {
     isProfileCompleted: user.isProfileCompleted && profile !== null,
+    hasPhone: user.phone !== null,
   };
 };
 
+/*
+ * 현재 로그인한 고객의 기본정보와 프로필 정보를 수정한다.
+ */
 const updateProfile = async (
   userId: string,
   input: UpdateProfileInput,
@@ -277,7 +372,6 @@ const updateProfile = async (
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       const target = error.meta?.target;
-
       const fields = Array.isArray(target) ? target.map(String) : [String(target)];
 
       if (fields.some((field) => field.includes("phone"))) {

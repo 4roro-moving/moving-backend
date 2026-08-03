@@ -95,6 +95,9 @@ const validateRegions = async (regionIds: number[]): Promise<void> => {
 
 /*
  * Prisma 조회 결과를 무버 프로필 응답 형식으로 변환한다.
+ *
+ * 비밀번호 해시는 응답에 포함하지 않고,
+ * 비밀번호 보유 여부만 hasPassword로 반환한다.
  */
 const mapProfileResponse = (
   profile: NonNullable<Awaited<ReturnType<typeof profileRepository.findProfileByUserId>>>,
@@ -104,7 +107,9 @@ const mapProfileResponse = (
     userId: profile.userId,
 
     name: profile.user.name,
+    email: profile.user.email,
     phone: profile.user.phone,
+    hasPassword: profile.user.password !== null,
 
     nickname: profile.nickname,
     imageUrl: profile.imageUrl,
@@ -129,12 +134,14 @@ const mapProfileResponse = (
 };
 
 /*
- * 무버 프로필 등록
+ * 무버 프로필을 등록한다.
  *
- * 무버 프로필, 서비스 가능 지역, 이사 유형을 생성하고
- * User.isProfileCompleted를 true로 변경한다.
+ * 기존 User.phone이 없는 경우 프로필 생성 요청에서
+ * 전화번호를 입력받아 User 테이블에 저장한다.
  *
- * 모든 작업은 하나의 트랜잭션으로 처리한다.
+ * User 전화번호 저장, 무버 프로필 생성,
+ * 서비스 가능 지역 및 이사 유형 생성,
+ * 프로필 완료 상태 변경을 하나의 트랜잭션으로 처리한다.
  */
 const createProfile = async (
   userId: string,
@@ -150,6 +157,45 @@ const createProfile = async (
     });
   }
 
+  /*
+   * 전화번호가 없는 사용자는 프로필 생성 시
+   * 전화번호를 반드시 입력해야 한다.
+   */
+  if (user.phone === null && input.phone === undefined) {
+    throw new AppError("BAD_REQUEST", {
+      message: "휴대전화 번호를 입력해주세요.",
+    });
+  }
+
+  /*
+   * 기존 전화번호가 있는 사용자의 번호 변경은
+   * 프로필 생성 API에서 처리하지 않는다.
+   */
+  if (user.phone !== null && input.phone !== undefined && input.phone !== user.phone) {
+    throw new AppError("BAD_REQUEST", {
+      message: "이미 등록된 휴대전화 번호는 프로필 생성 과정에서 변경할 수 없습니다.",
+    });
+  }
+
+  /*
+   * 기존 전화번호가 없는 경우에만
+   * 요청으로 전달된 전화번호를 저장한다.
+   */
+  const phoneToSave = user.phone === null ? input.phone : undefined;
+
+  if (phoneToSave !== undefined) {
+    const duplicatedUser = await profileRepository.findUserByPhoneExcludingUser(
+      phoneToSave,
+      user.id,
+    );
+
+    if (duplicatedUser) {
+      throw new AppError("CONFLICT", {
+        message: "이미 사용 중인 전화번호입니다.",
+      });
+    }
+  }
+
   const duplicatedProfile = await profileRepository.findProfileByNickname(input.nickname);
 
   if (duplicatedProfile) {
@@ -160,9 +206,37 @@ const createProfile = async (
 
   await validateRegions(input.regionIds);
 
+  /*
+   * phone은 User 테이블 필드이므로
+   * MoverProfile 생성 데이터와 분리한다.
+   */
+  const profileInput = {
+    nickname: input.nickname,
+
+    ...(input.imageUrl !== undefined && {
+      imageUrl: input.imageUrl,
+    }),
+
+    career: input.career,
+    shortIntro: input.shortIntro,
+    description: input.description,
+    regionIds: input.regionIds,
+    serviceTypes: input.serviceTypes,
+  };
+
   try {
     const profile = await runTransaction(async (tx) => {
-      const createdProfile = await profileRepository.createProfile(user.id, input, tx);
+      if (phoneToSave !== undefined) {
+        await profileRepository.updateUser(
+          user.id,
+          {
+            phone: phoneToSave,
+          },
+          tx,
+        );
+      }
+
+      const createdProfile = await profileRepository.createProfile(user.id, profileInput, tx);
 
       await profileRepository.markProfileCompleted(user.id, tx);
 
@@ -171,6 +245,16 @@ const createProfile = async (
 
     return mapProfileResponse(profile);
   } catch (error) {
+    /*
+     * 동일한 전화번호 등록 요청이 동시에 들어온 경우
+     * User.phone UNIQUE 제약조건으로 중복 저장을 막는다.
+     */
+    if (isUniqueConstraintError(error, "phone")) {
+      throw new AppError("CONFLICT", {
+        message: "이미 사용 중인 전화번호입니다.",
+      });
+    }
+
     /*
      * 동일 사용자의 프로필 생성 요청이 동시에 들어온 경우
      * MoverProfile.userId UNIQUE 제약조건으로 하나만 성공한다.
@@ -196,7 +280,7 @@ const createProfile = async (
 };
 
 /*
- * 내 무버 프로필 조회
+ * 내 무버 프로필을 조회한다.
  */
 const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
   const user = validateActiveMover(await profileRepository.findUserById(userId));
@@ -213,7 +297,7 @@ const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
 };
 
 /*
- * 무버 프로필 등록 여부 확인
+ * 무버 프로필 등록 상태와 전화번호 보유 여부를 조회한다.
  *
  * User.isProfileCompleted 값과 실제 MoverProfile 존재 여부를
  * 함께 확인하여 데이터 불일치 상황에서 잘못된 완료 응답을 막는다.
@@ -222,6 +306,7 @@ const getProfileStatus = async (
   userId: string,
 ): Promise<{
   isProfileCompleted: boolean;
+  hasPhone: boolean;
 }> => {
   const user = validateActiveMover(await profileRepository.findUserById(userId));
 
@@ -229,11 +314,12 @@ const getProfileStatus = async (
 
   return {
     isProfileCompleted: user.isProfileCompleted && profile !== null,
+    hasPhone: user.phone !== null,
   };
 };
 
 /*
- * 내 무버 기본정보 수정
+ * 내 무버 기본정보를 수정한다.
  *
  * User 테이블:
  * - name
@@ -279,6 +365,10 @@ const updateBasicInfo = async (
     input.newPasswordConfirm !== undefined;
 
   if (isPasswordChangeRequested) {
+    /*
+     * 비밀번호 변경을 요청한 경우
+     * 세 가지 값을 모두 입력해야 한다.
+     */
     if (
       input.currentPassword === undefined ||
       input.newPassword === undefined ||
@@ -297,6 +387,10 @@ const updateBasicInfo = async (
       await profileRepository.findUserWithPasswordById(user.id),
     );
 
+    /*
+     * 비밀번호가 없는 소셜 로그인 계정은
+     * 현재 비밀번호를 기반으로 한 변경 방식을 사용할 수 없다.
+     */
     if (!userWithPassword.password) {
       throw new AppError("BAD_REQUEST", {
         message: "소셜 로그인 계정은 비밀번호를 변경할 수 없습니다.",
@@ -317,6 +411,19 @@ const updateBasicInfo = async (
     if (input.newPassword !== input.newPasswordConfirm) {
       throw new AppError("BAD_REQUEST", {
         message: "새 비밀번호가 일치하지 않습니다.",
+      });
+    }
+
+    /*
+     * 새 비밀번호는 현재 비밀번호와 달라야 한다.
+     *
+     * Validator에서 먼저 검증하지만,
+     * Service가 다른 경로에서 직접 호출될 가능성을 고려해
+     * 비즈니스 규칙을 한 번 더 검증한다.
+     */
+    if (input.currentPassword === input.newPassword) {
+      throw new AppError("BAD_REQUEST", {
+        message: "새 비밀번호는 현재 비밀번호와 달라야 합니다.",
       });
     }
 
@@ -371,7 +478,7 @@ const updateBasicInfo = async (
 };
 
 /*
- * 내 무버 프로필 수정
+ * 내 무버 프로필을 수정한다.
  *
  * MoverProfile 테이블:
  * - nickname
