@@ -1,6 +1,8 @@
 import type { MoveType } from "@prisma/client";
 
 export interface CreateProfileInput {
+  phone?: string;
+
   nickname: string;
   imageUrl?: string;
   career: number;
@@ -33,7 +35,9 @@ export interface ProfileResponse {
   userId: string;
 
   name: string;
+  email: string;
   phone: string | null;
+  hasPassword: boolean;
 
   nickname: string;
   imageUrl: string | null;

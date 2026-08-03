@@ -3,7 +3,29 @@ import type { MoveType } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import type { DbClient } from "../../../utils/transaction";
 
-import type { CreateProfileInput } from "./profile.type";
+interface CreateMoverProfileData {
+  nickname: string;
+  imageUrl?: string;
+  career: number;
+  shortIntro: string;
+  description: string;
+  regionIds: number[];
+  serviceTypes: MoveType[];
+}
+
+interface UpdateUserData {
+  name?: string;
+  phone?: string;
+  password?: string;
+}
+
+interface UpdateMoverProfileData {
+  nickname?: string;
+  imageUrl?: string | null;
+  career?: number;
+  shortIntro?: string;
+  description?: string;
+}
 
 /*
  * 무버 프로필 조회 시 공통으로 포함할 관계 데이터
@@ -12,7 +34,9 @@ const profileInclude = {
   user: {
     select: {
       name: true,
+      email: true,
       phone: true,
+      password: true,
     },
   },
 
@@ -176,7 +200,11 @@ const countRegionsByIds = async (regionIds: number[], db: DbClient = prisma): Pr
  *
  * 무버 프로필과 서비스 가능 지역, 이사 유형을 함께 생성한다.
  */
-const createProfile = async (userId: string, input: CreateProfileInput, db: DbClient = prisma) => {
+const createProfile = async (
+  userId: string,
+  input: CreateMoverProfileData,
+  db: DbClient = prisma,
+) => {
   return db.moverProfile.create({
     data: {
       userId,
@@ -215,15 +243,7 @@ const createProfile = async (userId: string, input: CreateProfileInput, db: DbCl
  * - phone
  * - password
  */
-const updateUser = async (
-  userId: string,
-  data: {
-    name?: string;
-    phone?: string;
-    password?: string;
-  },
-  db: DbClient = prisma,
-) => {
+const updateUser = async (userId: string, data: UpdateUserData, db: DbClient = prisma) => {
   return db.user.update({
     where: {
       id: userId,
@@ -244,13 +264,7 @@ const updateUser = async (
  */
 const updateProfile = async (
   userId: string,
-  data: {
-    nickname?: string;
-    imageUrl?: string | null;
-    career?: number;
-    shortIntro?: string;
-    description?: string;
-  },
+  data: UpdateMoverProfileData,
   db: DbClient = prisma,
 ) => {
   return db.moverProfile.update({

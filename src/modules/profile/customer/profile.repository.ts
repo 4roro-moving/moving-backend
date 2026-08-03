@@ -3,7 +3,11 @@ import type { MoveType } from "@prisma/client";
 import { prisma } from "../../../lib/prisma";
 import type { DbClient } from "../../../utils/transaction";
 
-import type { CreateProfileInput } from "./profile.type";
+interface CreateCustomerProfileData {
+  imageUrl?: string;
+  regionIds: number[];
+  serviceTypes: MoveType[];
+}
 
 interface UpdateUserData {
   name?: string;
@@ -81,6 +85,7 @@ const findProfileByUserId = async (userId: string, db: DbClient = prisma) => {
           name: true,
           email: true,
           phone: true,
+          password: true,
         },
       },
       serviceAreas: {
@@ -110,7 +115,11 @@ const countRegionsByIds = async (regionIds: number[], db: DbClient = prisma): Pr
   });
 };
 
-const createProfile = async (userId: string, input: CreateProfileInput, db: DbClient = prisma) => {
+const createProfile = async (
+  userId: string,
+  input: CreateCustomerProfileData,
+  db: DbClient = prisma,
+) => {
   return db.customerProfile.create({
     data: {
       userId,
@@ -137,6 +146,7 @@ const createProfile = async (userId: string, input: CreateProfileInput, db: DbCl
           name: true,
           email: true,
           phone: true,
+          password: true,
         },
       },
       serviceAreas: {

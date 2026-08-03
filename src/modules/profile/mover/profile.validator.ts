@@ -113,6 +113,8 @@ const serviceTypesSchema = z
   });
 
 export const createProfileSchema = z.strictObject({
+  phone: phoneSchema.optional(),
+
   nickname: nicknameSchema,
   imageUrl: imageUrlSchema.optional(),
   career: careerSchema,
@@ -167,6 +169,18 @@ export const updateBasicInfoSchema = z
         code: "custom",
         path: ["newPasswordConfirm"],
         message: "새 비밀번호가 일치하지 않습니다.",
+      });
+    }
+
+    if (
+      input.currentPassword !== undefined &&
+      input.newPassword !== undefined &&
+      input.currentPassword === input.newPassword
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["newPassword"],
+        message: "새 비밀번호는 현재 비밀번호와 달라야 합니다.",
       });
     }
   });

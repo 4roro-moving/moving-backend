@@ -14,9 +14,10 @@ const nameSchema = z
 const phoneSchema = z
   .string()
   .trim()
-  .regex(/^010\d{8}$/, {
-    message: "전화번호는 하이픈 없이 010으로 시작하는 11자리 숫자여야 합니다.",
-  });
+  .regex(/^01[016789]-?\d{3,4}-?\d{4}$/, {
+    message: "올바른 휴대전화 번호 형식이 아닙니다.",
+  })
+  .transform((phone) => phone.replaceAll("-", ""));
 
 const passwordSchema = z
   .string()
@@ -61,14 +62,15 @@ const serviceTypesSchema = z
     message: "중복된 이용 서비스를 선택할 수 없습니다.",
   });
 
-export const createProfileSchema = z.object({
+export const createProfileSchema = z.strictObject({
+  phone: phoneSchema.optional(),
   imageUrl: imageUrlSchema.optional(),
   regionIds: regionIdsSchema,
   serviceTypes: serviceTypesSchema,
 });
 
 export const updateProfileSchema = z
-  .object({
+  .strictObject({
     name: nameSchema.optional(),
     phone: phoneSchema.optional(),
 
