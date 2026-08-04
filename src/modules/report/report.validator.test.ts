@@ -55,6 +55,16 @@ describe("createReportSchema", () => {
     assert.equal(result.success, false);
   });
 
+  it("REVIEW targetId가 안전한 정수 범위를 벗어나면 실패", () => {
+    const result = createReportSchema.safeParse({
+      targetType: "REVIEW",
+      targetId: "9007199254740993",
+      reason: "ABUSE",
+    });
+
+    assert.equal(result.success, false);
+  });
+
   it("REVIEW targetId가 0이면 실패", () => {
     const result = createReportSchema.safeParse({
       targetType: "REVIEW",

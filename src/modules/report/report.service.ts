@@ -33,6 +33,8 @@ function normalizeErrorMetaIdentifier(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+// Prisma meta.target은 보통 Prisma 필드명을 주지만, 환경에 따라 매핑된 식별자 형태가 달라도
+// 동일 복합 unique 충돌을 놓치지 않도록 정규화한 식별자 기준으로 비교합니다.
 const reportUniqueMetaFields = ["targettype", "targetid", "reporterid"] as const;
 
 function hasAllReportUniqueFields(values: string[]): boolean {

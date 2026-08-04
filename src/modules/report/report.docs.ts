@@ -14,7 +14,7 @@ registerRouterDocs(reportRouter, {
   headers: authHeaderSchema,
   commonResponses: {
     401: "인증이 필요합니다.",
-    403: "본인 자신은 신고할 수 없습니다. (`REPORT_SELF_NOT_ALLOWED`)",
+    403: "신고 권한이 없거나 본인 자신은 신고할 수 없습니다. (`FORBIDDEN`, `REPORT_SELF_NOT_ALLOWED`)",
     422: "입력값이 올바르지 않습니다.",
   },
   endpoints: {

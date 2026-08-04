@@ -8,6 +8,9 @@ import { AppError } from "../../lib/app-error";
 import { createReportService } from "./report.service";
 import type { ReportRepository } from "./report.repository";
 
+const VALID_MOVER_ID = "6f9619ff-8b86-4d11-b42d-00cf4fc964ff";
+const VALID_MOVER_ID_UPPERCASE = "6F9619FF-8B86-4D11-B42D-00CF4FC964FF";
+
 function createRepositoryStub(overrides: Partial<ReportRepository> = {}): ReportRepository {
   return {
     findReviewTargetById: async () => null,
@@ -34,7 +37,7 @@ function createUniqueConstraintError(): Prisma.PrismaClientKnownRequestError {
   Object.assign(error, {
     code: "P2002",
     meta: {
-      target: ["target_type", "target_id", "reporter_id"],
+      target: ["targetType", "targetId", "reporterId"],
     },
   });
 
@@ -104,14 +107,14 @@ describe("reportService.createReport", () => {
       reporterId: "customer-1",
       input: {
         targetType: "MOVER",
-        targetId: "6F9619FF-8B86-D011-B42D-00CF4FC964FF",
+        targetId: VALID_MOVER_ID_UPPERCASE,
         reason: "SPAM",
         description: "광고성 응답을 반복합니다.",
       },
     });
 
     assert.equal(result.targetType, "MOVER");
-    assert.equal(result.targetId, "6f9619ff-8b86-d011-b42d-00cf4fc964ff");
+    assert.equal(result.targetId, VALID_MOVER_ID);
   });
 
   it("존재하지 않는 리뷰면 REPORT_TARGET_NOT_FOUND", async () => {
@@ -141,7 +144,7 @@ describe("reportService.createReport", () => {
           reporterId: "customer-1",
           input: {
             targetType: "MOVER",
-            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            targetId: VALID_MOVER_ID,
             reason: "SPAM",
           },
         }),
@@ -156,10 +159,10 @@ describe("reportService.createReport", () => {
     await assert.rejects(
       () =>
         service.createReport({
-          reporterId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+          reporterId: VALID_MOVER_ID,
           input: {
             targetType: "MOVER",
-            targetId: "6F9619FF-8B86-D011-B42D-00CF4FC964FF",
+            targetId: VALID_MOVER_ID_UPPERCASE,
             reason: "SPAM",
           },
         }),
@@ -263,7 +266,7 @@ describe("reportService.createReport", () => {
           reporterId: "customer-1",
           input: {
             targetType: "MOVER",
-            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            targetId: VALID_MOVER_ID,
             reason: "SPAM",
           },
         }),
@@ -292,7 +295,7 @@ describe("reportService.createReport", () => {
           reporterId: "customer-1",
           input: {
             targetType: "MOVER",
-            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            targetId: VALID_MOVER_ID,
             reason: "SPAM",
           },
         }),
@@ -321,7 +324,7 @@ describe("reportService.createReport", () => {
           reporterId: "customer-1",
           input: {
             targetType: "MOVER",
-            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            targetId: VALID_MOVER_ID,
             reason: "SPAM",
           },
         }),
@@ -350,7 +353,7 @@ describe("reportService.createReport", () => {
           reporterId: "customer-1",
           input: {
             targetType: "MOVER",
-            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            targetId: VALID_MOVER_ID,
             reason: "SPAM",
           },
         }),
@@ -381,7 +384,7 @@ describe("reportService.createReport", () => {
           reporterId: "customer-1",
           input: {
             targetType: "MOVER",
-            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            targetId: VALID_MOVER_ID,
             reason: "SPAM",
           },
         }),
@@ -410,7 +413,7 @@ describe("reportService.createReport", () => {
           reporterId: "customer-1",
           input: {
             targetType: "MOVER",
-            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            targetId: VALID_MOVER_ID,
             reason: "SPAM",
           },
         }),
@@ -439,7 +442,7 @@ describe("reportService.createReport", () => {
           reporterId: "customer-1",
           input: {
             targetType: "MOVER",
-            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            targetId: VALID_MOVER_ID,
             reason: "SPAM",
           },
         }),
