@@ -41,6 +41,25 @@ function createUniqueConstraintError(): Prisma.PrismaClientKnownRequestError {
   return error;
 }
 
+function createUniqueConstraintErrorWithTarget(
+  target: string[] | string | undefined,
+  modelName?: string,
+): Prisma.PrismaClientKnownRequestError {
+  const error = Object.create(
+    Prisma.PrismaClientKnownRequestError.prototype,
+  ) as Prisma.PrismaClientKnownRequestError;
+
+  Object.assign(error, {
+    code: "P2002",
+    meta: {
+      ...(target !== undefined && { target }),
+      ...(modelName !== undefined && { modelName }),
+    },
+  });
+
+  return error;
+}
+
 describe("reportService.createReport", () => {
   it("리뷰 신고 성공", async () => {
     const service = createReportService(
@@ -279,6 +298,153 @@ describe("reportService.createReport", () => {
         }),
       (error: unknown) =>
         error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
+    );
+  });
+
+  it("P2002 camelCase target도 REPORT_ALREADY_EXISTS로 변환", async () => {
+    const service = createReportService(
+      createRepositoryStub({
+        findUserById: async (userId) => ({
+          id: userId,
+          role: UserRole.MOVER,
+          deletedAt: null,
+        }),
+        createReport: async () => {
+          throw createUniqueConstraintErrorWithTarget(["targetType", "targetId", "reporterId"]);
+        },
+      }),
+    );
+
+    await assert.rejects(
+      () =>
+        service.createReport({
+          reporterId: "customer-1",
+          input: {
+            targetType: "MOVER",
+            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            reason: "SPAM",
+          },
+        }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
+    );
+  });
+
+  it("P2002 snake_case target도 REPORT_ALREADY_EXISTS로 변환", async () => {
+    const service = createReportService(
+      createRepositoryStub({
+        findUserById: async (userId) => ({
+          id: userId,
+          role: UserRole.MOVER,
+          deletedAt: null,
+        }),
+        createReport: async () => {
+          throw createUniqueConstraintErrorWithTarget(["target_type", "target_id", "reporter_id"]);
+        },
+      }),
+    );
+
+    await assert.rejects(
+      () =>
+        service.createReport({
+          reporterId: "customer-1",
+          input: {
+            targetType: "MOVER",
+            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            reason: "SPAM",
+          },
+        }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
+    );
+  });
+
+  it("P2002 constraint name string도 REPORT_ALREADY_EXISTS로 변환", async () => {
+    const service = createReportService(
+      createRepositoryStub({
+        findUserById: async (userId) => ({
+          id: userId,
+          role: UserRole.MOVER,
+          deletedAt: null,
+        }),
+        createReport: async () => {
+          throw createUniqueConstraintErrorWithTarget(
+            "reports_target_type_target_id_reporter_id_key",
+          );
+        },
+      }),
+    );
+
+    await assert.rejects(
+      () =>
+        service.createReport({
+          reporterId: "customer-1",
+          input: {
+            targetType: "MOVER",
+            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            reason: "SPAM",
+          },
+        }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
+    );
+  });
+
+  it("target 정보가 불완전해도 Report 모델 P2002면 REPORT_ALREADY_EXISTS로 변환", async () => {
+    const service = createReportService(
+      createRepositoryStub({
+        findUserById: async (userId) => ({
+          id: userId,
+          role: UserRole.MOVER,
+          deletedAt: null,
+        }),
+        createReport: async () => {
+          throw createUniqueConstraintErrorWithTarget(["targetId"], "Report");
+        },
+      }),
+    );
+
+    await assert.rejects(
+      () =>
+        service.createReport({
+          reporterId: "customer-1",
+          input: {
+            targetType: "MOVER",
+            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            reason: "SPAM",
+          },
+        }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
+    );
+  });
+
+  it("무관한 P2002는 원본 에러를 유지", async () => {
+    const service = createReportService(
+      createRepositoryStub({
+        findUserById: async (userId) => ({
+          id: userId,
+          role: UserRole.MOVER,
+          deletedAt: null,
+        }),
+        createReport: async () => {
+          throw createUniqueConstraintErrorWithTarget(["someOtherField"], "OtherModel");
+        },
+      }),
+    );
+
+    await assert.rejects(
+      () =>
+        service.createReport({
+          reporterId: "customer-1",
+          input: {
+            targetType: "MOVER",
+            targetId: "6f9619ff-8b86-d011-b42d-00cf4fc964ff",
+            reason: "SPAM",
+          },
+        }),
+      (error: unknown) =>
+        error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002",
     );
   });
 });

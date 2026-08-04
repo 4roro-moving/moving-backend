@@ -14,7 +14,7 @@ registerRouterDocs(reportRouter, {
   headers: authHeaderSchema,
   commonResponses: {
     401: "인증이 필요합니다.",
-    403: "본인 자신은 신고할 수 없습니다.",
+    403: "본인 자신은 신고할 수 없습니다. (`REPORT_SELF_NOT_ALLOWED`)",
     422: "입력값이 올바르지 않습니다.",
   },
   endpoints: {
@@ -35,7 +35,12 @@ registerRouterDocs(reportRouter, {
       responses: {
         201: "신고 생성 성공",
         404: "신고 대상을 찾을 수 없습니다.",
-        409: "이미 신고한 대상이거나 신고 가능한 대상이 아닙니다.",
+        409: [
+          "다음 에러 코드를 반환할 수 있습니다.",
+          "",
+          "- `REPORT_ALREADY_EXISTS`: 같은 사용자가 같은 대상을 이미 신고한 경우",
+          "- `REPORT_TARGET_NOT_REPORTABLE`: 대상이 존재하지만 현재 1차 신고 지원 대상이 아닌 경우",
+        ].join("\n"),
       },
     },
   },

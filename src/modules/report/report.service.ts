@@ -5,9 +5,13 @@ import { AppError } from "../../lib/app-error";
 import { reportRepository, type ReportRecord, type ReportRepository } from "./report.repository";
 import type { CreateReportInput, ReportItem } from "./report.type";
 
+function toReviewTargetIdNumber(targetId: string): number {
+  return Number(targetId);
+}
+
 function normalizeTargetId(targetType: CreateReportInput["targetType"], targetId: string): string {
   if (targetType === "REVIEW") {
-    return String(Number.parseInt(targetId, 10));
+    return String(toReviewTargetIdNumber(targetId));
   }
 
   return targetId.toLowerCase();
@@ -25,23 +29,51 @@ function toReportItem(report: ReportRecord): ReportItem {
   };
 }
 
+function normalizeErrorMetaIdentifier(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+const reportUniqueMetaFields = ["targettype", "targetid", "reporterid"] as const;
+
+function hasAllReportUniqueFields(values: string[]): boolean {
+  return reportUniqueMetaFields.every((field) => values.includes(field));
+}
+
+function hasSomeReportUniqueField(values: string[]): boolean {
+  return values.some((value) => reportUniqueMetaFields.includes(value as (typeof reportUniqueMetaFields)[number]));
+}
+
 function isReportUniqueConstraintError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
     return false;
   }
 
   const target = error.meta?.target;
-  const fields = ["target_type", "target_id", "reporter_id"];
+  const modelName = normalizeErrorMetaIdentifier(String(error.meta?.modelName ?? ""));
 
   if (Array.isArray(target)) {
-    const normalized = target.map((field) => String(field).toLowerCase());
+    const normalized = target.map((field) => normalizeErrorMetaIdentifier(String(field)));
 
-    return fields.every((field) => normalized.includes(field));
+    if (hasAllReportUniqueFields(normalized)) {
+      return true;
+    }
+
+    return modelName === "report" && hasSomeReportUniqueField(normalized);
   }
 
-  const normalizedTarget = String(target).toLowerCase();
+  if (typeof target === "string") {
+    const normalizedTarget = normalizeErrorMetaIdentifier(target);
 
-  return fields.every((field) => normalizedTarget.includes(field));
+    if (reportUniqueMetaFields.every((field) => normalizedTarget.includes(field))) {
+      return true;
+    }
+
+    return modelName === "report" && hasSomeReportUniqueField([normalizedTarget]);
+  }
+
+  // createReport 내부에서 발생한 P2002는 report.create 문맥이므로,
+  // target 정보가 비어 있어도 Report 모델 충돌이면 중복 신고로 간주합니다.
+  return modelName === "report";
 }
 
 export function createReportService(repository: ReportRepository = reportRepository) {
@@ -52,7 +84,7 @@ export function createReportService(repository: ReportRepository = reportReposit
       const detail = input.description && input.description.length > 0 ? input.description : null;
 
       if (input.targetType === "REVIEW") {
-        const reviewId = Number.parseInt(normalizedTargetId, 10);
+        const reviewId = toReviewTargetIdNumber(normalizedTargetId);
         const review = await repository.findReviewTargetById(reviewId);
 
         if (!review) {

@@ -1,27 +1,43 @@
+import { ReportReason, ReportTargetType } from "@prisma/client";
 import { z } from "zod";
 
-const REPORT_TARGET_TYPES = ["REVIEW", "MOVER"] as const;
-const REPORT_REASONS = [
-  "SPAM",
-  "ABUSE",
-  "FALSE_INFO",
-  "INAPPROPRIATE",
-  "PRIVACY",
-  "OTHER",
-] as const;
-
 export const MAX_REPORT_DESCRIPTION_LENGTH = 1000;
+export const MAX_REVIEW_TARGET_ID = 2_147_483_647;
 
+// 신고 대상은 Prisma enum 전체가 아니라 1차 지원 subset만 허용합니다.
+const SUPPORTED_REPORT_TARGET_TYPES = [ReportTargetType.REVIEW, ReportTargetType.MOVER] as const;
 const reviewTargetIdPattern = /^[1-9]\d*$/;
+const moverTargetIdPattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function isValidReviewTargetId(value: string): boolean {
+  if (!reviewTargetIdPattern.test(value)) {
+    return false;
+  }
+
+  const asBigInt = BigInt(value);
+
+  if (asBigInt < 1n || asBigInt > BigInt(MAX_REVIEW_TARGET_ID)) {
+    return false;
+  }
+
+  const asNumber = Number(value);
+
+  return Number.isSafeInteger(asNumber) && asNumber >= 1 && asNumber <= MAX_REVIEW_TARGET_ID;
+}
+
+function isValidMoverTargetId(value: string): boolean {
+  return moverTargetIdPattern.test(value);
+}
 
 export const createReportSchema = z
   .object({
-    targetType: z.enum(REPORT_TARGET_TYPES),
+    targetType: z.enum(SUPPORTED_REPORT_TARGET_TYPES),
     targetId: z
       .string("신고 대상 ID는 문자열이어야 합니다.")
       .trim()
       .min(1, "신고 대상 ID를 입력해 주세요."),
-    reason: z.enum(REPORT_REASONS),
+    reason: z.enum(ReportReason),
     description: z
       .string("신고 상세 내용은 문자열이어야 합니다.")
       .trim()
@@ -32,26 +48,21 @@ export const createReportSchema = z
       .optional(),
   })
   .superRefine((value, ctx) => {
-    if (value.targetType === "REVIEW" && !reviewTargetIdPattern.test(value.targetId)) {
+    // REVIEW는 서비스에서 안전하게 number로 변환할 수 있도록 DB Int 범위로 제한합니다.
+    if (value.targetType === "REVIEW" && !isValidReviewTargetId(value.targetId)) {
       ctx.addIssue({
         code: "custom",
         path: ["targetId"],
-        message: "REVIEW 대상 ID는 양의 정수 문자열이어야 합니다.",
+        message: `REVIEW 대상 ID는 1 이상 ${String(MAX_REVIEW_TARGET_ID)} 이하의 정수 문자열이어야 합니다.`,
       });
     }
 
-    if (value.targetType === "MOVER") {
-      const result = z.uuid("MOVER 대상 ID는 UUID 형식이어야 합니다.").safeParse(value.targetId);
-
-      if (!result.success) {
-        for (const issue of result.error.issues) {
-          ctx.addIssue({
-            code: "custom",
-            path: ["targetId"],
-            message: issue.message,
-          });
-        }
-      }
+    if (value.targetType === "MOVER" && !isValidMoverTargetId(value.targetId)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["targetId"],
+        message: "MOVER 대상 ID는 UUID 형식이어야 합니다.",
+      });
     }
 
     if (value.reason === "OTHER" && (!value.description || value.description.length === 0)) {
