@@ -98,6 +98,11 @@ function toAdminReviewListItem(
   };
 }
 
+function getMoverNotificationSubject(review: AdminReviewRow): string {
+  const moverName = review.mover.moverProfile?.nickname ?? review.mover.name;
+  return `${moverName} 기사님`;
+}
+
 async function attachListMeta(reviews: AdminReviewRow[]): Promise<AdminReviewListItem[]> {
   const targetIds = reviews.map((review) => String(review.id));
 
@@ -171,7 +176,7 @@ export const contentsService = {
           userId: review.customerId,
           type: "CONTENT_HIDDEN",
           title: "리뷰가 숨김 처리되었습니다",
-          content: input.reason,
+          content: getMoverNotificationSubject(review),
           linkUrl: null,
           expiresAt: null,
         },
@@ -220,7 +225,7 @@ export const contentsService = {
           userId: review.customerId,
           type: "CONTENT_RESTORED",
           title: "리뷰 숨김이 해제되었습니다",
-          content: reason ?? "관리자에 의해 리뷰가 다시 공개되었습니다.",
+          content: getMoverNotificationSubject(review),
           linkUrl: null,
           expiresAt: null,
         },
