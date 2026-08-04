@@ -302,7 +302,7 @@ export const estimateRequestService = {
               moverId,
               type: "ESTIMATE_REQUEST_RECEIVED",
               title: "새로운 견적 요청이 도착했어요",
-              content: `${MOVE_TYPE_LABEL[created.moveType]} 견적 요청이 등록되었습니다.`,
+              content: MOVE_TYPE_LABEL[created.moveType],
               estimateRequestId: created.id,
             }),
           ),
