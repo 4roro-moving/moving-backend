@@ -293,13 +293,4 @@ export const estimateRequestRepository = {
 
     return profiles.map((profile) => profile.userId);
   },
-
-  // 알림 ------------------------------------------------------------------ */
-
-  /**
-   * notification 모듈이 완성되기 전까지 사용하는 임시 알림 생성.
-   */
-  createNotifications(data: Prisma.NotificationCreateManyInput[], db: Db = prisma) {
-    return db.notification.createMany({ data });
-  },
 };
