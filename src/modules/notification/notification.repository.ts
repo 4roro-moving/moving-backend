@@ -46,6 +46,9 @@ interface FindManyByUserIdInput {
  * cursorId가 있으면 해당 사용자 다음부터 조회한다.
  *
  * take는 한 번에 조회할 최대 사용자 수이다.
+ *
+ * snapshotAt은 대량 알림 발송을 시작한 시각이며,
+ * 해당 시각 이전에 생성된 사용자만 조회하기 위해 사용한다.
  */
 interface FindRecipientIdsByRoleInput {
   role: NoticeAudience;
@@ -293,6 +296,9 @@ async function create(input: CreateNotificationInput, db: DbClient = prisma) {
  * ALL은 CUSTOMER와 MOVER를 모두 조회하며
  * 관리자 계정은 알림 대상에서 제외한다.
  *
+ * 역할 값은 Service에서 사전 검증하며,
+ * Repository에서는 각 역할별 조회 조건을 명시적으로 구성한다.
+ *
  * 비활성화되었거나 탈퇴 처리된 사용자는
  * 알림 발송 대상에서 제외한다.
  *
@@ -317,14 +323,20 @@ async function findRecipientIdsByRole(
     },
   };
 
-  if (input.role === "CUSTOMER") {
-    where.role = "CUSTOMER";
-  } else if (input.role === "MOVER") {
-    where.role = "MOVER";
-  } else {
-    where.role = {
-      in: ["CUSTOMER", "MOVER"],
-    };
+  switch (input.role) {
+    case "CUSTOMER":
+      where.role = "CUSTOMER";
+      break;
+
+    case "MOVER":
+      where.role = "MOVER";
+      break;
+
+    case "ALL":
+      where.role = {
+        in: ["CUSTOMER", "MOVER"],
+      };
+      break;
   }
 
   const users = await db.user.findMany({

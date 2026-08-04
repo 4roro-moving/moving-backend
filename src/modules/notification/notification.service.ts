@@ -29,6 +29,25 @@ const CHAT_READ_VISIBILITY_DAYS = 3;
 const NOTIFICATION_RETENTION_DAYS = 90;
 const BULK_NOTIFICATION_BATCH_SIZE = 500;
 
+const SUPPORTED_NOTICE_AUDIENCES = ["CUSTOMER", "MOVER", "ALL"] as const;
+
+/*
+ * 대량 알림 발송 대상 역할이
+ * 현재 지원하는 값인지 확인한다.
+ *
+ * 알 수 없는 값이 ALL로 조용히 처리되지 않도록
+ * Service에서 명시적으로 검증한다.
+ */
+const validateNoticeAudience = (role: CreateBulkNotificationInput["role"]): void => {
+  const supportedRoles: readonly string[] = SUPPORTED_NOTICE_AUDIENCES;
+
+  if (!supportedRoles.includes(role)) {
+    throw new AppError("BAD_REQUEST", {
+      message: "지원하지 않는 알림 대상입니다.",
+    });
+  }
+};
+
 /*
  * 전달받은 날짜를 기준으로 원하는 일수만큼 더하거나 뺀
  * 새로운 Date 객체를 반환한다.
@@ -200,6 +219,9 @@ const createNotification = async (
  * 역할에 해당하는 활성 사용자에게
  * 동일한 알림을 일정 개수씩 나누어 생성한다.
  *
+ * 지원하지 않는 역할이 ALL로 처리되지 않도록
+ * 배치 실행 전에 역할 값을 명시적으로 검증한다.
+ *
  * 대량 알림 작업을 시작할 때 snapshotAt을 한 번 생성하고,
  * 해당 시각 이전에 가입한 사용자만 전체 배치의 대상으로 고정한다.
  *
@@ -232,6 +254,8 @@ const createNotification = async (
  * 실제로 생성된 전체 알림 개수이다.
  */
 const createBulkNotification = async (input: CreateBulkNotificationInput): Promise<number> => {
+  validateNoticeAudience(input.role);
+
   /*
    * 대량 알림 작업이 시작된 시점을 기준으로
    * 이번 발송 대상 사용자 집합을 고정한다.
