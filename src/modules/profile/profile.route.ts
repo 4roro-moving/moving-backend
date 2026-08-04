@@ -7,6 +7,7 @@ import { asyncHandler } from "../../utils/async-handler.util";
 
 import {
   createProfileSchema as createCustomerProfileSchema,
+  updateBasicInfoSchema as updateCustomerBasicInfoSchema,
   updateProfileSchema as updateCustomerProfileSchema,
 } from "./customer/profile.validator";
 
@@ -75,10 +76,26 @@ profileRouter.get(
 );
 
 /*
+ * 현재 로그인한 고객의 기본정보를 수정한다.
+ *
+ * User 테이블의 이름, 전화번호, 비밀번호를
+ * 요청 Body 검증 후 수정한다.
+ */
+profileRouter.patch(
+  "/customer/me/basic",
+  authenticate,
+  authorize(UserRole.CUSTOMER),
+  validate({
+    body: updateCustomerBasicInfoSchema,
+  }),
+  asyncHandler(profileController.updateBasicInfo),
+);
+
+/*
  * 현재 로그인한 고객의 프로필을 수정한다.
  *
- * 요청 Body를 검증한 뒤
- * 고객 프로필 정보를 수정한다.
+ * CustomerProfile 정보와 이용 지역,
+ * 이사 서비스 유형을 요청 Body 검증 후 수정한다.
  */
 profileRouter.patch(
   "/customer/me",

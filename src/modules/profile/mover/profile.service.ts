@@ -388,12 +388,12 @@ const updateBasicInfo = async (
     );
 
     /*
-     * 비밀번호가 없는 소셜 로그인 계정은
+     * 비밀번호가 등록되지 않은 계정은
      * 현재 비밀번호를 기반으로 한 변경 방식을 사용할 수 없다.
      */
     if (!userWithPassword.password) {
       throw new AppError("BAD_REQUEST", {
-        message: "소셜 로그인 계정은 비밀번호를 변경할 수 없습니다.",
+        message: "비밀번호가 등록되지 않은 계정은 비밀번호를 변경할 수 없습니다.",
       });
     }
 
@@ -432,23 +432,15 @@ const updateBasicInfo = async (
 
   try {
     const updatedProfile = await runTransaction(async (tx) => {
-      await profileRepository.updateUser(
-        user.id,
-        {
-          ...(input.name !== undefined && {
-            name: input.name,
-          }),
+      const userUpdateData = {
+        ...(input.name !== undefined && input.name !== user.name && { name: input.name }),
+        ...(input.phone !== undefined && input.phone !== user.phone && { phone: input.phone }),
+        ...(hashedPassword !== undefined && { password: hashedPassword }),
+      };
 
-          ...(input.phone !== undefined && {
-            phone: input.phone,
-          }),
-
-          ...(hashedPassword !== undefined && {
-            password: hashedPassword,
-          }),
-        },
-        tx,
-      );
+      if (Object.keys(userUpdateData).length > 0) {
+        await profileRepository.updateUser(user.id, userUpdateData, tx);
+      }
 
       const profile = await profileRepository.findProfileByUserId(user.id, tx);
 

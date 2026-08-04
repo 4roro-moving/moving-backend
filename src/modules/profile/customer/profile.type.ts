@@ -7,14 +7,16 @@ export interface CreateProfileInput {
   serviceTypes: MoveType[];
 }
 
-export interface UpdateProfileInput {
+export interface UpdateBasicInfoInput {
   name?: string;
   phone?: string;
 
   currentPassword?: string;
   newPassword?: string;
   newPasswordConfirm?: string;
+}
 
+export interface UpdateProfileInput {
   imageUrl?: string | null;
   regionIds?: number[];
   serviceTypes?: MoveType[];
@@ -28,6 +30,7 @@ export interface ProfileResponse {
   email: string;
   phone: string | null;
   hasPassword: boolean;
+
   imageUrl: string | null;
 
   regions: {
