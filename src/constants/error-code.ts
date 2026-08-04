@@ -159,6 +159,23 @@ export const ERROR_CODES = {
     code: "INQUIRY_CLOSED",
     message: "이미 종료된 문의입니다. 새 문의를 등록해 주세요.",
   },
+
+  // 2026.08.03 신영미 - [추가] 관리자 콘텐츠 관리
+  CONTENT_NOT_FOUND: {
+    status: 404,
+    code: "CONTENT_NOT_FOUND",
+    message: "콘텐츠를 찾을 수 없습니다.",
+  },
+  CONTENT_ALREADY_HIDDEN: {
+    status: 409,
+    code: "CONTENT_ALREADY_HIDDEN",
+    message: "이미 숨김 처리된 콘텐츠입니다.",
+  },
+  CONTENT_NOT_HIDDEN: {
+    status: 409,
+    code: "CONTENT_NOT_HIDDEN",
+    message: "숨김 상태가 아니므로 복구할 수 없습니다.",
+  },
 } as const;
 
 // ErrorCode의 key 타입
