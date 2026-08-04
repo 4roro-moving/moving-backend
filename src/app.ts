@@ -13,6 +13,7 @@ import { generateOpenApiDocument } from "./config/openapi";
 import errorHandler from "./middlewares/error-handler";
 import notFoundHandler from "./middlewares/not-found-handler";
 
+import { adminReviewRouter } from "./modules/admin/contents/contents.route";
 import noticeRouter from "./modules/admin/notice/notice.route";
 import { authRouter } from "./modules/auth/auth.route";
 import estimateRequestRouter from "./modules/estimate-request/estimateRequest.route";
@@ -160,6 +161,7 @@ app.use("/api/notifications/sse", notificationSseRouter);
  * 관리자 API
  */
 app.use("/api/admin/notices", noticeRouter);
+app.use("/api/admin/reviews", adminReviewRouter);
 app.use("/api/admin/faqs", adminFaqRouter); //  관리자 FAQ 라우터
 app.use("/api/faqs", publicFaqRouter); // 일반 사용자 FAQ 라우터
 app.use("/api/inquiries", inquiryRouter); // 사용자 1:1 문의 라우터

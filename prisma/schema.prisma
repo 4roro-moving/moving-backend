@@ -140,6 +140,8 @@ enum NotificationType {
   ESTIMATE_REVISION_REJECTED // 견적 수정 요청 거절됨
   NOTICE_RECEIVED // (전체/대상) 새 공지사항 등록됨
   INQUIRY_ANSWERED // 관리자 문의 응답
+  CONTENT_HIDDEN // (작성자) 콘텐츠가 관리자에 의해 숨김 처리됨
+  CONTENT_RESTORED // (작성자) 숨김 콘텐츠가 관리자에 의해 복구됨
 }
 
 /// 채팅 메시지 유형
