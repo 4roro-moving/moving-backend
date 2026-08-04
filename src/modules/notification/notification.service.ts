@@ -7,6 +7,7 @@ import { notificationRepository } from "./notification.repository";
 import { notificationSseService } from "./notification-sse.service";
 
 import type {
+  CreateBulkNotificationInput,
   CreateNotificationInput,
   NotificationItem,
   NotificationListResponse,
@@ -26,6 +27,68 @@ type NotificationDbClient = Parameters<typeof notificationRepository.create>[1];
 
 const CHAT_READ_VISIBILITY_DAYS = 3;
 const NOTIFICATION_RETENTION_DAYS = 90;
+const BULK_NOTIFICATION_BATCH_SIZE = 500;
+
+const SUPPORTED_NOTICE_AUDIENCES = ["CUSTOMER", "MOVER", "ALL"] as const;
+
+/*
+ * 대량 알림 발송 대상 역할이
+ * 현재 지원하는 값인지 확인한다.
+ *
+ * 알 수 없는 값이 ALL로 조용히 처리되지 않도록
+ * Service에서 명시적으로 검증한다.
+ */
+const validateNoticeAudience = (role: CreateBulkNotificationInput["role"]): void => {
+  const supportedRoles: readonly string[] = SUPPORTED_NOTICE_AUDIENCES;
+
+  if (!supportedRoles.includes(role)) {
+    throw new AppError("BAD_REQUEST", {
+      message: "지원하지 않는 알림 대상입니다.",
+    });
+  }
+};
+
+/*
+ * 대량 알림의 원본 식별자가 유효한지 확인한다.
+ *
+ * 빈 문자열은 서로 다른 작업이 동일한 원본으로
+ * 처리될 수 있으므로 허용하지 않는다.
+ *
+ * 여러 도메인에서 sourceId를 사용할 때
+ * 원본 종류를 구분할 수 있도록
+ * notice:{id}와 같은 도메인 접두어 형식을 요구한다.
+ */
+const validateBulkNotificationSourceId = (sourceId: string): void => {
+  const normalizedSourceId = sourceId.trim();
+
+  if (normalizedSourceId.length === 0) {
+    throw new AppError("BAD_REQUEST", {
+      message: "대량 알림 원본 식별자는 비어 있을 수 없습니다.",
+    });
+  }
+
+  const separatorIndex = normalizedSourceId.indexOf(":");
+
+  if (separatorIndex <= 0 || separatorIndex === normalizedSourceId.length - 1) {
+    throw new AppError("BAD_REQUEST", {
+      message: "대량 알림 원본 식별자는 notice:{id}와 같은 형식이어야 합니다.",
+    });
+  }
+};
+
+/*
+ * 대량 알림 대상 기준 시각이 유효한지 확인한다.
+ *
+ * 잘못된 Date가 전달되면 대상 사용자 조회 조건도
+ * 올바르게 동작하지 않으므로 배치 실행 전에 차단한다.
+ */
+const validateBulkNotificationSnapshotAt = (snapshotAt: Date): void => {
+  if (Number.isNaN(snapshotAt.getTime())) {
+    throw new AppError("BAD_REQUEST", {
+      message: "대량 알림 대상 기준 시각이 올바르지 않습니다.",
+    });
+  }
+};
 
 /*
  * 전달받은 날짜를 기준으로 원하는 일수만큼 더하거나 뺀
@@ -195,6 +258,122 @@ const createNotification = async (
 };
 
 /*
+ * 역할에 해당하는 활성 사용자에게
+ * 동일한 알림을 일정 개수씩 나누어 생성한다.
+ *
+ * 지원하지 않는 역할이 ALL로 처리되지 않도록
+ * 배치 실행 전에 역할 값을 명시적으로 검증한다.
+ *
+ * 동일한 작업이 재실행되더라도 대상 기준 시점이
+ * 달라지지 않도록 snapshotAt을 호출부에서 전달받는다.
+ *
+ * 공지 알림에서는 재실행해도 변하지 않는
+ * notice.createdAt을 snapshotAt으로 사용한다.
+ *
+ * snapshotAt 이전에 가입한 사용자 중,
+ * 각 배치 조회 시점에 대상 역할과 활성 조건을
+ * 만족하는 사용자를 조회한다.
+ *
+ * 따라서 가입 시점은 고정하지만 역할, 활성 여부,
+ * 탈퇴 여부까지 최초 시점 기준으로 고정하는 구조는 아니다.
+ *
+ * 전체 사용자 ID를 한 번에 조회하지 않고,
+ * 마지막으로 조회한 사용자 ID를 cursor로 사용하여
+ * BULK_NOTIFICATION_BATCH_SIZE만큼 반복 조회한다.
+ *
+ * 각 배치에서는 Prisma createMany를 사용하여
+ * 사용자별 알림을 한 번에 저장한다.
+ *
+ * 동일한 원본 이벤트에서 생성된 대량 알림에는
+ * sourceId를 함께 저장한다.
+ *
+ * Repository의 복합 unique 제약과
+ * createMany의 skipDuplicates 옵션을 이용해
+ * 동일한 대량 알림 작업이 재실행되더라도
+ * 이미 생성된 사용자 알림은 중복 저장하지 않는다.
+ *
+ * 각 배치는 별도의 DB 작업으로 처리되므로,
+ * 중간 배치에서 실패하면 이미 완료된 이전 배치는 유지된다.
+ *
+ * 이후 동일한 sourceId와 snapshotAt으로 재실행하면
+ * 기존 알림은 건너뛰고 생성되지 않은 사용자 알림만 저장한다.
+ *
+ * 반환값은 중복으로 건너뛴 데이터를 제외하고
+ * 실제로 생성된 전체 알림 개수이다.
+ */
+const createBulkNotification = async (input: CreateBulkNotificationInput): Promise<number> => {
+  validateNoticeAudience(input.role);
+  validateBulkNotificationSourceId(input.sourceId);
+  validateBulkNotificationSnapshotAt(input.snapshotAt);
+
+  let cursorId: string | undefined;
+  let createdCount = 0;
+
+  while (true) {
+    const recipientIds = await notificationRepository.findRecipientIdsByRole({
+      role: input.role,
+      take: BULK_NOTIFICATION_BATCH_SIZE,
+      snapshotAt: input.snapshotAt,
+      ...(cursorId !== undefined && {
+        cursorId,
+      }),
+    });
+
+    if (recipientIds.length === 0) {
+      break;
+    }
+
+    const notifications: CreateNotificationInput[] = recipientIds.map((userId) => ({
+      userId,
+      type: input.type,
+      title: input.title,
+      content: input.content,
+      sourceId: input.sourceId.trim(),
+      expiresAt: input.expiresAt,
+      ...(input.linkUrl !== undefined && {
+        linkUrl: input.linkUrl,
+      }),
+    }));
+
+    const batchCreatedCount = await notificationRepository.createMany(notifications);
+
+    createdCount += batchCreatedCount;
+
+    /*
+     * 해당 배치에서 새 알림이 한 건 이상 생성된 경우,
+     * 배치 대상 사용자 전체에게 알림 목록 갱신 이벤트를 전송한다.
+     *
+     * createMany는 실제로 생성된 사용자의 ID를 반환하지 않으므로
+     * skipDuplicates로 건너뛴 사용자가 일부 포함될 수 있다.
+     *
+     * 이 경우 일부 사용자에게 불필요한 refetch가 발생할 수 있지만,
+     * 알림 데이터의 정합성에는 영향을 주지 않는다.
+     */
+    if (batchCreatedCount > 0) {
+      notificationSseService.sendNotificationRefresh(recipientIds);
+    }
+
+    const lastRecipientId = recipientIds[recipientIds.length - 1];
+
+    if (lastRecipientId === undefined) {
+      break;
+    }
+
+    cursorId = lastRecipientId;
+
+    /*
+     * 조회된 사용자 수가 배치 크기보다 작으면
+     * 마지막 배치이므로 다음 조회 없이 종료한다.
+     */
+    if (recipientIds.length < BULK_NOTIFICATION_BATCH_SIZE) {
+      break;
+    }
+  }
+
+  return createdCount;
+};
+
+/*
  * DB에 저장된 알림을 SSE로 실시간 전송한다.
  *
  * 트랜잭션 내부에서 호출하지 않고,
@@ -234,6 +413,7 @@ export const notificationService = {
   readNotification,
   readAllNotifications,
   createNotification,
+  createBulkNotification,
   sendNotification,
   cleanupExpiredNotifications,
 };

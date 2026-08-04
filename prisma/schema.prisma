@@ -124,21 +124,22 @@ enum EstimateRequestHistoryType {
 /// Notification.type 에 저장되어 프론트에서 아이콘/문구/이동 링크를 분기합니다.
 /// 상단 그룹은 기본 기능, CHAT_ 이하는 채팅/견적 수정(심화 기능) 알림입니다.
 enum NotificationType {
-  ESTIMATE_REQUEST_RECEIVED    // (기사) 일반 견적 요청이 도착함
-  DESIGNATED_REQUEST_RECEIVED  // (기사) 나를 지정한 견적 요청이 도착함
-  ESTIMATE_RECEIVED            // (고객) 기사님이 견적을 보냄
-  ESTIMATE_CONFIRMED           // (기사) 내 견적이 확정됨
-  ESTIMATE_REQUEST_REJECTED    // (고객) 기사님이 요청을 반려함
-  ESTIMATE_REQUEST_CANCELED    // (기사) 고객이 견적 요청을 취소함
-  MOVE_DAY_REMINDER            // 이사 당일 리마인더
+  ESTIMATE_REQUEST_RECEIVED // (기사) 일반 견적 요청이 도착함
+  DESIGNATED_REQUEST_RECEIVED // (기사) 나를 지정한 견적 요청이 도착함
+  ESTIMATE_RECEIVED // (고객) 기사님이 견적을 보냄
+  ESTIMATE_CONFIRMED // (기사) 내 견적이 확정됨
+  ESTIMATE_REQUEST_REJECTED // (고객) 기사님이 요청을 반려함
+  ESTIMATE_REQUEST_CANCELED // (기사) 고객이 견적 요청을 취소함
+  MOVE_DAY_REMINDER // 이사 당일 리마인더
   ESTIMATE_EXPIRATION_REMINDER // 견적 요청 만료 임박 리마인더
-  REVIEW_AVAILABLE             // (고객) 리뷰 작성 가능 안내
-  REVIEW_RECEIVED              // (기사) 리뷰를 받음
-  CHAT_MESSAGE_RECEIVED        // 채팅 메시지 수신
-  ESTIMATE_REVISION_REQUESTED  // 견적 수정 요청 도착
-  ESTIMATE_REVISION_APPROVED   // 견적 수정 요청 승인됨
-  ESTIMATE_REVISION_REJECTED   // 견적 수정 요청 거절됨
-  NOTICE_RECEIVED              // (전체/대상) 새 공지사항 등록됨
+  REVIEW_AVAILABLE // (고객) 리뷰 작성 가능 안내
+  REVIEW_RECEIVED // (기사) 리뷰를 받음
+  CHAT_MESSAGE_RECEIVED // 채팅 메시지 수신
+  ESTIMATE_REVISION_REQUESTED // 견적 수정 요청 도착
+  ESTIMATE_REVISION_APPROVED // 견적 수정 요청 승인됨
+  ESTIMATE_REVISION_REJECTED // 견적 수정 요청 거절됨
+  NOTICE_RECEIVED // (전체/대상) 새 공지사항 등록됨
+  INQUIRY_ANSWERED // 관리자 문의 응답
 }
 
 /// 채팅 메시지 유형
@@ -180,12 +181,12 @@ enum ReportTargetType {
 /// 신고 접수 화면에서 고르는 사유 목록입니다. OTHER 선택 시
 /// Report.detail 에 자유 서술을 받도록 운영합니다.
 enum ReportReason {
-  SPAM          // 스팸/광고
-  ABUSE         // 욕설/비방
-  FALSE_INFO    // 허위 정보
+  SPAM // 스팸/광고
+  ABUSE // 욕설/비방
+  FALSE_INFO // 허위 정보
   INAPPROPRIATE // 부적절한 내용
-  PRIVACY       // 개인정보 노출
-  OTHER         // 기타
+  PRIVACY // 개인정보 노출
+  OTHER // 기타
 }
 
 /// 신고 처리 상태
@@ -211,9 +212,9 @@ enum SuspensionAction {
 /// SUSPENSION_APPEAL 은 정지 이의 제기 창구로, 정지 회원도 접근할 수 있어야 합니다.
 enum InquiryCategory {
   SUSPENSION_APPEAL // 정지 이의 제기
-  ACCOUNT           // 계정 관련
-  SERVICE           // 서비스 이용 관련
-  ETC               // 기타
+  ACCOUNT // 계정 관련
+  SERVICE // 서비스 이용 관련
+  ETC // 기타
 }
 
 /// 1:1 문의 상태
@@ -269,29 +270,24 @@ enum LogTargetType {
   REPORT
 }
 
-
-
 /// 약관 유형, 버전 관리 대상
 ///
 /// 문서 기준으로 나눴습니다.
 enum TermsType {
-  TERMS_OF_SERVICE  // 서비스 이용약관
-  PRIVACY_POLICY    // 개인정보 처리방침
-  MARKETING_POLICY  // 마케팅 정보 수신 동의
-  LOCATION_POLICY   // 위치정보 이용약관
-  MOVER_POLICY      // 기사님 이용 정책
-  OTHER             // 기타
+  TERMS_OF_SERVICE // 서비스 이용약관
+  PRIVACY_POLICY // 개인정보 처리방침
+  MARKETING_POLICY // 마케팅 정보 수신 동의
+  LOCATION_POLICY // 위치정보 이용약관
+  MOVER_POLICY // 기사님 이용 정책
+  OTHER // 기타
 }
-
 
 /// 약관 유형 게시상태
 enum TermsStatus {
-  DRAFT       // 작성 중 (미게시)
-  PUBLISHED   // 게시됨 (현재 유효)
-  ARCHIVED    // 보관됨 (효력 종료, 이력 보존)
+  DRAFT // 작성 중 (미게시)
+  PUBLISHED // 게시됨 (현재 유효)
+  ARCHIVED // 보관됨 (효력 종료, 이력 보존)
 }
-
-
 
 // ===========================================================================
 // USER / AUTHENTICATION
@@ -479,28 +475,28 @@ model CustomerProfile {
 /// - confirmedCount 는 견적 확정 시 갱신합니다.
 model MoverProfile {
   /// PK.
-  id             Int                 @id @default(autoincrement())
+  id             Int     @id @default(autoincrement())
   /// 소유 사용자. 1:1 이므로 unique.
-  userId         String              @unique @db.Uuid
+  userId         String  @unique @db.Uuid
   /// 화면에 표시되는 기사님 별명. 중복 불가입니다.
-  nickname       String              @unique
+  nickname       String  @unique
   /// 프로필 이미지 URL. 미설정 허용.
   imageUrl       String?
   /// 경력 연수. 기본 0.
-  career         Int                 @default(0)
+  career         Int     @default(0)
   /// 한 줄 소개.
   shortIntro     String
   /// 상세 소개(긴 텍스트).
-  description    String              @db.Text
+  description    String  @db.Text
   /// 고객에게 확정된 견적 수. 정렬/노출용 비정규화 필드.
-  confirmedCount Int                 @default(0)
+  confirmedCount Int     @default(0)
   /// 리뷰 평균 평점(소수점 1자리). 리뷰 변경 시 갱신하는 비정규화 필드.
-  averageRating  Decimal             @default(0) @db.Decimal(2, 1)
+  averageRating  Decimal @default(0) @db.Decimal(2, 1)
   /// 리뷰 수. 리뷰 변경 시 갱신하는 비정규화 필드.
-  reviewCount    Int                 @default(0)
+  reviewCount    Int     @default(0)
 
   /// 사업자 등록번호. 가입 후 별도 신청 단계에서 입력하므로 nullable 이며 중복 불가.
-  businessNumber String?             @unique
+  businessNumber String? @unique
   /// 상호명. 사업자 신청 시 입력.
   businessName   String?
   /// 사업자등록증 파일의 S3 key.
@@ -1017,11 +1013,16 @@ model Notification {
   readAt    DateTime?        @map("read_at")
   /// 노출/정리 기준 만료 시각.
   expiresAt DateTime?        @map("expires_at")
+  /// 동일한 원본 이벤트에서 생성된 알림을 식별하는 키.
+  /// 대량 알림 재실행 시 중복 생성을 방지하기 위해 사용한다.
+  sourceId  String?          @map("source_id")
   /// 수신 사용자 관계. 계정 삭제 시 함께 삭제(Cascade).
   user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// 생성 시각.
   createdAt DateTime         @default(now()) @map("created_at")
 
+  /// 동일 사용자에게 같은 원본 알림이 중복 생성되지 않도록 보장.
+  @@unique([userId, type, sourceId])
   /// 사용자별 안 읽은 알림 조회 최적화.
   @@index([userId, isRead])
   /// 사용자별 최신순 알림 조회 최적화.
@@ -1339,23 +1340,23 @@ model InquiryMessage {
 /// 관리자가 작성해 사용자에게 노출하는 공지입니다.
 model Notice {
   /// PK.
-  id        Int            @id @default(autoincrement())
+  id               Int            @id @default(autoincrement())
   /// 작성 관리자.
-  authorId  String         @map("author_id") @db.Uuid
+  authorId         String         @map("author_id") @db.Uuid
   /// 공지 제목.
-  title     String
+  title            String
   /// 공지 내용.
-  content   String         @db.Text
+  content          String         @db.Text
   /// 노출 대상 그룹. 기본 ALL.
-  audience  NoticeAudience @default(ALL)
+  audience         NoticeAudience @default(ALL)
   /// 목록 상단 고정 여부.
-  isPinned  Boolean        @default(false) @map("is_pinned")
+  isPinned         Boolean        @default(false) @map("is_pinned")
   /// 노출 여부. false 면 숨김.
-  isVisible Boolean        @default(true) @map("is_visible")
+  isVisible        Boolean        @default(true) @map("is_visible")
   /// 등록 시 알림을 함께 발송할지 여부.
-  sendNotification Boolean @default(false) @map("send_notification")
+  sendNotification Boolean        @default(false) @map("send_notification")
   /// 조회수.
-  viewCount Int            @default(0) @map("view_count")
+  viewCount        Int            @default(0) @map("view_count")
 
   /// 작성 관리자 관계. 작성자 보존을 위해 계정 삭제를 막음(Restrict).
   author User @relation("NoticeAuthor", fields: [authorId], references: [id], onDelete: Restrict)
@@ -1402,7 +1403,6 @@ model Faq {
   @@index([isVisible, sortOrder])
   @@map("faqs")
 }
-
 
 /// 약관. 유형(type) + 버전(version) 조합으로 관리하며, 수정 시 새 버전을 생성한다.
 model Terms {

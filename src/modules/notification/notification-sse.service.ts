@@ -181,6 +181,53 @@ const sendNotification = (userId: string, notification: NotificationItem): void 
 };
 
 /*
+ * 대량 알림 저장이 완료된 사용자에게
+ * 알림 목록 갱신 이벤트를 전송한다.
+ *
+ * Prisma createMany는 생성된 NotificationItem 목록을
+ * 반환하지 않으므로 단건 notification 이벤트 대신
+ * notification-refresh 이벤트를 전송한다.
+ *
+ * 클라이언트는 이 이벤트를 받으면
+ * 알림 목록과 미읽음 알림 개수를 다시 조회한다.
+ *
+ * 현재 SSE에 연결되어 있지 않은 사용자는 건너뛰며,
+ * DB에 저장된 알림은 이후 알림 목록 API를 통해 확인할 수 있다.
+ */
+const sendNotificationRefresh = (userIds: string[]): void => {
+  const refreshedAt = new Date().toISOString();
+
+  userIds.forEach((userId) => {
+    const userConnections = connections.get(userId);
+
+    if (!userConnections) {
+      return;
+    }
+
+    userConnections.forEach((response) => {
+      if (response.writableEnded || response.destroyed) {
+        removeConnection(userId, response);
+
+        return;
+      }
+
+      try {
+        writeEvent(response, "notification-refresh", {
+          refreshedAt,
+        });
+      } catch (error) {
+        logger.warn("SSE 알림 갱신 이벤트 전송에 실패했습니다.", {
+          userId,
+          error,
+        });
+
+        removeConnection(userId, response);
+      }
+    });
+  });
+};
+
+/*
  * 서버 종료 시 현재 연결된 모든 SSE 응답을 종료한다.
  *
  * heartbeat interval도 함께 정리하여
@@ -209,5 +256,6 @@ export const notificationSseService = {
   addConnection,
   removeConnection,
   sendNotification,
+  sendNotificationRefresh,
   closeAllConnections,
 };
