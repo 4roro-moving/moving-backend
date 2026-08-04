@@ -16,6 +16,7 @@ import notFoundHandler from "./middlewares/not-found-handler";
 import { adminReviewRouter } from "./modules/admin/contents/contents.route";
 import noticeRouter from "./modules/admin/notice/notice.route";
 import { authRouter } from "./modules/auth/auth.route";
+import { chatRouter } from "./modules/chat/chat.route";
 import estimateRequestRouter from "./modules/estimate-request/estimateRequest.route";
 import estimateRouter from "./modules/estimate/estimate.route";
 import favoriteRouter from "./modules/favorite/favorite.route";
@@ -154,6 +155,7 @@ app.use("/api/movers", moverRouter);
 app.use("/api/estimates", estimateRouter);
 app.use("/api/reviews", reviewRouter);
 app.use("/api/favorites", favoriteRouter);
+app.use("/api/chats", chatRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/notifications/sse", notificationSseRouter);
 
