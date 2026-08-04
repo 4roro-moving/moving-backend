@@ -1,12 +1,15 @@
-import { LogAction, ReportTargetType, type Prisma } from "@prisma/client";
+import { LogAction } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
-import { prisma } from "../../../lib/prisma";
 import { notificationService } from "../../notification/notification.service";
 import { buildPagination } from "../../../utils/pagination.util";
 import { runTransaction } from "../../../utils/transaction";
 
-import { contentsRepository, type AdminReviewRow } from "./contents.repository";
+import {
+  contentsRepository,
+  type AdminReviewListFilters,
+  type AdminReviewRow,
+} from "./contents.repository";
 import type {
   AdminReviewListItem,
   HideContentBody,
@@ -23,61 +26,23 @@ function toEndOfDay(date: string): Date {
   return new Date(`${date}T23:59:59.999Z`);
 }
 
-function buildReviewOrderBy(
-  sort: ListAdminReviewsQuery["sort"],
-): Prisma.ReviewOrderByWithRelationInput[] {
-  switch (sort) {
-    case "OLDEST":
-      return [{ createdAt: "asc" }, { id: "asc" }];
-    case "RATING_HIGH":
-      return [{ rating: "desc" }, { createdAt: "desc" }, { id: "desc" }];
-    case "RATING_LOW":
-      return [{ rating: "asc" }, { createdAt: "desc" }, { id: "desc" }];
-    case "LATEST":
-    default:
-      return [{ createdAt: "desc" }, { id: "desc" }];
-  }
-}
-
-async function buildReviewWhere(query: ListAdminReviewsQuery): Promise<Prisma.ReviewWhereInput> {
-  const where: Prisma.ReviewWhereInput = {};
+function buildReviewListFilters(query: ListAdminReviewsQuery): AdminReviewListFilters {
+  const filters: AdminReviewListFilters = {};
 
   if (query.isHidden !== undefined) {
-    where.isHidden = query.isHidden;
+    filters.isHidden = query.isHidden;
+  }
+  if (query.keyword !== undefined) {
+    filters.keyword = query.keyword;
+  }
+  if (query.from) {
+    filters.from = toStartOfDay(query.from);
+  }
+  if (query.to) {
+    filters.to = toEndOfDay(query.to);
   }
 
-  if (query.keyword) {
-    where.OR = [
-      { content: { contains: query.keyword, mode: "insensitive" } },
-      { customer: { name: { contains: query.keyword, mode: "insensitive" } } },
-    ];
-  }
-
-  if (query.from || query.to) {
-    where.createdAt = {};
-    if (query.from) {
-      where.createdAt.gte = toStartOfDay(query.from);
-    }
-    if (query.to) {
-      where.createdAt.lte = toEndOfDay(query.to);
-    }
-  }
-
-  if (query.reportedOnly) {
-    const reported = await prisma.report.groupBy({
-      by: ["targetId"],
-      where: { targetType: ReportTargetType.REVIEW },
-    });
-
-    const reportedIds = reported
-      .map((row) => Number(row.targetId))
-      .filter((id) => Number.isInteger(id) && id > 0);
-
-    // 신고가 한 건도 없으면 빈 목록이 되도록 불가능한 id 조건을 둔다.
-    where.id = { in: reportedIds.length > 0 ? reportedIds : [-1] };
-  }
-
-  return where;
+  return filters;
 }
 
 function pickLatestModerationByTargetId(
@@ -158,14 +123,13 @@ async function attachListMeta(reviews: AdminReviewRow[]): Promise<AdminReviewLis
 export const contentsService = {
   async getReviewList(query: ListAdminReviewsQuery) {
     const { page, limit, sort } = query;
-    const where = await buildReviewWhere(query);
-    const orderBy = buildReviewOrderBy(sort);
 
     const { reviews, totalCount } = await contentsRepository.findReviewsWithCount({
       skip: (page - 1) * limit,
       take: limit,
-      where,
-      orderBy,
+      filters: buildReviewListFilters(query),
+      sort,
+      reportedOnly: query.reportedOnly === true,
     });
 
     const items = await attachListMeta(reviews);
