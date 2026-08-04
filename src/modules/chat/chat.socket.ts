@@ -3,14 +3,14 @@ import type { Server as SocketIOServer, Socket } from "socket.io";
 import { AppError } from "../../lib/app-error";
 import { emitSocketError, type SocketErrorResponse } from "../../socket/socket-error";
 import { chatService } from "./chat.service";
-import type { ChatMessageResponse, ChatRoomSummary } from "./chat.type";
+import type { ChatMessageResponse, ChatRoomSummary, MissedChatMessagesResponse } from "./chat.type";
 import { joinChatRoomPayloadSchema, sendChatMessagePayloadSchema } from "./chat.validator";
 
 type JoinRoomAck =
   | {
       ok: true;
       room: ChatRoomSummary;
-      missedMessages: ChatMessageResponse[];
+      missedMessages: MissedChatMessagesResponse;
     }
   | {
       ok: false;

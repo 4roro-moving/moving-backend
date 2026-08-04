@@ -43,3 +43,9 @@ export type ChatMessageResponse = {
   createdAt: Date;
   sender: ChatParticipant;
 };
+
+export type MissedChatMessagesResponse = {
+  messages: ChatMessageResponse[];
+  hasMore: boolean;
+  nextMessageId: number | null;
+};

@@ -61,11 +61,13 @@ export const chatRepository = {
       where: { id: estimateId },
       select: {
         id: true,
+        status: true,
         estimateRequestId: true,
         moverId: true,
         estimateRequest: {
           select: {
             customerId: true,
+            status: true,
           },
         },
       },

@@ -1,11 +1,22 @@
-import { Prisma, type UserRole } from "@prisma/client";
+import {
+  Prisma,
+  type EstimateRequestStatus,
+  type EstimateStatus,
+  type UserRole,
+} from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import { runTransaction } from "../../utils/transaction";
 import { chatRepository, type ChatMessageRow, type ChatRoomRow } from "./chat.repository";
-import type { ChatMessageResponse, ChatRoomSummary } from "./chat.type";
+import type { ChatMessageResponse, ChatRoomSummary, MissedChatMessagesResponse } from "./chat.type";
 
 const ROOM_JOIN_RECOVERY_LIMIT = 50;
+const CHAT_ROOM_BLOCKED_ESTIMATE_STATUSES: readonly EstimateStatus[] = ["EXPIRED", "CANCELED"];
+const CHAT_ROOM_BLOCKED_REQUEST_STATUSES: readonly EstimateRequestStatus[] = [
+  "COMPLETED",
+  "EXPIRED",
+  "CANCELED",
+];
 
 function isParticipant(room: Pick<ChatRoomRow, "customerId" | "moverId">, userId: string): boolean {
   return room.customerId === userId || room.moverId === userId;
@@ -84,6 +95,25 @@ function isChatRoomUniqueError(error: unknown): boolean {
   return hasEstimateId || (hasEstimateRequestId && hasMoverId);
 }
 
+function assertChatRoomCreatable(estimate: {
+  status: EstimateStatus;
+  estimateRequest: {
+    status: EstimateRequestStatus;
+  };
+}): void {
+  if (CHAT_ROOM_BLOCKED_ESTIMATE_STATUSES.includes(estimate.status)) {
+    throw new AppError("CONFLICT", {
+      message: "취소되었거나 만료된 견적은 채팅방을 생성할 수 없습니다.",
+    });
+  }
+
+  if (CHAT_ROOM_BLOCKED_REQUEST_STATUSES.includes(estimate.estimateRequest.status)) {
+    throw new AppError("CONFLICT", {
+      message: "종료된 견적 요청은 채팅방을 생성할 수 없습니다.",
+    });
+  }
+}
+
 export const chatService = {
   async getOrCreateRoom(userId: string, estimateId: number): Promise<ChatRoomSummary> {
     const room = await chatRepository.findRoomByEstimateId(estimateId);
@@ -98,6 +128,8 @@ export const chatService = {
     if (!estimate) {
       throw new AppError("ESTIMATE_NOT_FOUND");
     }
+
+    assertChatRoomCreatable(estimate);
 
     const customerId = estimate.estimateRequest.customerId;
     const moverId = estimate.moverId;
@@ -188,17 +220,25 @@ export const chatService = {
 
   async joinRoom(userId: string, roomId: number, lastMessageId?: number | null) {
     const room = await this.getRoom(userId, roomId);
-    const missedMessages = lastMessageId
+    const missedMessageRows = lastMessageId
       ? await chatRepository.findMessagesAfterId({
           roomId,
           messageId: lastMessageId,
-          take: ROOM_JOIN_RECOVERY_LIMIT,
+          take: ROOM_JOIN_RECOVERY_LIMIT + 1,
         })
       : [];
+    const hasMore = missedMessageRows.length > ROOM_JOIN_RECOVERY_LIMIT;
+    const pageMessageRows = missedMessageRows.slice(0, ROOM_JOIN_RECOVERY_LIMIT);
+    const lastMissedMessage = pageMessageRows.at(-1);
+    const missedMessages = {
+      messages: pageMessageRows.map(mapMessage),
+      hasMore,
+      nextMessageId: hasMore && lastMissedMessage ? lastMissedMessage.id : null,
+    } satisfies MissedChatMessagesResponse;
 
     return {
       room,
-      missedMessages: missedMessages.map(mapMessage),
+      missedMessages,
     };
   },
 
