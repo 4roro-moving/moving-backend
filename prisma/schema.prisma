@@ -139,6 +139,7 @@ enum NotificationType {
   ESTIMATE_REVISION_APPROVED // 견적 수정 요청 승인됨
   ESTIMATE_REVISION_REJECTED // 견적 수정 요청 거절됨
   NOTICE_RECEIVED // (전체/대상) 새 공지사항 등록됨
+  INQUIRY_ANSWERED // 관리자 문의 응답
 }
 
 /// 채팅 메시지 유형
