@@ -47,8 +47,10 @@ interface FindManyByUserIdInput {
  *
  * take는 한 번에 조회할 최대 사용자 수이다.
  *
- * snapshotAt은 대량 알림 발송을 시작한 시각이며,
- * 해당 시각 이전에 생성된 사용자만 조회하기 위해 사용한다.
+ * snapshotAt은 대량 알림 대상을 고정하기 위한 기준 시각이다.
+ *
+ * snapshotAt 이전에 생성된 사용자만 조회하여
+ * 동일한 작업을 재실행하더라도 최초 대상 기준을 유지한다.
  */
 interface FindRecipientIdsByRoleInput {
   role: NoticeAudience;
@@ -287,29 +289,14 @@ async function create(input: CreateNotificationInput, db: DbClient = prisma) {
 }
 
 /*
- * 역할별 대량 알림 발송 대상 사용자 ID를
- * cursor 방식으로 일정 개수씩 조회한다.
+ * snapshotAt 이전에 생성된 사용자만 조회한다.
  *
- * CUSTOMER는 활성 고객만 조회하고,
- * MOVER는 활성 기사만 조회한다.
+ * 동일한 작업을 재실행하더라도
+ * snapshotAt 이후 가입한 사용자는
+ * 이번 발송 대상에 포함되지 않는다.
  *
- * ALL은 CUSTOMER와 MOVER를 모두 조회하며
- * 관리자 계정은 알림 대상에서 제외한다.
- *
- * 역할 값은 Service에서 사전 검증하며,
- * Repository에서는 각 역할별 조회 조건을 명시적으로 구성한다.
- *
- * 비활성화되었거나 탈퇴 처리된 사용자는
- * 알림 발송 대상에서 제외한다.
- *
- * snapshotAt 이전에 생성된 사용자만 조회하여
- * 배치 시작 이후 가입한 사용자는 이번 발송 대상에서 제외한다.
- *
- * 사용자 ID를 오름차순으로 정렬하고,
- * cursorId가 전달된 경우 해당 사용자 다음부터 조회한다.
- *
- * 전체 사용자 ID를 한 번에 메모리에 올리지 않고
- * take만큼 나누어 처리할 수 있도록 한다.
+ * 역할, 활성 여부, 탈퇴 여부는
+ * 각 배치 조회 시점의 현재 상태를 기준으로 판단한다.
  */
 async function findRecipientIdsByRole(
   input: FindRecipientIdsByRoleInput,
