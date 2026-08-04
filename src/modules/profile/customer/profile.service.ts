@@ -5,7 +5,12 @@ import { AppError } from "../../../lib/app-error";
 import { runTransaction } from "../../../utils/transaction";
 
 import { profileRepository } from "./profile.repository";
-import type { CreateProfileInput, ProfileResponse, UpdateProfileInput } from "./profile.type";
+import type {
+  CreateProfileInput,
+  ProfileResponse,
+  UpdateBasicInfoInput,
+  UpdateProfileInput,
+} from "./profile.type";
 
 type CustomerProfileWithRelations = NonNullable<
   Awaited<ReturnType<typeof profileRepository.findProfileByUserId>>
@@ -238,11 +243,16 @@ const getProfileStatus = async (
 };
 
 /*
- * 현재 로그인한 고객의 기본정보와 프로필 정보를 수정한다.
+ * 현재 로그인한 고객의 기본정보를 수정한다.
+ *
+ * User 테이블:
+ * - name
+ * - phone
+ * - password
  */
-const updateProfile = async (
+const updateBasicInfo = async (
   userId: string,
-  input: UpdateProfileInput,
+  input: UpdateBasicInfoInput,
 ): Promise<ProfileResponse> => {
   const user = validateActiveCustomer(await profileRepository.findUserById(userId));
 
@@ -254,6 +264,10 @@ const updateProfile = async (
     });
   }
 
+  /*
+   * 전화번호가 실제로 변경되는 경우에만
+   * 현재 사용자를 제외하고 중복 여부를 확인한다.
+   */
   if (input.phone !== undefined && input.phone !== user.phone) {
     const phoneOwner = await profileRepository.findUserByPhoneExcludingUser(input.phone, user.id);
 
@@ -264,10 +278,6 @@ const updateProfile = async (
     }
   }
 
-  if (input.regionIds !== undefined) {
-    await validateRegions(input.regionIds);
-  }
-
   let hashedPassword: string | undefined;
 
   const isPasswordChangeRequested =
@@ -276,6 +286,12 @@ const updateProfile = async (
     input.newPasswordConfirm !== undefined;
 
   if (isPasswordChangeRequested) {
+    /*
+     * 비밀번호 변경 요청 시 세 필드를 모두 전달해야 한다.
+     *
+     * Validator에서도 확인하지만 Service 직접 호출에 대비해
+     * 비즈니스 규칙을 다시 검증한다.
+     */
     if (
       input.currentPassword === undefined ||
       input.newPassword === undefined ||
@@ -290,9 +306,13 @@ const updateProfile = async (
       await profileRepository.findUserWithPasswordById(user.id),
     );
 
+    /*
+     * 비밀번호가 등록되지 않은 계정은
+     * 현재 비밀번호 기반의 변경 방식을 사용할 수 없다.
+     */
     if (!userWithPassword.password) {
       throw new AppError("BAD_REQUEST", {
-        message: "소셜 로그인 계정은 비밀번호를 변경할 수 없습니다.",
+        message: "비밀번호가 등록되지 않은 계정은 비밀번호를 변경할 수 없습니다.",
       });
     }
 
@@ -313,62 +333,39 @@ const updateProfile = async (
       });
     }
 
+    if (input.currentPassword === input.newPassword) {
+      throw new AppError("BAD_REQUEST", {
+        message: "새 비밀번호는 현재 비밀번호와 달라야 합니다.",
+      });
+    }
+
     hashedPassword = await bcrypt.hash(input.newPassword, PASSWORD_SALT_ROUNDS);
   }
 
   try {
-    return await runTransaction(async (tx) => {
-      const hasUserUpdate =
-        input.name !== undefined || input.phone !== undefined || hashedPassword !== undefined;
+    const updatedProfile = await runTransaction(async (tx) => {
+      const userUpdateData = {
+        ...(input.name !== undefined && input.name !== user.name && { name: input.name }),
+        ...(input.phone !== undefined && input.phone !== user.phone && { phone: input.phone }),
+        ...(hashedPassword !== undefined && { password: hashedPassword }),
+      };
 
-      if (hasUserUpdate) {
-        await profileRepository.updateUser(
-          user.id,
-          {
-            ...(input.name !== undefined && {
-              name: input.name,
-            }),
-
-            ...(input.phone !== undefined && {
-              phone: input.phone,
-            }),
-
-            ...(hashedPassword !== undefined && {
-              password: hashedPassword,
-            }),
-          },
-          tx,
-        );
+      if (Object.keys(userUpdateData).length > 0) {
+        await profileRepository.updateUser(user.id, userUpdateData, tx);
       }
 
-      if (input.imageUrl !== undefined) {
-        await profileRepository.updateProfile(
-          user.id,
-          {
-            imageUrl: input.imageUrl,
-          },
-          tx,
-        );
-      }
+      const profile = await profileRepository.findProfileByUserId(user.id, tx);
 
-      if (input.regionIds !== undefined) {
-        await profileRepository.replaceServiceAreas(existingProfile.id, input.regionIds, tx);
-      }
-
-      if (input.serviceTypes !== undefined) {
-        await profileRepository.replaceServiceTypes(existingProfile.id, input.serviceTypes, tx);
-      }
-
-      const updatedProfile = await profileRepository.findProfileByUserId(user.id, tx);
-
-      if (!updatedProfile) {
+      if (!profile) {
         throw new AppError("NOT_FOUND", {
           message: "수정된 프로필을 찾을 수 없습니다.",
         });
       }
 
-      return mapProfileResponse(updatedProfile);
+      return profile;
     });
+
+    return mapProfileResponse(updatedProfile);
   } catch (error) {
     if (isUniqueConstraintError(error)) {
       const target = error.meta?.target;
@@ -389,9 +386,83 @@ const updateProfile = async (
   }
 };
 
+/*
+ * 현재 로그인한 고객의 프로필 정보를 수정한다.
+ *
+ * CustomerProfile 테이블:
+ * - imageUrl
+ *
+ * 관계 테이블:
+ * - serviceAreas
+ * - serviceTypes
+ */
+const updateProfile = async (
+  userId: string,
+  input: UpdateProfileInput,
+): Promise<ProfileResponse> => {
+  const user = validateActiveCustomer(await profileRepository.findUserById(userId));
+
+  const existingProfile = await profileRepository.findProfileByUserId(user.id);
+
+  if (!existingProfile) {
+    throw new AppError("NOT_FOUND", {
+      message: "등록된 프로필이 없습니다.",
+    });
+  }
+
+  if (input.regionIds !== undefined) {
+    await validateRegions(input.regionIds);
+  }
+
+  return runTransaction(async (tx) => {
+    /*
+     * imageUrl:
+     * - undefined: 이미지 수정 없음
+     * - null: 기존 이미지 삭제
+     * - string: 새 이미지로 변경
+     */
+    if (input.imageUrl !== undefined) {
+      await profileRepository.updateProfile(
+        user.id,
+        {
+          imageUrl: input.imageUrl,
+        },
+        tx,
+      );
+    }
+
+    /*
+     * 지역 정보가 전달되면 기존 값을 모두 삭제하고
+     * 새로운 지역 목록으로 교체한다.
+     */
+    if (input.regionIds !== undefined) {
+      await profileRepository.replaceServiceAreas(existingProfile.id, input.regionIds, tx);
+    }
+
+    /*
+     * 서비스 유형이 전달되면 기존 값을 모두 삭제하고
+     * 새로운 서비스 유형 목록으로 교체한다.
+     */
+    if (input.serviceTypes !== undefined) {
+      await profileRepository.replaceServiceTypes(existingProfile.id, input.serviceTypes, tx);
+    }
+
+    const updatedProfile = await profileRepository.findProfileByUserId(user.id, tx);
+
+    if (!updatedProfile) {
+      throw new AppError("NOT_FOUND", {
+        message: "수정된 프로필을 찾을 수 없습니다.",
+      });
+    }
+
+    return mapProfileResponse(updatedProfile);
+  });
+};
+
 export const profileService = {
   createProfile,
   getMyProfile,
   getProfileStatus,
+  updateBasicInfo,
   updateProfile,
 };
