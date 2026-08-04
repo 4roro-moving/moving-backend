@@ -8,36 +8,41 @@ const booleanQuerySchema = z
   .transform((value) => value === "true")
   .optional();
 
-const dateQuerySchema = z
-  .string()
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "날짜는 YYYY-MM-DD 형식이어야 합니다.")
-  .optional();
+const dateQuerySchema = z.iso.date("날짜는 YYYY-MM-DD 형식의 유효한 날짜여야 합니다.").optional();
 
 /**
  * 관리자 리뷰 목록 조회 쿼리.
- * sort 를 우선 사용합니다. order 는 선택적 하위 호환용입니다.
  */
-export const listAdminReviewsQuerySchema = z.object({
-  page: z.coerce
-    .number()
-    .int("페이지 번호는 정수여야 합니다.")
-    .positive("페이지 번호는 1 이상이어야 합니다.")
-    .max(MAX_PAGE, `페이지 번호는 ${String(MAX_PAGE)} 이하여야 합니다.`)
-    .default(1),
-  limit: z.coerce
-    .number()
-    .int("조회 개수는 정수여야 합니다.")
-    .positive("조회 개수는 1 이상이어야 합니다.")
-    .max(50, "조회 개수는 50 이하여야 합니다.")
-    .default(10),
-  keyword: z.string().trim().min(1).max(100).optional(),
-  isHidden: booleanQuerySchema,
-  sort: z.enum(["LATEST", "OLDEST", "RATING_HIGH", "RATING_LOW"]).default("LATEST"),
-  order: z.enum(["ASC", "DESC"]).optional(),
-  from: dateQuerySchema,
-  to: dateQuerySchema,
-  reportedOnly: booleanQuerySchema,
-});
+export const listAdminReviewsQuerySchema = z
+  .object({
+    page: z.coerce
+      .number()
+      .int("페이지 번호는 정수여야 합니다.")
+      .positive("페이지 번호는 1 이상이어야 합니다.")
+      .max(MAX_PAGE, `페이지 번호는 ${String(MAX_PAGE)} 이하여야 합니다.`)
+      .default(1),
+    limit: z.coerce
+      .number()
+      .int("조회 개수는 정수여야 합니다.")
+      .positive("조회 개수는 1 이상이어야 합니다.")
+      .max(50, "조회 개수는 50 이하여야 합니다.")
+      .default(10),
+    keyword: z.string().trim().min(1).max(100).optional(),
+    isHidden: booleanQuerySchema,
+    sort: z.enum(["LATEST", "OLDEST", "RATING_HIGH", "RATING_LOW"]).default("LATEST"),
+    from: dateQuerySchema,
+    to: dateQuerySchema,
+    reportedOnly: booleanQuerySchema,
+  })
+  .superRefine((data, ctx) => {
+    if (data.from && data.to && data.from > data.to) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["from"],
+        message: "시작일(from)은 종료일(to)보다 늦을 수 없습니다.",
+      });
+    }
+  });
 
 export const reviewIdParamSchema = z.object({
   reviewId: z.coerce

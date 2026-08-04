@@ -186,12 +186,13 @@ export const contentsService = {
         throw new AppError("CONTENT_NOT_FOUND");
       }
 
-      if (review.isHidden) {
+      const updated = await contentsRepository.updateReviewHiddenIf(reviewId, false, true, tx);
+
+      if (!updated) {
         throw new AppError("CONTENT_ALREADY_HIDDEN");
       }
 
-      const updated = await contentsRepository.updateReviewHidden(reviewId, true, tx);
-      const log = await contentsRepository.createActivityLog(
+      await contentsRepository.createActivityLog(
         {
           actorId: adminId,
           action: LogAction.HIDE,
@@ -201,17 +202,22 @@ export const contentsService = {
         tx,
       );
 
-      return { updated, log, authorId: review.customerId };
+      const notification = await notificationService.createNotification(
+        {
+          userId: review.customerId,
+          type: "CONTENT_HIDDEN",
+          title: "리뷰가 숨김 처리되었습니다",
+          content: input.reason,
+          linkUrl: null,
+          expiresAt: null,
+        },
+        tx,
+      );
+
+      return { updated, notification, authorId: review.customerId };
     });
 
-    await notificationService.createNotification({
-      userId: result.authorId,
-      type: "CONTENT_HIDDEN",
-      title: "게시글이 숨김 처리되었습니다",
-      content: input.reason,
-      linkUrl: null,
-      expiresAt: null,
-    });
+    notificationService.sendNotification(result.authorId, result.notification);
 
     const [item] = await attachListMeta([result.updated]);
 
@@ -229,12 +235,13 @@ export const contentsService = {
         throw new AppError("CONTENT_NOT_FOUND");
       }
 
-      if (!review.isHidden) {
+      const updated = await contentsRepository.updateReviewHiddenIf(reviewId, true, false, tx);
+
+      if (!updated) {
         throw new AppError("CONTENT_NOT_HIDDEN");
       }
 
-      const updated = await contentsRepository.updateReviewHidden(reviewId, false, tx);
-      const log = await contentsRepository.createActivityLog(
+      await contentsRepository.createActivityLog(
         {
           actorId: adminId,
           action: LogAction.UNHIDE,
@@ -244,17 +251,22 @@ export const contentsService = {
         tx,
       );
 
-      return { updated, log, authorId: review.customerId };
+      const notification = await notificationService.createNotification(
+        {
+          userId: review.customerId,
+          type: "CONTENT_RESTORED",
+          title: "리뷰 숨김이 해제되었습니다",
+          content: reason ?? "관리자에 의해 리뷰가 다시 공개되었습니다.",
+          linkUrl: null,
+          expiresAt: null,
+        },
+        tx,
+      );
+
+      return { updated, notification, authorId: review.customerId };
     });
 
-    await notificationService.createNotification({
-      userId: result.authorId,
-      type: "CONTENT_RESTORED",
-      title: "게시글 숨김이 해제되었습니다",
-      content: reason ?? "관리자에 의해 게시글이 다시 공개되었습니다.",
-      linkUrl: null,
-      expiresAt: null,
-    });
+    notificationService.sendNotification(result.authorId, result.notification);
 
     const [item] = await attachListMeta([result.updated]);
 

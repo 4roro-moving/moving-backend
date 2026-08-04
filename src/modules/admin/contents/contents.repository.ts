@@ -63,14 +63,31 @@ export const contentsRepository = {
     });
   },
 
-  updateReviewHidden(
+  /**
+   * 현재 isHidden 이 expectedHidden 일 때만 전환합니다.
+   * 동시 요청에서 중복 로그/알림을 막기 위한 조건부 업데이트입니다.
+   * 전환에 실패하면 null 을 반환합니다.
+   */
+  async updateReviewHiddenIf(
     reviewId: number,
-    isHidden: boolean,
+    expectedHidden: boolean,
+    nextHidden: boolean,
     db: DbClient = prisma,
-  ): Promise<AdminReviewRow> {
-    return db.review.update({
+  ): Promise<AdminReviewRow | null> {
+    const result = await db.review.updateMany({
+      where: {
+        id: reviewId,
+        isHidden: expectedHidden,
+      },
+      data: { isHidden: nextHidden },
+    });
+
+    if (result.count === 0) {
+      return null;
+    }
+
+    return db.review.findUnique({
       where: { id: reviewId },
-      data: { isHidden },
       select: adminReviewSelect,
     });
   },
