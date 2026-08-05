@@ -27,6 +27,7 @@ import reviewRouter from "./modules/review/review.route";
 
 import { adminFaqRouter, publicFaqRouter } from "./modules/admin/faq/faq.route";
 import { adminInquiryRouter, inquiryRouter } from "./modules/inquiry/inquiry.route";
+import { adminAuthRouter } from "./modules/admin/auth/admin-auth.route";
 
 // Swagger UI로 전환할 때 사용
 // import type { RequestHandler } from "express";
@@ -160,6 +161,7 @@ app.use("/api/notifications/sse", notificationSseRouter);
 /*
  * 관리자 API
  */
+app.use("/api/admin/auth", adminAuthRouter);
 app.use("/api/admin/notices", noticeRouter);
 app.use("/api/admin/reviews", adminReviewRouter);
 app.use("/api/admin/faqs", adminFaqRouter); //  관리자 FAQ 라우터

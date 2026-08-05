@@ -29,7 +29,7 @@ export const requireActiveAdmin: RequestHandler = async (req, _res, next) => {
       );
     }
 
-    const admin = await adminAuthRepository.findById(req.user.id);
+    const admin = await adminAuthRepository.findByIdForSession(req.user.id);
 
     if (!admin) {
       return next(
