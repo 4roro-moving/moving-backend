@@ -3,6 +3,7 @@ import { Prisma } from "@prisma/client";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
+import type { DbClient } from "../../utils/transaction";
 
 import { termsRepository } from "./terms.repository";
 import type { CreateTermsInput, ListTermsQuery, UpdateTermsInput } from "./terms.type";
@@ -18,16 +19,23 @@ type UpdateParams = {
 };
 
 /** 같은 (type, version) 조합 중복 시 Prisma 가 던지는 unique 위반 에러인지 */
-function isUniqueViolation(error: unknown): boolean {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+function isVersionDuplicated(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+    return false;
+  }
+  const target = error.meta?.target;
+
+  return typeof target === "string"
+    ? target.includes("version")
+    : Array.isArray(target) && target.some((t) => String(t).includes("version"));
 }
 
 /**
  * 약관을 조회하고, 없거나 삭제됐으면 404 를 던진다.
  * 수정/게시/삭제 전 공통으로 존재를 보장하는 헬퍼.
  */
-async function findTermsOrThrow(termsId: number) {
-  const terms = await termsRepository.findById(termsId);
+async function findTermsOrThrow(termsId: number, db?: DbClient) {
+  const terms = await termsRepository.findById(termsId, db);
 
   if (!terms || terms.deletedAt !== null) {
     throw new AppError("TERMS_NOT_FOUND");
@@ -59,7 +67,7 @@ export const termsService = {
     try {
       return await termsRepository.create(data);
     } catch (error) {
-      if (isUniqueViolation(error)) {
+      if (isVersionDuplicated(error)) {
         throw new AppError("TERMS_VERSION_DUPLICATED");
       }
 
@@ -108,13 +116,7 @@ export const termsService = {
    * type/version 은 정체성이라 수정 대상에서 제외합니다.
    */
   async updateTerms({ termsId, input }: UpdateParams) {
-    const terms = await findTermsOrThrow(termsId);
-
-    if (terms.status !== "DRAFT") {
-      throw new AppError("TERMS_NOT_EDITABLE");
-    }
-
-    const data: Prisma.TermsUncheckedUpdateInput = {};
+    const data: Prisma.TermsUncheckedUpdateManyInput = {};
 
     if (input.title !== undefined) {
       data.title = input.title;
@@ -132,7 +134,16 @@ export const termsService = {
       data.effectiveAt = new Date(`${input.effectiveAt}T00:00:00.000Z`);
     }
 
-    return termsRepository.update(termsId, data);
+    // 상태 검증과 수정을 한 쿼리로 원자화(동시 요청 안전). 변경 행이 없으면 DRAFT 가 아니거나 없는 것.
+    const count = await termsRepository.updateDraft(termsId, data);
+
+    if (count === 0) {
+      // 대상이 없는지, DRAFT 가 아니어서 막힌 것인지 구분해 에러를 반환한다.
+      await findTermsOrThrow(termsId);
+      throw new AppError("TERMS_NOT_EDITABLE");
+    }
+
+    return findTermsOrThrow(termsId);
   },
 
   /**
@@ -140,21 +151,26 @@ export const termsService = {
    * 같은 유형의 기존 PUBLISHED 를 ARCHIVED 로 내리고(원자적), 대상을 PUBLISHED 로 올립니다.
    */
   async publishTerms(termsId: number) {
-    const terms = await findTermsOrThrow(termsId);
-
-    if (terms.status !== "DRAFT") {
-      throw new AppError("TERMS_NOT_PUBLISHABLE");
-    }
-
     const now = new Date();
 
-    return runTransaction(async (tx) => {
+    const published = await runTransaction(async (tx) => {
       // 같은 유형의 현재 PUBLISHED 를 ARCHIVED 로 (한 유형에 PUBLISHED 하나 보장)
+      // 게시 대상의 type 을 알기 위해 먼저 조회한다.
+      const terms = await findTermsOrThrow(termsId, tx);
+
       await termsRepository.archivePublishedByType(terms.type, tx);
 
-      // 대상을 PUBLISHED 로 게시
-      return termsRepository.publish(termsId, now, tx);
+      // 상태 검증과 게시를 한 쿼리로 원자화. DRAFT 가 아니면 count 0.
+      const count = await termsRepository.publishDraft(termsId, now, tx);
+
+      if (count === 0) {
+        throw new AppError("TERMS_NOT_PUBLISHABLE");
+      }
+
+      return termsRepository.findById(termsId, tx);
     });
+
+    return published;
   },
 
   /**
@@ -162,13 +178,14 @@ export const termsService = {
    * 게시된 적 있는 약관(PUBLISHED/ARCHIVED)은 이력 보존을 위해 삭제를 막습니다.
    */
   async deleteTerms(termsId: number) {
-    const terms = await findTermsOrThrow(termsId);
+    // 상태 검증과 삭제를 한 쿼리로 원자화(동시 요청 안전).
+    const count = await termsRepository.softDeleteDraft(termsId);
 
-    if (terms.status !== "DRAFT") {
+    if (count === 0) {
+      // 없는지, DRAFT 가 아니어서 막힌 것인지 구분해 에러를 반환한다.
+      await findTermsOrThrow(termsId);
       throw new AppError("TERMS_NOT_DELETABLE");
     }
-
-    await termsRepository.softDelete(termsId);
   },
 
   /**

@@ -31,14 +31,22 @@ const termsStatusSchema = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"], {
 
 /**
  * 시행일(effectiveAt). YYYY-MM-DD 문자열로 받는다.
- * (moveDate 컨벤션과 동일하게 형식 + 유효 날짜를 검증)
+ * DB 에는 timestamp with time zone 으로 저장되므로, UTC 기준 00:00:00 으로 변환해
+ * 저장하며 존재하지 않는 날짜는 허용하지 않는다.
  */
 const effectiveAtSchema = z
   .string({ error: "시행일은 문자열이어야 합니다." })
   .regex(/^\d{4}-\d{2}-\d{2}$/, "시행일은 YYYY-MM-DD 형식이어야 합니다.")
-  .refine((value) => !Number.isNaN(new Date(`${value}T00:00:00.000Z`).getTime()), {
-    message: "존재하지 않는 날짜입니다.",
-  });
+  .refine(
+    (value) => {
+      const parsed = new Date(`${value}T00:00:00.000Z`);
+
+      return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+    },
+    {
+      message: "존재하지 않는 날짜입니다.",
+    },
+  );
 
 /**
  * 약관 생성 요청 body.

@@ -93,12 +93,22 @@ export const termsRepository = {
     });
   },
 
-  update(termsId: number, data: Prisma.TermsUncheckedUpdateInput, db: DbClient = prisma) {
-    return db.terms.update({
-      where: { id: termsId },
+  /**
+   * DRAFT 상태의 약관만 수정한다.
+   * 상태 검증과 수정을 하나의 쿼리로 원자적으로 처리하기 위해 updateMany 를 사용하고,
+   * 변경된 행 수(count)를 반환한다. count 가 0 이면 대상이 DRAFT 가 아니거나 삭제된 것이다.
+   */
+  async updateDraft(
+    termsId: number,
+    data: Prisma.TermsUncheckedUpdateManyInput,
+    db: DbClient = prisma,
+  ) {
+    const { count } = await db.terms.updateMany({
+      where: { id: termsId, status: "DRAFT", deletedAt: null },
       data,
-      select: termsSelect,
     });
+
+    return count;
   },
 
   /**
@@ -114,25 +124,30 @@ export const termsRepository = {
   },
 
   /**
-   * 대상 약관을 게시(PUBLISHED)한다. 게시 시각(publishedAt)을 함께 기록한다.
+   * DRAFT 상태의 약관만 게시(PUBLISHED)한다. 게시 시각(publishedAt)을 함께 기록한다.
+   * 상태 검증과 게시를 하나의 쿼리로 원자적으로 처리하기 위해 updateMany 를 사용하고,
+   * 변경된 행 수(count)를 반환한다. count 가 0 이면 대상이 DRAFT 가 아니거나 삭제된 것이다.
    */
-  publish(termsId: number, publishedAt: Date, db: DbClient = prisma) {
-    return db.terms.update({
-      where: { id: termsId },
+  async publishDraft(termsId: number, publishedAt: Date, db: DbClient = prisma) {
+    const { count } = await db.terms.updateMany({
+      where: { id: termsId, status: "DRAFT", deletedAt: null },
       data: { status: "PUBLISHED", publishedAt },
-      select: termsSelect,
     });
+
+    return count;
   },
 
   /**
-   * 약관 삭제. DRAFT(미게시 초안)만 삭제하므로 물리 삭제한다.
-   * (게시 이력이 없는 초안이라 보존 가치가 없다. 삭제 가능 여부는 service 에서 검증)
+   * DRAFT 상태의 약관만 soft delete 한다(deletedAt 기록).
+   * 게시된 적 있는 약관은 이력 보존을 위해 삭제하지 않으며, 물리 삭제가 아닌 soft delete 로 기록을 남긴다.
+   * 상태 검증과 삭제를 하나의 쿼리로 원자적으로 처리하기 위해 updateMany 를 사용하고 count 를 반환한다.
    */
-  softDelete(termsId: number, db: DbClient = prisma) {
-    return db.terms.update({
-      where: { id: termsId },
+  async softDeleteDraft(termsId: number, db: DbClient = prisma) {
+    const { count } = await db.terms.updateMany({
+      where: { id: termsId, status: "DRAFT", deletedAt: null },
       data: { deletedAt: new Date() },
-      select: termsSelect,
     });
+
+    return count;
   },
 };
