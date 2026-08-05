@@ -24,10 +24,12 @@ import moverRouter from "./modules/mover/mover.route";
 import { notificationRouter } from "./modules/notification/notification.route";
 import notificationSseRouter from "./modules/notification/notification-sse.route";
 import { profileRouter } from "./modules/profile/profile.route";
+import reportRouter from "./modules/report/report.route";
 import reviewRouter from "./modules/review/review.route";
 
 import { adminFaqRouter, publicFaqRouter } from "./modules/admin/faq/faq.route";
 import { adminInquiryRouter, inquiryRouter } from "./modules/inquiry/inquiry.route";
+import { adminTermsRouter, publicTermsRouter } from "./modules/terms/terms.route";
 
 // Swagger UI로 전환할 때 사용
 // import type { RequestHandler } from "express";
@@ -154,10 +156,12 @@ app.use("/api/estimate-requests", estimateRequestRouter);
 app.use("/api/movers", moverRouter);
 app.use("/api/estimates", estimateRouter);
 app.use("/api/reviews", reviewRouter);
+app.use("/api/reports", reportRouter);
 app.use("/api/favorites", favoriteRouter);
 app.use("/api/chats", chatRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/notifications/sse", notificationSseRouter);
+app.use("/api/terms", publicTermsRouter);
 
 /*
  * 관리자 API
@@ -168,6 +172,7 @@ app.use("/api/admin/faqs", adminFaqRouter); //  관리자 FAQ 라우터
 app.use("/api/faqs", publicFaqRouter); // 일반 사용자 FAQ 라우터
 app.use("/api/inquiries", inquiryRouter); // 사용자 1:1 문의 라우터
 app.use("/api/admin/inquiries", adminInquiryRouter); // 관리자 1:1 문의 라우터
+app.use("/api/admin/terms", adminTermsRouter); // 관리자 약관 라우터
 
 /*
  * 존재하지 않는 경로 처리
