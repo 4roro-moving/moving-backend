@@ -11,9 +11,28 @@ const envSchema = z.object({
     error: "DATABASE_URL is required",
   }),
 
-  CLIENT_URL: z.url({
-    error: "CLIENT_URL must be a valid URL",
-  }),
+  CLIENT_URL: z
+    .string()
+    .min(1, {
+      error: "CLIENT_URL is required",
+    })
+    .transform((value) =>
+      value
+        .split(",")
+        .map((url) => url.trim())
+        .filter(Boolean),
+    )
+    .pipe(
+      z
+        .array(
+          z.url({
+            error: "Each CLIENT_URL entry must be a valid URL",
+          }),
+        )
+        .min(1, {
+          error: "CLIENT_URL must contain at least one URL",
+        }),
+    ),
 
   CLIENT_DEV_URL: z
     .url({

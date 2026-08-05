@@ -1,4 +1,4 @@
-import compression from "compression";
+﻿import compression from "compression";
 import cookieParser from "cookie-parser";
 import cors from "cors";
 import express from "express";
@@ -55,13 +55,14 @@ app.use(
  * 프론트엔드와 쿠키를 주고받기 위해
  * credentials 옵션을 활성화한다.
  */
+const CLIENT_URL = process.env.CLIENT_URL?.split(",") ?? [];
+
 app.use(
   cors({
-    origin: env.CLIENT_URL,
+    origin: CLIENT_URL,
     credentials: true,
   }),
 );
-
 /*
  * 일반 응답에는 압축을 적용한다.
  *
