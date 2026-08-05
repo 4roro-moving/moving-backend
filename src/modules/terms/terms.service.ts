@@ -154,20 +154,24 @@ export const termsService = {
     const now = new Date();
 
     const published = await runTransaction(async (tx) => {
-      // 같은 유형의 현재 PUBLISHED 를 ARCHIVED 로 (한 유형에 PUBLISHED 하나 보장)
-      // 게시 대상의 type 을 알기 위해 먼저 조회한다.
       const terms = await findTermsOrThrow(termsId, tx);
 
       await termsRepository.archivePublishedByType(terms.type, tx);
 
-      // 상태 검증과 게시를 한 쿼리로 원자화. DRAFT 가 아니면 count 0.
       const count = await termsRepository.publishDraft(termsId, now, tx);
 
       if (count === 0) {
         throw new AppError("TERMS_NOT_PUBLISHABLE");
       }
 
-      return termsRepository.findById(termsId, tx);
+      return findTermsOrThrow(termsId, tx);
+    }).catch((error) => {
+      // 동시 게시로 partial unique index(한 유형에 PUBLISHED 하나) 위반 시 P2002.
+      // 이미 다른 요청이 같은 유형을 게시한 상황이므로 게시 불가로 처리한다.
+      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+        throw new AppError("TERMS_NOT_PUBLISHABLE");
+      }
+      throw error;
     });
 
     return published;
