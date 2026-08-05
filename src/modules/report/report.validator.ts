@@ -3,6 +3,8 @@ import { z } from "zod";
 
 export const MAX_REPORT_DESCRIPTION_LENGTH = 1000;
 export const MAX_REVIEW_TARGET_ID = 2_147_483_647;
+const MAX_SAFE_REVIEW_TARGET_ID = BigInt(Number.MAX_SAFE_INTEGER);
+const MAX_PRISMA_INT_TARGET_ID = BigInt(MAX_REVIEW_TARGET_ID);
 
 // 신고 대상은 Prisma enum 전체가 아니라 1차 지원 subset만 허용합니다.
 const SUPPORTED_REPORT_TARGET_TYPES = [ReportTargetType.REVIEW, ReportTargetType.MOVER] as const;
@@ -17,11 +19,15 @@ function isValidReviewTargetId(value: string): boolean {
 
   const asBigInt = BigInt(value);
 
-  if (asBigInt < 1n || asBigInt > BigInt(MAX_REVIEW_TARGET_ID)) {
+  if (asBigInt > MAX_SAFE_REVIEW_TARGET_ID) {
     return false;
   }
 
-  const asNumber = Number(value);
+  if (asBigInt > MAX_PRISMA_INT_TARGET_ID) {
+    return false;
+  }
+
+  const asNumber = Number(asBigInt);
 
   return Number.isSafeInteger(asNumber) && asNumber >= 1 && asNumber <= MAX_REVIEW_TARGET_ID;
 }

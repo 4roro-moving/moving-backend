@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import { createReportSchema, MAX_REVIEW_TARGET_ID } from "./report.validator";
 
 describe("createReportSchema", () => {
-  it("OTHER인데 description이 없으면 실패", () => {
+  it("fails when OTHER is selected without a description", () => {
     const result = createReportSchema.safeParse({
       targetType: "REVIEW",
       targetId: "123",
@@ -14,7 +14,7 @@ describe("createReportSchema", () => {
     assert.equal(result.success, false);
   });
 
-  it("OTHER인데 공백-only description이면 실패", () => {
+  it("fails when OTHER has a whitespace-only description", () => {
     const result = createReportSchema.safeParse({
       targetType: "REVIEW",
       targetId: "123",
@@ -25,7 +25,17 @@ describe("createReportSchema", () => {
     assert.equal(result.success, false);
   });
 
-  it("REVIEW 최대 Int는 성공", () => {
+  it("accepts the minimum REVIEW targetId boundary", () => {
+    const result = createReportSchema.safeParse({
+      targetType: "REVIEW",
+      targetId: "1",
+      reason: "ABUSE",
+    });
+
+    assert.equal(result.success, true);
+  });
+
+  it("accepts the maximum Prisma Int REVIEW targetId", () => {
     const result = createReportSchema.safeParse({
       targetType: "REVIEW",
       targetId: String(MAX_REVIEW_TARGET_ID),
@@ -35,7 +45,7 @@ describe("createReportSchema", () => {
     assert.equal(result.success, true);
   });
 
-  it("REVIEW Int 초과는 실패", () => {
+  it("fails when REVIEW targetId exceeds Prisma Int max", () => {
     const result = createReportSchema.safeParse({
       targetType: "REVIEW",
       targetId: "2147483648",
@@ -45,17 +55,7 @@ describe("createReportSchema", () => {
     assert.equal(result.success, false);
   });
 
-  it("매우 긴 숫자 문자열은 실패", () => {
-    const result = createReportSchema.safeParse({
-      targetType: "REVIEW",
-      targetId: "999999999999999999999999999999999",
-      reason: "ABUSE",
-    });
-
-    assert.equal(result.success, false);
-  });
-
-  it("REVIEW targetId가 안전한 정수 범위를 벗어나면 실패", () => {
+  it("fails when REVIEW targetId exceeds Number.MAX_SAFE_INTEGER", () => {
     const result = createReportSchema.safeParse({
       targetType: "REVIEW",
       targetId: "9007199254740993",
@@ -65,7 +65,17 @@ describe("createReportSchema", () => {
     assert.equal(result.success, false);
   });
 
-  it("REVIEW targetId가 0이면 실패", () => {
+  it("fails when REVIEW targetId is an extremely large numeric string", () => {
+    const result = createReportSchema.safeParse({
+      targetType: "REVIEW",
+      targetId: "999999999999999999999999999999999",
+      reason: "ABUSE",
+    });
+
+    assert.equal(result.success, false);
+  });
+
+  it("fails when REVIEW targetId is zero", () => {
     const result = createReportSchema.safeParse({
       targetType: "REVIEW",
       targetId: "0",
@@ -75,7 +85,7 @@ describe("createReportSchema", () => {
     assert.equal(result.success, false);
   });
 
-  it("REVIEW targetId가 음수면 실패", () => {
+  it("fails when REVIEW targetId is negative", () => {
     const result = createReportSchema.safeParse({
       targetType: "REVIEW",
       targetId: "-1",
@@ -85,7 +95,7 @@ describe("createReportSchema", () => {
     assert.equal(result.success, false);
   });
 
-  it("REVIEW targetId가 소수면 실패", () => {
+  it("fails when REVIEW targetId is fractional", () => {
     const result = createReportSchema.safeParse({
       targetType: "REVIEW",
       targetId: "1.5",
@@ -95,7 +105,7 @@ describe("createReportSchema", () => {
     assert.equal(result.success, false);
   });
 
-  it("REVIEW targetId가 양의 정수 문자열이 아니면 실패", () => {
+  it("fails when REVIEW targetId is not a positive integer string", () => {
     const result = createReportSchema.safeParse({
       targetType: "REVIEW",
       targetId: "12a",
@@ -105,7 +115,7 @@ describe("createReportSchema", () => {
     assert.equal(result.success, false);
   });
 
-  it("MOVER targetId가 UUID 형식이 아니면 실패", () => {
+  it("fails when MOVER targetId is not a UUID", () => {
     const result = createReportSchema.safeParse({
       targetType: "MOVER",
       targetId: "not-a-uuid",
@@ -115,7 +125,7 @@ describe("createReportSchema", () => {
     assert.equal(result.success, false);
   });
 
-  it("MOVER UUID는 대소문자 혼합 입력도 성공", () => {
+  it("accepts mixed-case UUID input for a MOVER targetId", () => {
     const result = createReportSchema.safeParse({
       targetType: "MOVER",
       targetId: "6F9619FF-8B86-4D11-B42D-00CF4FC964FF",

@@ -33,25 +33,67 @@ function normalizeErrorMetaIdentifier(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-// Prisma meta.target은 보통 Prisma 필드명을 주지만, 환경에 따라 매핑된 식별자 형태가 달라도
-// 동일 복합 unique 충돌을 놓치지 않도록 정규화한 식별자 기준으로 비교합니다.
 const reportUniqueMetaFields = ["targettype", "targetid", "reporterid"] as const;
+const reportModelMetaIdentifiers = ["report", "reports"] as const;
 
 function hasAllReportUniqueFields(values: string[]): boolean {
   return reportUniqueMetaFields.every((field) => values.includes(field));
 }
 
 function hasSomeReportUniqueField(values: string[]): boolean {
-  return values.some((value) => reportUniqueMetaFields.includes(value as (typeof reportUniqueMetaFields)[number]));
+  return values.some((value) =>
+    reportUniqueMetaFields.includes(value as (typeof reportUniqueMetaFields)[number]),
+  );
 }
 
-function isReportUniqueConstraintError(error: unknown): error is Prisma.PrismaClientKnownRequestError {
+function isReportModelMetaIdentifier(value: unknown): boolean {
+  if (typeof value !== "string") {
+    return false;
+  }
+
+  const normalized = normalizeErrorMetaIdentifier(value);
+
+  return reportModelMetaIdentifiers.some((identifier) => identifier === normalized);
+}
+
+function hasAllReportUniqueFieldsInString(value: string): boolean {
+  const normalized = normalizeErrorMetaIdentifier(value);
+
+  return reportUniqueMetaFields.every((field) => normalized.includes(field));
+}
+
+function hasSomeReportUniqueFieldInString(value: string): boolean {
+  const normalized = normalizeErrorMetaIdentifier(value);
+
+  return reportUniqueMetaFields.some((field) => normalized.includes(field));
+}
+
+function isLikelyReportConstraintName(value: string): boolean {
+  const normalized = normalizeErrorMetaIdentifier(value);
+
+  return (
+    reportModelMetaIdentifiers.some((identifier) => normalized.includes(identifier)) &&
+    reportUniqueMetaFields.every((field) => normalized.includes(field))
+  );
+}
+
+function isReportUniqueConstraintError(
+  error: unknown,
+): error is Prisma.PrismaClientKnownRequestError {
   if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
     return false;
   }
 
   const target = error.meta?.target;
-  const modelName = normalizeErrorMetaIdentifier(String(error.meta?.modelName ?? ""));
+  const isReportModel = isReportModelMetaIdentifier(error.meta?.modelName);
+  const hasExplicitNonReportModel =
+    typeof error.meta?.modelName === "string" &&
+    normalizeErrorMetaIdentifier(error.meta.modelName).length > 0 &&
+    !isReportModel;
+
+  if (hasExplicitNonReportModel) {
+    return false;
+  }
 
   if (Array.isArray(target)) {
     const normalized = target.map((field) => normalizeErrorMetaIdentifier(String(field)));
@@ -60,27 +102,26 @@ function isReportUniqueConstraintError(error: unknown): error is Prisma.PrismaCl
       return true;
     }
 
-    return modelName === "report" && hasSomeReportUniqueField(normalized);
+    return isReportModel && hasSomeReportUniqueField(normalized);
   }
 
   if (typeof target === "string") {
-    const normalizedTarget = normalizeErrorMetaIdentifier(target);
-
-    if (reportUniqueMetaFields.every((field) => normalizedTarget.includes(field))) {
-      return true;
+    if (hasAllReportUniqueFieldsInString(target)) {
+      return isReportModel || isLikelyReportConstraintName(target);
     }
 
-    return modelName === "report" && hasSomeReportUniqueField([normalizedTarget]);
+    return isReportModel && hasSomeReportUniqueFieldInString(target);
   }
 
-  // createReport 내부에서 발생한 P2002는 report.create 문맥이므로,
-  // target 정보가 비어 있어도 Report 모델 충돌이면 중복 신고로 간주합니다.
-  return modelName === "report";
+  return isReportModel;
 }
 
 export function createReportService(repository: ReportRepository = reportRepository) {
   return {
-    async createReport(params: { reporterId: string; input: CreateReportInput }): Promise<ReportItem> {
+    async createReport(params: {
+      reporterId: string;
+      input: CreateReportInput;
+    }): Promise<ReportItem> {
       const { reporterId, input } = params;
       const normalizedTargetId = normalizeTargetId(input.targetType, input.targetId);
       const detail = input.description && input.description.length > 0 ? input.description : null;

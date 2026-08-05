@@ -5,8 +5,8 @@ import { Prisma, UserRole } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 
-import { createReportService } from "./report.service";
 import type { ReportRepository } from "./report.repository";
+import { createReportService } from "./report.service";
 
 const VALID_MOVER_ID = "6f9619ff-8b86-4d11-b42d-00cf4fc964ff";
 const VALID_MOVER_ID_UPPERCASE = "6F9619FF-8B86-4D11-B42D-00CF4FC964FF";
@@ -29,42 +29,24 @@ function createRepositoryStub(overrides: Partial<ReportRepository> = {}): Report
   };
 }
 
-function createUniqueConstraintError(): Prisma.PrismaClientKnownRequestError {
+function createUniqueConstraintError(meta: {
+  target?: string[] | string;
+  modelName?: string;
+}): Prisma.PrismaClientKnownRequestError {
   const error = Object.create(
     Prisma.PrismaClientKnownRequestError.prototype,
   ) as Prisma.PrismaClientKnownRequestError;
 
   Object.assign(error, {
     code: "P2002",
-    meta: {
-      target: ["targetType", "targetId", "reporterId"],
-    },
-  });
-
-  return error;
-}
-
-function createUniqueConstraintErrorWithTarget(
-  target: string[] | string | undefined,
-  modelName?: string,
-): Prisma.PrismaClientKnownRequestError {
-  const error = Object.create(
-    Prisma.PrismaClientKnownRequestError.prototype,
-  ) as Prisma.PrismaClientKnownRequestError;
-
-  Object.assign(error, {
-    code: "P2002",
-    meta: {
-      ...(target !== undefined && { target }),
-      ...(modelName !== undefined && { modelName }),
-    },
+    meta,
   });
 
   return error;
 }
 
 describe("reportService.createReport", () => {
-  it("리뷰 신고 성공", async () => {
+  it("creates a review report with normalized targetId", async () => {
     const service = createReportService(
       createRepositoryStub({
         findReviewTargetById: async (reviewId) => ({
@@ -92,7 +74,7 @@ describe("reportService.createReport", () => {
     assert.equal(result.description, "욕설이 포함되어 있습니다.");
   });
 
-  it("기사 신고 성공", async () => {
+  it("creates a mover report with normalized UUID casing", async () => {
     const service = createReportService(
       createRepositoryStub({
         findUserById: async (userId) => ({
@@ -117,7 +99,7 @@ describe("reportService.createReport", () => {
     assert.equal(result.targetId, VALID_MOVER_ID);
   });
 
-  it("존재하지 않는 리뷰면 REPORT_TARGET_NOT_FOUND", async () => {
+  it("throws REPORT_TARGET_NOT_FOUND for a missing review", async () => {
     const service = createReportService(createRepositoryStub());
 
     await assert.rejects(
@@ -130,12 +112,11 @@ describe("reportService.createReport", () => {
             reason: "ABUSE",
           },
         }),
-      (error: unknown) =>
-        error instanceof AppError && error.code === "REPORT_TARGET_NOT_FOUND",
+      (error: unknown) => error instanceof AppError && error.code === "REPORT_TARGET_NOT_FOUND",
     );
   });
 
-  it("존재하지 않는 기사면 REPORT_TARGET_NOT_FOUND", async () => {
+  it("throws REPORT_TARGET_NOT_FOUND for a missing mover", async () => {
     const service = createReportService(createRepositoryStub());
 
     await assert.rejects(
@@ -148,12 +129,11 @@ describe("reportService.createReport", () => {
             reason: "SPAM",
           },
         }),
-      (error: unknown) =>
-        error instanceof AppError && error.code === "REPORT_TARGET_NOT_FOUND",
+      (error: unknown) => error instanceof AppError && error.code === "REPORT_TARGET_NOT_FOUND",
     );
   });
 
-  it("자기 자신 기사 신고는 REPORT_SELF_NOT_ALLOWED", async () => {
+  it("throws REPORT_SELF_NOT_ALLOWED when a mover reports themselves", async () => {
     const service = createReportService(createRepositoryStub());
 
     await assert.rejects(
@@ -166,12 +146,11 @@ describe("reportService.createReport", () => {
             reason: "SPAM",
           },
         }),
-      (error: unknown) =>
-        error instanceof AppError && error.code === "REPORT_SELF_NOT_ALLOWED",
+      (error: unknown) => error instanceof AppError && error.code === "REPORT_SELF_NOT_ALLOWED",
     );
   });
 
-  it("리뷰 작성자의 자기 리뷰 신고는 REPORT_SELF_NOT_ALLOWED", async () => {
+  it("throws REPORT_SELF_NOT_ALLOWED when a review author reports their own review", async () => {
     const service = createReportService(
       createRepositoryStub({
         findReviewTargetById: async (reviewId) => ({
@@ -192,12 +171,11 @@ describe("reportService.createReport", () => {
             reason: "ABUSE",
           },
         }),
-      (error: unknown) =>
-        error instanceof AppError && error.code === "REPORT_SELF_NOT_ALLOWED",
+      (error: unknown) => error instanceof AppError && error.code === "REPORT_SELF_NOT_ALLOWED",
     );
   });
 
-  it("리뷰 대상 기사의 해당 리뷰 신고는 성공", async () => {
+  it("allows the mover who received the review to report that review", async () => {
     const service = createReportService(
       createRepositoryStub({
         findReviewTargetById: async (reviewId) => ({
@@ -222,7 +200,7 @@ describe("reportService.createReport", () => {
     assert.equal(result.reason, "FALSE_INFO");
   });
 
-  it("중복 신고는 REPORT_ALREADY_EXISTS", async () => {
+  it("throws REPORT_ALREADY_EXISTS when a duplicate report is found before create", async () => {
     const service = createReportService(
       createRepositoryStub({
         findReviewTargetById: async (reviewId) => ({
@@ -244,12 +222,11 @@ describe("reportService.createReport", () => {
             reason: "ABUSE",
           },
         }),
-      (error: unknown) =>
-        error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
+      (error: unknown) => error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
     );
   });
 
-  it("신고 가능한 대상이 아닌 사용자면 REPORT_TARGET_NOT_REPORTABLE", async () => {
+  it("throws REPORT_TARGET_NOT_REPORTABLE when the target user is not a mover", async () => {
     const service = createReportService(
       createRepositoryStub({
         findUserById: async (userId) => ({
@@ -275,7 +252,7 @@ describe("reportService.createReport", () => {
     );
   });
 
-  it("P2002 발생 시 REPORT_ALREADY_EXISTS로 변환", async () => {
+  it("maps a default camelCase P2002 target to REPORT_ALREADY_EXISTS", async () => {
     const service = createReportService(
       createRepositoryStub({
         findUserById: async (userId) => ({
@@ -284,7 +261,9 @@ describe("reportService.createReport", () => {
           deletedAt: null,
         }),
         createReport: async () => {
-          throw createUniqueConstraintError();
+          throw createUniqueConstraintError({
+            target: ["targetType", "targetId", "reporterId"],
+          });
         },
       }),
     );
@@ -299,12 +278,11 @@ describe("reportService.createReport", () => {
             reason: "SPAM",
           },
         }),
-      (error: unknown) =>
-        error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
+      (error: unknown) => error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
     );
   });
 
-  it("P2002 camelCase target도 REPORT_ALREADY_EXISTS로 변환", async () => {
+  it("maps a snake_case P2002 target to REPORT_ALREADY_EXISTS", async () => {
     const service = createReportService(
       createRepositoryStub({
         findUserById: async (userId) => ({
@@ -313,7 +291,9 @@ describe("reportService.createReport", () => {
           deletedAt: null,
         }),
         createReport: async () => {
-          throw createUniqueConstraintErrorWithTarget(["targetType", "targetId", "reporterId"]);
+          throw createUniqueConstraintError({
+            target: ["target_type", "target_id", "reporter_id"],
+          });
         },
       }),
     );
@@ -328,12 +308,11 @@ describe("reportService.createReport", () => {
             reason: "SPAM",
           },
         }),
-      (error: unknown) =>
-        error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
+      (error: unknown) => error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
     );
   });
 
-  it("P2002 snake_case target도 REPORT_ALREADY_EXISTS로 변환", async () => {
+  it("maps a constraint-name P2002 target to REPORT_ALREADY_EXISTS", async () => {
     const service = createReportService(
       createRepositoryStub({
         findUserById: async (userId) => ({
@@ -342,7 +321,9 @@ describe("reportService.createReport", () => {
           deletedAt: null,
         }),
         createReport: async () => {
-          throw createUniqueConstraintErrorWithTarget(["target_type", "target_id", "reporter_id"]);
+          throw createUniqueConstraintError({
+            target: "reports_target_type_target_id_reporter_id_key",
+          });
         },
       }),
     );
@@ -357,12 +338,11 @@ describe("reportService.createReport", () => {
             reason: "SPAM",
           },
         }),
-      (error: unknown) =>
-        error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
+      (error: unknown) => error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
     );
   });
 
-  it("P2002 constraint name string도 REPORT_ALREADY_EXISTS로 변환", async () => {
+  it("maps a partial target to REPORT_ALREADY_EXISTS only when it is clearly the Report model", async () => {
     const service = createReportService(
       createRepositoryStub({
         findUserById: async (userId) => ({
@@ -371,9 +351,10 @@ describe("reportService.createReport", () => {
           deletedAt: null,
         }),
         createReport: async () => {
-          throw createUniqueConstraintErrorWithTarget(
-            "reports_target_type_target_id_reporter_id_key",
-          );
+          throw createUniqueConstraintError({
+            target: ["targetId"],
+            modelName: "Report",
+          });
         },
       }),
     );
@@ -388,12 +369,11 @@ describe("reportService.createReport", () => {
             reason: "SPAM",
           },
         }),
-      (error: unknown) =>
-        error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
+      (error: unknown) => error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
     );
   });
 
-  it("target 정보가 불완전해도 Report 모델 P2002면 REPORT_ALREADY_EXISTS로 변환", async () => {
+  it("rethrows P2002 for a different model even if the target fields look the same", async () => {
     const service = createReportService(
       createRepositoryStub({
         findUserById: async (userId) => ({
@@ -402,36 +382,10 @@ describe("reportService.createReport", () => {
           deletedAt: null,
         }),
         createReport: async () => {
-          throw createUniqueConstraintErrorWithTarget(["targetId"], "Report");
-        },
-      }),
-    );
-
-    await assert.rejects(
-      () =>
-        service.createReport({
-          reporterId: "customer-1",
-          input: {
-            targetType: "MOVER",
-            targetId: VALID_MOVER_ID,
-            reason: "SPAM",
-          },
-        }),
-      (error: unknown) =>
-        error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
-    );
-  });
-
-  it("무관한 P2002는 원본 에러를 유지", async () => {
-    const service = createReportService(
-      createRepositoryStub({
-        findUserById: async (userId) => ({
-          id: userId,
-          role: UserRole.MOVER,
-          deletedAt: null,
-        }),
-        createReport: async () => {
-          throw createUniqueConstraintErrorWithTarget(["someOtherField"], "OtherModel");
+          throw createUniqueConstraintError({
+            target: ["targetType", "targetId", "reporterId"],
+            modelName: "OtherModel",
+          });
         },
       }),
     );
