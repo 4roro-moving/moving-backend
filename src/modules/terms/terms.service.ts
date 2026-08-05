@@ -30,6 +30,19 @@ function isVersionDuplicated(error: unknown): boolean {
     : Array.isArray(target) && target.some((t) => String(t).includes("version"));
 }
 
+/** 같은 유형에 이미 PUBLISHED 가 있어(partial unique index) 게시가 충돌하는지 */
+function isPublishConflict(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+    return false;
+  }
+  const target = error.meta?.target;
+
+  // partial unique index(terms_type_published_unique) 위반만 식별한다.
+  return typeof target === "string"
+    ? target.includes("published")
+    : Array.isArray(target) && target.some((t) => String(t).includes("published"));
+}
+
 /**
  * 약관을 조회하고, 없거나 삭제됐으면 404 를 던진다.
  * 수정/게시/삭제 전 공통으로 존재를 보장하는 헬퍼.
@@ -168,7 +181,7 @@ export const termsService = {
     }).catch((error) => {
       // 동시 게시로 partial unique index(한 유형에 PUBLISHED 하나) 위반 시 P2002.
       // 이미 다른 요청이 같은 유형을 게시한 상황이므로 게시 불가로 처리한다.
-      if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
+      if (isPublishConflict(error)) {
         throw new AppError("TERMS_NOT_PUBLISHABLE");
       }
       throw error;
