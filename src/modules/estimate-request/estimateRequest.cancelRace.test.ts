@@ -62,7 +62,9 @@ async function createRaceFixture(): Promise<RaceFixture> {
 
   const region =
     (await prisma.region.findFirst({ where: { name: "서울" } })) ??
-    (await prisma.region.create({ data: { name: `서울-race-${suffix}` } }));
+    (await prisma.region.create({
+      data: { name: `서울-race-${suffix}`, latitude: 37.5665, longitude: 126.978 },
+    }));
 
   const customer = await prisma.user.create({
     data: {
