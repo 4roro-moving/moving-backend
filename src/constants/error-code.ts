@@ -194,6 +194,7 @@ export const ERROR_CODES = {
     status: 409,
     code: "REPORT_TARGET_NOT_REPORTABLE",
     message: "신고 가능한 대상이 아닙니다.",
+  },
 
   // 2026.08.04 심현수 - [추가] 약관(Terms)
   TERMS_NOT_FOUND: {
