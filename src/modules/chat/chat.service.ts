@@ -220,10 +220,23 @@ export const chatService = {
 
   async joinRoom(userId: string, roomId: number, lastMessageId?: number | null) {
     const room = await this.getRoom(userId, roomId);
-    const missedMessageRows = lastMessageId
-      ? await chatRepository.findMessagesAfterId({
+    const cursor = lastMessageId
+      ? await chatRepository.findMessageCursor({
           roomId,
           messageId: lastMessageId,
+        })
+      : undefined;
+
+    if (lastMessageId && !cursor) {
+      throw new AppError("VALIDATION_ERROR", {
+        message: "유효하지 않은 메시지 ID입니다.",
+      });
+    }
+
+    const missedMessageRows = cursor
+      ? await chatRepository.findMessagesAfterCursor({
+          roomId,
+          cursor,
           take: ROOM_JOIN_RECOVERY_LIMIT + 1,
         })
       : [];

@@ -147,14 +147,20 @@ export const chatRepository = {
     });
   },
 
-  findMessagesAfterId(
-    params: { roomId: number; messageId: number; take: number },
+  findMessagesAfterCursor(
+    params: { roomId: number; cursor: ChatMessageCursor; take: number },
     db: DbClient = prisma,
   ) {
     return db.chatMessage.findMany({
       where: {
         roomId: params.roomId,
-        id: { gt: params.messageId },
+        OR: [
+          { createdAt: { gt: params.cursor.createdAt } },
+          {
+            createdAt: params.cursor.createdAt,
+            id: { gt: params.cursor.id },
+          },
+        ],
       },
       select: chatMessageSelect,
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
