@@ -2,6 +2,33 @@ import "dotenv/config";
 
 import { z } from "zod";
 
+const browserOriginSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => {
+      try {
+        const url = new URL(value);
+
+        return (
+          (url.protocol === "http:" || url.protocol === "https:") &&
+          url.username === "" &&
+          url.password === "" &&
+          url.pathname === "/" &&
+          url.search === "" &&
+          url.hash === "" &&
+          !value.endsWith("/")
+        );
+      } catch {
+        return false;
+      }
+    },
+    {
+      message:
+        "CLIENT_URL entries must be valid http/https origins without path, query, fragment, or trailing slash",
+    },
+  );
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
@@ -19,26 +46,14 @@ const envSchema = z.object({
     .transform((value) =>
       value
         .split(",")
-        .map((url) => url.trim())
+        .map((origin) => origin.trim())
         .filter(Boolean),
     )
     .pipe(
-      z
-        .array(
-          z.url({
-            error: "Each CLIENT_URL entry must be a valid URL",
-          }),
-        )
-        .min(1, {
-          error: "CLIENT_URL must contain at least one URL",
-        }),
+      z.array(browserOriginSchema).min(1, {
+        error: "CLIENT_URL must contain at least one valid origin",
+      }),
     ),
-
-  CLIENT_DEV_URL: z
-    .url({
-      error: "CLIENT_DEV_URL must be a valid URL",
-    })
-    .optional(),
 
   LOG_LEVEL: z.enum(["error", "warn", "info", "http", "verbose", "debug", "silly"]).default("info"),
 

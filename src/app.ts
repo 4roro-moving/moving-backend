@@ -55,11 +55,9 @@ app.use(
  * 프론트엔드와 쿠키를 주고받기 위해
  * credentials 옵션을 활성화한다.
  */
-const CLIENT_URL = process.env.CLIENT_URL?.split(",") ?? [];
-
 app.use(
   cors({
-    origin: CLIENT_URL,
+    origin: env.CLIENT_URL,
     credentials: true,
   }),
 );
