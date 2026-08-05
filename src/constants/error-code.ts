@@ -159,7 +159,6 @@ export const ERROR_CODES = {
     code: "INQUIRY_CLOSED",
     message: "이미 종료된 문의입니다. 새 문의를 등록해 주세요.",
   },
-
   // 2026.08.03 신영미 - [추가] 관리자 콘텐츠 관리
   CONTENT_NOT_FOUND: {
     status: 404,
@@ -195,6 +194,32 @@ export const ERROR_CODES = {
     status: 409,
     code: "REPORT_TARGET_NOT_REPORTABLE",
     message: "신고 가능한 대상이 아닙니다.",
+
+  // 2026.08.04 심현수 - [추가] 약관(Terms)
+  TERMS_NOT_FOUND: {
+    status: 404,
+    code: "TERMS_NOT_FOUND",
+    message: "약관을 찾을 수 없습니다.",
+  },
+  TERMS_NOT_EDITABLE: {
+    status: 409,
+    code: "TERMS_NOT_EDITABLE",
+    message: "작성 중(DRAFT) 상태의 약관만 수정할 수 있습니다.",
+  },
+  TERMS_NOT_PUBLISHABLE: {
+    status: 409,
+    code: "TERMS_NOT_PUBLISHABLE",
+    message: "작성 중(DRAFT) 상태의 약관만 게시할 수 있습니다.",
+  },
+  TERMS_NOT_DELETABLE: {
+    status: 409,
+    code: "TERMS_NOT_DELETABLE",
+    message: "작성 중(DRAFT) 상태의 약관만 삭제할 수 있습니다.",
+  },
+  TERMS_VERSION_DUPLICATED: {
+    status: 409,
+    code: "TERMS_VERSION_DUPLICATED",
+    message: "같은 유형에 이미 존재하는 버전입니다.",
   },
 } as const;
 
