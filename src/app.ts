@@ -24,6 +24,7 @@ import moverRouter from "./modules/mover/mover.route";
 import { notificationRouter } from "./modules/notification/notification.route";
 import notificationSseRouter from "./modules/notification/notification-sse.route";
 import { profileRouter } from "./modules/profile/profile.route";
+import reportRouter from "./modules/report/report.route";
 import reviewRouter from "./modules/review/review.route";
 
 import { adminFaqRouter, publicFaqRouter } from "./modules/admin/faq/faq.route";
@@ -155,6 +156,7 @@ app.use("/api/estimate-requests", estimateRequestRouter);
 app.use("/api/movers", moverRouter);
 app.use("/api/estimates", estimateRouter);
 app.use("/api/reviews", reviewRouter);
+app.use("/api/reports", reportRouter);
 app.use("/api/favorites", favoriteRouter);
 app.use("/api/chats", chatRouter);
 app.use("/api/notifications", notificationRouter);

@@ -175,6 +175,25 @@ export const ERROR_CODES = {
     code: "CONTENT_NOT_HIDDEN",
     message: "숨김 상태가 아니므로 복구할 수 없습니다.",
   },
+  REPORT_TARGET_NOT_FOUND: {
+    status: 404,
+    code: "REPORT_TARGET_NOT_FOUND",
+    message: "신고 대상을 찾을 수 없습니다.",
+  },
+  REPORT_ALREADY_EXISTS: {
+    status: 409,
+    code: "REPORT_ALREADY_EXISTS",
+    message: "이미 신고한 대상입니다.",
+  },
+  REPORT_SELF_NOT_ALLOWED: {
+    status: 403,
+    code: "REPORT_SELF_NOT_ALLOWED",
+    message: "본인 자신은 신고할 수 없습니다.",
+  },
+  REPORT_TARGET_NOT_REPORTABLE: {
+    status: 409,
+    code: "REPORT_TARGET_NOT_REPORTABLE",
+    message: "신고 가능한 대상이 아닙니다.",
 
   // 2026.08.04 심현수 - [추가] 약관(Terms)
   TERMS_NOT_FOUND: {
