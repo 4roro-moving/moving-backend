@@ -61,7 +61,6 @@ app.use(
     credentials: true,
   }),
 );
-
 /*
  * 일반 응답에는 압축을 적용한다.
  *
