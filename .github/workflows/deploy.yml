@@ -1,0 +1,46 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+
+          script: |
+            cd ~/moving-backend
+
+            echo "📥 Pull latest code..."
+            git pull origin dev
+
+            echo "📦 Install dependencies..."
+            npm install
+
+            echo "🛠 Prisma Generate..."
+            npx prisma generate
+
+            echo "🗄 Prisma Migrate..."
+            npx prisma migrate deploy
+
+            echo "🏗 Build..."
+            npm run build
+
+            echo "🚀 Restart PM2..."
+            pm2 restart moving-backend
+
+            pm2 save
+
+            echo "✅ Deployment Complete!"
