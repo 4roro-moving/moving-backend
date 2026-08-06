@@ -32,7 +32,7 @@ export const customersRepository = {
       db.user.findMany({
         where,
         select: customerListSelect,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         skip,
         take,
       }),
