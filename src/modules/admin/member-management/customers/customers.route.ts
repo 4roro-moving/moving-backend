@@ -1,5 +1,7 @@
 import { Router } from "express";
+import { UserRole } from "@prisma/client";
 
+import { requireActiveAdmin } from "../../../../middlewares/admin";
 import { authenticate, authorize } from "../../../../middlewares/auth";
 import { validate } from "../../../../middlewares/validate";
 import { asyncHandler } from "../../../../utils/async-handler.util";
@@ -12,7 +14,7 @@ import { listCustomerQuerySchema } from "./customers.validator";
  */
 const adminCustomerRouter = Router();
 
-adminCustomerRouter.use(authenticate, authorize("ADMIN"));
+adminCustomerRouter.use(authenticate, authorize(UserRole.ADMIN), requireActiveAdmin);
 
 adminCustomerRouter
   .route("/")
