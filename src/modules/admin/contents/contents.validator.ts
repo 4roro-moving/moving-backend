@@ -29,7 +29,9 @@ export const listAdminReviewsQuerySchema = z
       .default(10),
     keyword: z.string().trim().min(1).max(100).optional(),
     isHidden: booleanQuerySchema,
-    sort: z.enum(["LATEST", "OLDEST", "RATING_HIGH", "RATING_LOW"]).default("LATEST"),
+    sort: z
+      .enum(["LATEST", "OLDEST", "RATING_HIGH", "RATING_LOW", "REPORT_HIGH"])
+      .default("LATEST"),
     from: dateQuerySchema,
     to: dateQuerySchema,
     reportedOnly: booleanQuerySchema,

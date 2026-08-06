@@ -11,15 +11,42 @@ const envSchema = z.object({
     error: "DATABASE_URL is required",
   }),
 
-  CLIENT_URL: z.url({
-    error: "CLIENT_URL must be a valid URL",
-  }),
+  /**
+   * 허용 Origin 목록.
+   * 단일 URL 또는 콤마로 구분한 여러 URL을 받을 수 있다.
+   * 예: http://localhost:3000
+   * 예: http://localhost:3000,http://localhost:3001
+   */
+  CLIENT_URL: z
+    .string()
+    .min(1, { error: "CLIENT_URL is required" })
+    .transform((value, ctx) => {
+      const origins = value
+        .split(",")
+        .map((origin) => origin.trim())
+        .filter((origin) => origin.length > 0);
 
-  CLIENT_DEV_URL: z
-    .url({
-      error: "CLIENT_DEV_URL must be a valid URL",
-    })
-    .optional(),
+      if (origins.length === 0) {
+        ctx.addIssue({
+          code: "custom",
+          message: "CLIENT_URL must include at least one URL",
+        });
+        return z.NEVER;
+      }
+
+      for (const origin of origins) {
+        const parsed = z.url().safeParse(origin);
+        if (!parsed.success) {
+          ctx.addIssue({
+            code: "custom",
+            message: `CLIENT_URL contains an invalid URL: ${origin}`,
+          });
+          return z.NEVER;
+        }
+      }
+
+      return origins;
+    }),
 
   LOG_LEVEL: z.enum(["error", "warn", "info", "http", "verbose", "debug", "silly"]).default("info"),
 
