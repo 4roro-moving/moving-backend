@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { AuthProvider, Prisma, UserRole } from "@prisma/client";
+import { AuthProvider, Prisma, RefreshTokenSessionType, UserRole } from "@prisma/client";
 
 import { authRepository } from "./auth.repository";
 import { googleOAuth } from "./oauth/google.oauth";
@@ -158,6 +158,7 @@ const createLocalUser = async (input: SignUpInput, role: SignUpRole): Promise<Au
         {
           userId: user.id,
           tokenHash: tokenHash(refreshToken),
+          sessionType: RefreshTokenSessionType.USER,
           expiresAt: refreshTokenExpiresAt,
         },
         tx,
@@ -273,10 +274,14 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
    *
    * DB에는 Refresh Token 원문이 아니라
    * HMAC-SHA256 해시값만 저장한다.
+   *
+   * 일반 인증에서 발급된 세션이므로
+   * sessionType은 USER로 저장한다.
    */
   await authRepository.saveRefreshToken({
     userId: user.id,
     tokenHash: tokenHash(refreshToken),
+    sessionType: RefreshTokenSessionType.USER,
     expiresAt: refreshTokenExpiresAt,
   });
 
@@ -317,6 +322,7 @@ const createOAuthLoginResponse = async (user: OAuthUser): Promise<AuthResponse> 
   await authRepository.saveRefreshToken({
     userId: user.id,
     tokenHash: tokenHash(refreshToken),
+    sessionType: RefreshTokenSessionType.USER,
     expiresAt: refreshTokenExpiresAt,
   });
 
@@ -401,6 +407,7 @@ const loginWithOAuth = async (
         {
           userId: user.id,
           tokenHash: tokenHash(refreshToken),
+          sessionType: RefreshTokenSessionType.USER,
           expiresAt: refreshTokenExpiresAt,
         },
         tx,
@@ -520,7 +527,16 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
 
   const currentTokenHash = tokenHash(currentRefreshToken);
 
-  const storedRefreshToken = await authRepository.findRefreshTokenByHash(currentTokenHash);
+  /*
+   * 일반 사용자 인증에서 생성된 USER 세션만 조회한다.
+   *
+   * 동일한 Token Hash가 전달되더라도 관리자 인증 세션은
+   * 일반 Refresh API에서 사용할 수 없다.
+   */
+  const storedRefreshToken = await authRepository.findRefreshTokenByHash(
+    currentTokenHash,
+    RefreshTokenSessionType.USER,
+  );
 
   /*
    * JWT 자체가 유효하더라도 DB에 저장된 토큰이 없다면
@@ -552,7 +568,7 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
    * 일정 기간 이력을 유지한다.
    */
   if (storedRefreshToken.expiresAt.getTime() <= Date.now()) {
-    await authRepository.revokeRefreshTokenByHash(currentTokenHash);
+    await authRepository.revokeRefreshTokenByHash(currentTokenHash, RefreshTokenSessionType.USER);
 
     throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않거나 만료된 Refresh Token입니다.",
@@ -596,9 +612,16 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
    * revoke 결과 count가 1인 요청만 성공하도록 하여
    * 동일 Refresh Token으로 동시에 재발급 요청이 들어와도
    * 하나의 요청만 Rotation에 성공하도록 한다.
+   *
+   * 기존 세션 폐기와 신규 세션 저장 모두
+   * USER 세션 범위 안에서만 처리한다.
    */
   await runTransaction(async (tx) => {
-    const revokeResult = await authRepository.revokeRefreshTokenByHash(currentTokenHash, tx);
+    const revokeResult = await authRepository.revokeRefreshTokenByHash(
+      currentTokenHash,
+      RefreshTokenSessionType.USER,
+      tx,
+    );
 
     if (revokeResult.count !== 1) {
       throw new AppError("UNAUTHORIZED", {
@@ -610,6 +633,7 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
       {
         userId: user.id,
         tokenHash: tokenHash(refreshToken),
+        sessionType: RefreshTokenSessionType.USER,
         expiresAt: refreshTokenExpiresAt,
       },
       tx,
@@ -639,8 +663,10 @@ const logout = async (currentRefreshToken: string): Promise<void> => {
    *
    * 이미 revoke된 토큰이나 존재하지 않는 토큰으로
    * 다시 요청해도 에러를 발생시키지 않고 정상 처리한다.
+   *
+   * 일반 로그아웃 API에서는 USER 세션만 폐기한다.
    */
-  await authRepository.revokeRefreshTokenByHash(currentTokenHash);
+  await authRepository.revokeRefreshTokenByHash(currentTokenHash, RefreshTokenSessionType.USER);
 };
 
 export const authService = {

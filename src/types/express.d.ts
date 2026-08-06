@@ -7,6 +7,15 @@ declare global {
         id: string;
         role: UserRole;
       };
+
+      admin?: {
+        id: string;
+        email: string;
+        name: string;
+        role: UserRole;
+        isActive: boolean;
+        createdAt: Date;
+      };
     }
   }
 }

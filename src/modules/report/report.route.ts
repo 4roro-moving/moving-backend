@@ -11,6 +11,10 @@ const reportRouter = Router();
 
 reportRouter.use(authenticate, authorize("CUSTOMER", "MOVER"));
 
-reportRouter.post("/", validate({ body: createReportSchema }), asyncHandler(reportController.createReport));
+reportRouter.post(
+  "/",
+  validate({ body: createReportSchema }),
+  asyncHandler(reportController.createReport),
+);
 
 export default reportRouter;
