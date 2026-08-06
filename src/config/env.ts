@@ -2,6 +2,33 @@ import "dotenv/config";
 
 import { z } from "zod";
 
+const browserOriginSchema = z
+  .string()
+  .trim()
+  .refine(
+    (value) => {
+      try {
+        const url = new URL(value);
+
+        return (
+          (url.protocol === "http:" || url.protocol === "https:") &&
+          url.username === "" &&
+          url.password === "" &&
+          url.pathname === "/" &&
+          url.search === "" &&
+          url.hash === "" &&
+          !value.endsWith("/")
+        );
+      } catch {
+        return false;
+      }
+    },
+    {
+      message:
+        "CLIENT_URL entries must be valid http/https origins without path, query, fragment, or trailing slash",
+    },
+  );
+
 const envSchema = z.object({
   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
 
@@ -11,42 +38,22 @@ const envSchema = z.object({
     error: "DATABASE_URL is required",
   }),
 
-  /**
-   * 허용 Origin 목록.
-   * 단일 URL 또는 콤마로 구분한 여러 URL을 받을 수 있다.
-   * 예: http://localhost:3000
-   * 예: http://localhost:3000,http://localhost:3001
-   */
   CLIENT_URL: z
     .string()
-    .min(1, { error: "CLIENT_URL is required" })
-    .transform((value, ctx) => {
-      const origins = value
+    .min(1, {
+      error: "CLIENT_URL is required",
+    })
+    .transform((value) =>
+      value
         .split(",")
         .map((origin) => origin.trim())
-        .filter((origin) => origin.length > 0);
-
-      if (origins.length === 0) {
-        ctx.addIssue({
-          code: "custom",
-          message: "CLIENT_URL must include at least one URL",
-        });
-        return z.NEVER;
-      }
-
-      for (const origin of origins) {
-        const parsed = z.url().safeParse(origin);
-        if (!parsed.success) {
-          ctx.addIssue({
-            code: "custom",
-            message: `CLIENT_URL contains an invalid URL: ${origin}`,
-          });
-          return z.NEVER;
-        }
-      }
-
-      return origins;
-    }),
+        .filter(Boolean),
+    )
+    .pipe(
+      z.array(browserOriginSchema).min(1, {
+        error: "CLIENT_URL must contain at least one valid origin",
+      }),
+    ),
 
   LOG_LEVEL: z.enum(["error", "warn", "info", "http", "verbose", "debug", "silly"]).default("info"),
 

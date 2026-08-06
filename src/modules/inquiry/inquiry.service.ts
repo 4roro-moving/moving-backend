@@ -6,6 +6,7 @@ import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
 
 import { inquiryRepository } from "./inquiry.repository";
+import { notificationService } from "../notification/notification.service";
 import type {
   AdminListInquiryQuery,
   CreateInquiryInput,
@@ -195,8 +196,8 @@ export const adminInquiryService = {
   async answer(inquiryId: number, adminId: string, input: CreateMessageInput) {
     const now = new Date();
 
-    await runTransaction(async (tx) => {
-      await findInquiryOrThrow(inquiryId, tx);
+    const result = await runTransaction(async (tx) => {
+      const inquiry = await findInquiryOrThrow(inquiryId, tx);
 
       const ok = await inquiryRepository.addMessage(
         {
@@ -214,7 +215,25 @@ export const adminInquiryService = {
       if (!ok) {
         throw new AppError("INQUIRY_CLOSED");
       }
+
+      // 답변 알림은 문의 작성자에게. DB 저장은 트랜잭션에 포함(알림 필수), SSE 는 커밋 후.
+      const notification = await notificationService.createNotification(
+        {
+          userId: inquiry.authorId,
+          type: "INQUIRY_ANSWERED",
+          title: "문의에 답변이 등록되었어요",
+          content: "1:1 문의에 대한 답변이 도착했습니다.",
+          linkUrl: `/inquiries/${String(inquiryId)}`,
+          expiresAt: null,
+        },
+        tx,
+      );
+
+      return { authorId: inquiry.authorId, notification };
     });
+
+    // 커밋 이후 SSE 전송
+    notificationService.sendNotification(result.authorId, result.notification);
 
     return inquiryRepository.findById(inquiryId);
   },

@@ -600,7 +600,10 @@ model Region {
   id   Int    @id @default(autoincrement())
   /// 공식 지역명. 중복 불가입니다.
   name String @unique
-
+  /// 지도 마커에 사용하는 지역 대표 위도.
+  latitude  Float
+  /// 지도 마커에 사용하는 지역 대표 경도.
+  longitude Float
   /// 이 지역을 서비스하는 기사님 목록(역방향).
   moverServiceAreas    MoverServiceArea[]
   /// 이 지역을 관심 지역으로 둔 고객 목록(역방향).

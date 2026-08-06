@@ -4,26 +4,9 @@ import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
 
 import { runTransaction } from "../../../utils/transaction";
+import { notificationService } from "../../notification/notification.service";
 import { noticeRepository } from "./notice.repository";
 import type { CreateNoticeInput, ListNoticeQuery, UpdateNoticeInput } from "./notice.type";
-
-/**
- * 공지 알림 1건에 담기는 사용자별 데이터를 만듭니다.
- * NotificationType.NOTICE_RECEIVED 는 enum 추가 마이그레이션이 필요합니다.
- * (아래 create 주석 참고)
- */
-function buildNoticeNotifications(
-  recipientIds: string[],
-  notice: { id: number; title: string },
-): Prisma.NotificationCreateManyInput[] {
-  return recipientIds.map((userId) => ({
-    userId,
-    type: "NOTICE_RECEIVED",
-    title: "새로운 공지사항",
-    content: notice.title,
-    linkUrl: `/notices/${notice.id}`,
-  }));
-}
 
 type CreateParams = {
   authorId: string;
@@ -48,25 +31,26 @@ export const noticeService = {
   async createNotice({ authorId, input }: CreateParams) {
     const { sendNotification, ...noticeData } = input;
 
-    return runTransaction(async (tx) => {
-      const notice = await noticeRepository.create(
-        { ...noticeData, sendNotification, authorId },
-        tx,
-      );
-
-      if (sendNotification) {
-        const recipientIds = await noticeRepository.findRecipientIds(notice.audience, tx);
-
-        if (recipientIds.length > 0) {
-          await noticeRepository.createNotifications(
-            buildNoticeNotifications(recipientIds, notice),
-            tx,
-          );
-        }
-      }
-
-      return notice;
+    const notice = await runTransaction(async (tx) => {
+      return noticeRepository.create({ ...noticeData, sendNotification, authorId }, tx);
     });
+
+    // 대량 알림은 자체 배치 + 멱등(sourceId) + refresh SSE 로 처리되므로 커밋 이후 호출한다.
+    // 재실행되어도 대상 기준 시점이 흔들리지 않도록 snapshotAt 에 notice.createdAt 을 전달한다.
+    if (sendNotification) {
+      await notificationService.createBulkNotification({
+        role: notice.audience,
+        type: "NOTICE_RECEIVED",
+        title: "새로운 공지사항",
+        content: notice.title,
+        linkUrl: `/notices/${String(notice.id)}`,
+        snapshotAt: notice.createdAt,
+        sourceId: `notice:${String(notice.id)}`,
+        expiresAt: null,
+      });
+    }
+
+    return notice;
   },
 
   /**
