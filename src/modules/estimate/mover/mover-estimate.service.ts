@@ -1,6 +1,5 @@
 import type { EstimateRequestStatus, EstimateStatus, MoveType } from "@prisma/client";
 
-import logger from "../../../config/logger";
 import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
 import { lockEstimateRequestForUpdate } from "../../../utils/estimate-request-lock.util";
@@ -266,32 +265,26 @@ export const moverEstimateRequestService = {
         tx,
       );
 
+      const notification = await notificationService.createNotification(
+        {
+          userId: estimateRequest.customerId,
+          type: "ESTIMATE_RECEIVED",
+          title: "견적 도착",
+          content: `${profile.nickname} 기사님의 ${MOVE_TYPE_LABEL[estimateRequest.moveType]} 견적`,
+          linkUrl: null,
+          expiresAt: estimateRequest.expiresAt,
+        },
+        tx,
+      );
+
       return {
         estimate,
         customerId: estimateRequest.customerId,
-        moverNickname: profile.nickname,
-        moveType: estimateRequest.moveType,
-        expiresAt: estimateRequest.expiresAt,
+        notification,
       };
     });
 
-    // 2026.08.03 정슬기 - [수정] 알림 실패가 견적 전송 성공 응답을 덮지 않도록 격리
-    try {
-      await notificationService.createNotification({
-        userId: result.customerId,
-        type: "ESTIMATE_RECEIVED",
-        title: "견적 도착",
-        content: `${result.moverNickname} 기사님의 ${MOVE_TYPE_LABEL[result.moveType]} 견적`,
-        linkUrl: null,
-        expiresAt: result.expiresAt,
-      });
-    } catch (error) {
-      logger.error("Failed to create ESTIMATE_RECEIVED notification.", {
-        error,
-        estimateId: result.estimate.id,
-        customerId: result.customerId,
-      });
-    }
+    notificationService.sendNotification(result.customerId, result.notification);
 
     return result.estimate;
   },
@@ -371,30 +364,27 @@ export const moverEstimateRequestService = {
         tx,
       );
 
+      const notificationCreatedAt = new Date();
+      const notification = await notificationService.createNotification(
+        {
+          userId: estimateRequest.customerId,
+          type: "ESTIMATE_REQUEST_REJECTED",
+          title: "견적 요청 반려",
+          content: profile.nickname,
+          linkUrl: null,
+          expiresAt: getRejectionNotificationExpiresAt(notificationCreatedAt),
+        },
+        tx,
+      );
+
       return {
         rejection,
         customerId: estimateRequest.customerId,
-        moverNickname: profile.nickname,
+        notification,
       };
     });
 
-    // 2026.08.03 정슬기 - [수정] 알림 실패가 반려 성공 응답을 덮지 않도록 격리
-    try {
-      await notificationService.createNotification({
-        userId: result.customerId,
-        type: "ESTIMATE_REQUEST_REJECTED",
-        title: "견적 요청 반려",
-        content: result.moverNickname,
-        linkUrl: null,
-        expiresAt: getRejectionNotificationExpiresAt(new Date()),
-      });
-    } catch (error) {
-      logger.error("Failed to create ESTIMATE_REQUEST_REJECTED notification.", {
-        error,
-        rejectionId: result.rejection.id,
-        customerId: result.customerId,
-      });
-    }
+    notificationService.sendNotification(result.customerId, result.notification);
 
     return result.rejection;
   },
