@@ -2,6 +2,15 @@
 
 set -Eeuo pipefail
 
+export NVM_DIR="/home/ubuntu/.nvm"
+
+if [ -s "$NVM_DIR/nvm.sh" ]; then
+  # shellcheck disable=SC1090
+  source "$NVM_DIR/nvm.sh"
+fi
+
+export PATH="$NVM_DIR/versions/node/v22.23.2/bin:$PATH"
+
 PROJECT_DIR="/home/ubuntu/moving-backend"
 PROCESS_NAME="moving-backend"
 HEALTH_CHECK_URL="http://localhost/api/health"
@@ -39,10 +48,7 @@ done
 
 echo "❌ Health check failed."
 
-echo "===== PM2 status ====="
 pm2 status
-
-echo "===== Recent application logs ====="
 pm2 logs "$PROCESS_NAME" --lines 50 --nostream || true
 
 exit 1
