@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { AuthProvider, UserRole } from "@prisma/client";
+import { AuthProvider, RefreshTokenSessionType, UserRole } from "@prisma/client";
 
 import { adminAuthRepository } from "./admin-auth.repository";
 import { authRepository } from "../../auth/auth.repository";
@@ -125,10 +125,14 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
    *
    * DB에는 Refresh Token 원문이 아니라
    * HMAC-SHA256 Hash만 저장한다.
+   *
+   * 관리자 인증에서 발급한 세션이므로
+   * sessionType은 ADMIN으로 저장한다.
    */
   await authRepository.saveRefreshToken({
     userId: user.id,
     tokenHash: tokenHash(refreshToken),
+    sessionType: RefreshTokenSessionType.ADMIN,
     expiresAt: refreshTokenExpiresAt,
   });
 
@@ -170,7 +174,16 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
 
   const currentTokenHash = tokenHash(currentRefreshToken);
 
-  const storedRefreshToken = await authRepository.findRefreshTokenByHash(currentTokenHash);
+  /*
+   * 관리자 인증에서 생성된 ADMIN 세션만 조회한다.
+   *
+   * 일반 사용자 Refresh Token이 관리자 Cookie에 전달되더라도
+   * 관리자 Refresh 세션으로 사용할 수 없다.
+   */
+  const storedRefreshToken = await authRepository.findRefreshTokenByHash(
+    currentTokenHash,
+    RefreshTokenSessionType.ADMIN,
+  );
 
   /*
    * JWT 자체가 유효하더라도 DB에 저장된 세션이 없다면
@@ -197,7 +210,7 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
    * DB에 저장된 세션 만료 시각도 확인한다.
    */
   if (storedRefreshToken.expiresAt.getTime() <= Date.now()) {
-    await authRepository.revokeRefreshTokenByHash(currentTokenHash);
+    await authRepository.revokeRefreshTokenByHash(currentTokenHash, RefreshTokenSessionType.ADMIN);
 
     throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않거나 만료된 관리자 Refresh Token입니다.",
@@ -223,8 +236,8 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
   }
 
   /*
-   * 일반 사용자의 Refresh Token이 관리자 Cookie에 전달되더라도
-   * 관리자 Access Token을 발급하지 않는다.
+   * 세션 유형뿐 아니라 실제 DB 사용자 Role도 다시 확인하여
+   * 관리자 권한이 없는 사용자에게 관리자 Token을 발급하지 않는다.
    */
   if (admin.role !== UserRole.ADMIN) {
     throw new AppError("UNAUTHORIZED", {
@@ -237,10 +250,12 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
    * 기존 Refresh Token이 남아 있더라도 재발급할 수 없다.
    *
    * 비활성 상태가 확인되면 해당 관리자의
-   * 모든 Refresh Token을 폐기한다.
+   * ADMIN 세션만 모두 폐기한다.
+   *
+   * 일반 사용자 인증 세션은 폐기 범위에 포함하지 않는다.
    */
   if (!admin.isActive || admin.deletedAt !== null) {
-    await authRepository.revokeAllRefreshTokensByUserId(admin.id);
+    await authRepository.revokeAllRefreshTokensByUserId(admin.id, RefreshTokenSessionType.ADMIN);
 
     throw new AppError("FORBIDDEN", {
       message: "비활성화된 관리자 계정입니다.",
@@ -258,9 +273,16 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
    *
    * 동일 Refresh Token으로 동시 재발급 요청이 들어오더라도
    * revoke 결과가 1건인 요청만 Rotation에 성공한다.
+   *
+   * 기존 세션 폐기와 신규 세션 저장 모두
+   * ADMIN 세션 범위 안에서만 처리한다.
    */
   await runTransaction(async (tx) => {
-    const revokeResult = await authRepository.revokeRefreshTokenByHash(currentTokenHash, tx);
+    const revokeResult = await authRepository.revokeRefreshTokenByHash(
+      currentTokenHash,
+      RefreshTokenSessionType.ADMIN,
+      tx,
+    );
 
     if (revokeResult.count !== 1) {
       throw new AppError("UNAUTHORIZED", {
@@ -272,6 +294,7 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
       {
         userId: admin.id,
         tokenHash: tokenHash(refreshToken),
+        sessionType: RefreshTokenSessionType.ADMIN,
         expiresAt: refreshTokenExpiresAt,
       },
       tx,
@@ -295,10 +318,13 @@ const logout = async (currentRefreshToken: string): Promise<void> => {
   /*
    * 로그아웃은 멱등성을 유지한다.
    *
-   * 현재 Refresh Token에 해당하는 세션만 폐기하며,
+   * 현재 Refresh Token에 해당하는 ADMIN 세션만 폐기하며,
    * 이미 폐기됐거나 존재하지 않는 토큰이어도 오류를 발생시키지 않는다.
+   *
+   * 일반 사용자 인증 세션은 관리자 로그아웃의
+   * 폐기 범위에 포함하지 않는다.
    */
-  await authRepository.revokeRefreshTokenByHash(currentTokenHash);
+  await authRepository.revokeRefreshTokenByHash(currentTokenHash, RefreshTokenSessionType.ADMIN);
 };
 
 /**
