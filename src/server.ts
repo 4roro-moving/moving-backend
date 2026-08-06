@@ -1,6 +1,6 @@
 import type { Server } from "node:http";
 
-import app from "./app";
+import app from "./app.js";
 import { env } from "./config/env";
 import logger from "./config/logger";
 import { startNotificationCleanupJob } from "./jobs/notification-cleanup.job";
