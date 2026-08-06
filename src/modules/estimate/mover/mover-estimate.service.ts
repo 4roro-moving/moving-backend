@@ -299,7 +299,14 @@ export const moverEstimateRequestService = {
         throw new AppError("MOVER_NOT_FOUND");
       }
 
-      //견적 요청 조회
+      // 취소/견적 전송 트랜잭션과 직렬화한 뒤 최신 상태 재확인
+      const locked = await lockEstimateRequestForUpdate(tx, estimateRequestId);
+
+      if (!locked) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+      }
+
+      //견적 요청 조회 (잠금 이후 최신 상태)
       const estimateRequest =
         await moverEstimateRequestRepository.findEstimateRequestForMoverAction(
           estimateRequestId,
