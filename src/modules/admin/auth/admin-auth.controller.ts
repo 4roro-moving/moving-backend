@@ -139,21 +139,22 @@ const logout: RequestHandler = async (req, res) => {
  * 현재 로그인한 관리자 정보 조회
  *
  * GET /api/admin/auth/me
+ *
+ * requireActiveAdmin 미들웨어에서 조회하고 검증한
+ * 관리자 정보를 req.admin에서 재사용한다.
  */
 const getCurrentAdmin: RequestHandler = async (req, res) => {
-  if (!req.user) {
+  if (!req.admin) {
     throw new AppError("UNAUTHORIZED", {
-      message: "인증 정보가 없습니다.",
+      message: "관리자 계정을 확인할 수 없습니다.",
     });
   }
-
-  const admin = await adminAuthService.getCurrentAdmin(req.user.id);
 
   res.status(200).json({
     success: true,
     message: "관리자 정보를 조회했습니다.",
     data: {
-      admin,
+      admin: req.admin,
     },
   });
 };

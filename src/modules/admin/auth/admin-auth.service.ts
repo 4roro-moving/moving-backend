@@ -4,7 +4,7 @@ import { AuthProvider, RefreshTokenSessionType, UserRole } from "@prisma/client"
 import { adminAuthRepository } from "./admin-auth.repository";
 import { authRepository } from "../../auth/auth.repository";
 
-import type { AdminAuthResponse, AdminRefreshResponse, CurrentAdmin } from "./admin-auth.type";
+import type { AdminAuthResponse, AdminRefreshResponse } from "./admin-auth.type";
 import type { AdminLoginInput } from "./admin-auth.validator";
 
 import { AppError } from "../../../lib/app-error";
@@ -327,53 +327,8 @@ const logout = async (currentRefreshToken: string): Promise<void> => {
   await authRepository.revokeRefreshTokenByHash(currentTokenHash, RefreshTokenSessionType.ADMIN);
 };
 
-/**
- * 현재 로그인한 관리자 정보 조회
- *
- * GET /api/admin/auth/me
- */
-const getCurrentAdmin = async (adminId: string): Promise<CurrentAdmin> => {
-  const admin = await adminAuthRepository.findByIdForSession(adminId);
-
-  if (!admin) {
-    throw new AppError("UNAUTHORIZED", {
-      message: "관리자 계정을 확인할 수 없습니다.",
-    });
-  }
-
-  /*
-   * 유효한 Access Token이라도 ADMIN Role이 아니라면
-   * 관리자 정보에 접근할 수 없다.
-   */
-  if (admin.role !== UserRole.ADMIN) {
-    throw new AppError("FORBIDDEN", {
-      message: "관리자 권한이 없는 계정입니다.",
-    });
-  }
-
-  /*
-   * Access Token이 아직 만료되지 않았더라도
-   * DB의 활성 상태를 확인해 비활성 관리자를 즉시 차단한다.
-   */
-  if (!admin.isActive || admin.deletedAt !== null) {
-    throw new AppError("FORBIDDEN", {
-      message: "비활성화된 관리자 계정입니다.",
-    });
-  }
-
-  return {
-    id: admin.id,
-    email: admin.email,
-    name: admin.name,
-    role: admin.role,
-    isActive: admin.isActive,
-    createdAt: admin.createdAt,
-  };
-};
-
 export const adminAuthService = {
   login,
   refresh,
   logout,
-  getCurrentAdmin,
 };
