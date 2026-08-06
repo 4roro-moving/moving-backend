@@ -3,10 +3,6 @@ import type { NextFunction, Request, Response } from "express";
 import { env } from "../config/env";
 import { AppError } from "../lib/app-error";
 
-const allowedOrigins = [env.CLIENT_URL, env.CLIENT_DEV_URL].filter((origin): origin is string =>
-  Boolean(origin),
-);
-
 export const csrfProtection = (req: Request, _res: Response, next: NextFunction): void => {
   const origin = req.get("origin");
 
@@ -21,7 +17,7 @@ export const csrfProtection = (req: Request, _res: Response, next: NextFunction)
     });
   }
 
-  if (!allowedOrigins.includes(origin)) {
+  if (!env.CLIENT_URL.includes(origin)) {
     throw new AppError("FORBIDDEN", {
       message: "허용되지 않은 요청 출처입니다.",
     });

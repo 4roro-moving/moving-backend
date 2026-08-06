@@ -1,4 +1,4 @@
-import type { EstimateRequestStatus, MoveType, NotificationType, Prisma } from "@prisma/client";
+import type { EstimateRequestStatus, MoveType, Prisma } from "@prisma/client";
 
 import logger from "../../config/logger";
 import { prisma } from "../../lib/prisma";
@@ -197,22 +197,6 @@ function toHistorySnapshot(request: {
 /**
  * [C] 기사님에게 보낼 알림 payload 를 만든다.
  */
-function buildMoverNotification(params: {
-  moverId: string;
-  type: NotificationType;
-  title: string;
-  content: string;
-  estimateRequestId: number;
-}): Prisma.NotificationCreateManyInput {
-  return {
-    userId: params.moverId,
-    type: params.type,
-    title: params.title,
-    content: params.content,
-    linkUrl: `/mover/estimate-requests/${String(params.estimateRequestId)}`,
-  };
-}
-
 /* -------------------------------------------------------------------------- */
 /* 서비스                                                                       */
 /* -------------------------------------------------------------------------- */
@@ -242,7 +226,7 @@ export const estimateRequestService = {
     const moveDate = resolveMoveDate(input.moveDate);
     const expiresAt = resolveExpiresAt(moveDate);
 
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const existing = await estimateRequestRepository.findActiveByCustomerId(customerId, tx);
 
       if (existing) {
@@ -295,23 +279,35 @@ export const estimateRequestService = {
         tx,
       );
 
-      if (moverIds.length > 0) {
-        await estimateRequestRepository.createNotifications(
-          moverIds.map((moverId) =>
-            buildMoverNotification({
-              moverId,
+      // 알림 DB 저장은 핵심 작업과 같은 트랜잭션에 포함한다(알림 필수).
+      // SSE 전송은 롤백이 불가하므로 커밋 이후 별도로 처리한다.
+      const notifications = await Promise.all(
+        moverIds.map(async (moverId) => {
+          const notification = await notificationService.createNotification(
+            {
+              userId: moverId,
               type: "ESTIMATE_REQUEST_RECEIVED",
               title: "새로운 견적 요청이 도착했어요",
               content: MOVE_TYPE_LABEL[created.moveType],
-              estimateRequestId: created.id,
-            }),
-          ),
-          tx,
-        );
-      }
+              linkUrl: `/mover/estimate-requests/${String(created.id)}`,
+              expiresAt: null,
+            },
+            tx,
+          );
 
-      return created;
+          return { userId: moverId, notification };
+        }),
+      );
+
+      return { created, notifications };
     });
+
+    // 커밋 이후 SSE 전송 (실패해도 이미 커밋된 견적 요청에는 영향 없음)
+    for (const { userId, notification } of result.notifications) {
+      notificationService.sendNotification(userId, notification);
+    }
+
+    return result.created;
   },
 
   /**
@@ -527,7 +523,7 @@ export const estimateRequestService = {
     customerId,
     moverId,
   }: DesignateParams): Promise<EstimateRequestDetail> {
-    return prisma.$transaction(async (tx) => {
+    const result = await prisma.$transaction(async (tx) => {
       const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
       assertEditable(request, "지금은 지정 견적을 요청할 수 없는 상태입니다.");
@@ -565,20 +561,27 @@ export const estimateRequestService = {
 
       await estimateRequestRepository.createDesignation(estimateRequestId, moverId, tx);
 
-      await estimateRequestRepository.createNotifications(
-        [
-          buildMoverNotification({
-            moverId,
-            type: "DESIGNATED_REQUEST_RECEIVED",
-            title: "지정 견적 요청이 도착했어요",
-            content: "고객님이 회원님을 지정하여 견적을 요청했습니다.",
-            estimateRequestId,
-          }),
-        ],
+      // 알림 DB 저장은 지정 처리와 같은 트랜잭션에 포함(알림 필수), SSE 는 커밋 후.
+      const notification = await notificationService.createNotification(
+        {
+          userId: moverId,
+          type: "DESIGNATED_REQUEST_RECEIVED",
+          title: "지정 견적 요청이 도착했어요",
+          content: "고객님이 회원님을 지정하여 견적을 요청했습니다.",
+          linkUrl: `/mover/estimate-requests/${String(estimateRequestId)}`,
+          expiresAt: null,
+        },
         tx,
       );
 
-      return findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
+      const detail = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
+
+      return { detail, notification, moverId };
     });
+
+    // 커밋 이후 SSE 전송
+    notificationService.sendNotification(result.moverId, result.notification);
+
+    return result.detail;
   },
 };
