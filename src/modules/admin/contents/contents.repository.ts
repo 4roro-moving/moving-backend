@@ -96,6 +96,16 @@ function toPrismaOrderBy(sort: AdminReviewSort): Prisma.ReviewOrderByWithRelatio
   }
 }
 
+/** ILIKE 와일드카드(%, _)와 escape 문자(\)를 리터럴로 검색하기 위해 이스케이프합니다. */
+function escapeIlikePattern(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+function buildKeywordIlikeSql(keyword: string): Prisma.Sql {
+  const pattern = `%${escapeIlikePattern(keyword)}%`;
+  return Prisma.sql`(r.content ILIKE ${pattern} ESCAPE '\\' OR c.name ILIKE ${pattern} ESCAPE '\\')`;
+}
+
 function buildReportedExistsWhereSql(filters: AdminReviewListFilters): Prisma.Sql {
   const parts: Prisma.Sql[] = [
     Prisma.sql`EXISTS (
@@ -111,8 +121,7 @@ function buildReportedExistsWhereSql(filters: AdminReviewListFilters): Prisma.Sq
   }
 
   if (filters.keyword) {
-    const pattern = `%${filters.keyword}%`;
-    parts.push(Prisma.sql`(r.content ILIKE ${pattern} OR c.name ILIKE ${pattern})`);
+    parts.push(buildKeywordIlikeSql(filters.keyword));
   }
 
   if (filters.from) {
@@ -171,8 +180,7 @@ async function findReviewsByRawSql(
           parts.push(Prisma.sql`r.is_hidden = ${filters.isHidden}`);
         }
         if (filters.keyword) {
-          const pattern = `%${filters.keyword}%`;
-          parts.push(Prisma.sql`(r.content ILIKE ${pattern} OR c.name ILIKE ${pattern})`);
+          parts.push(buildKeywordIlikeSql(filters.keyword));
         }
         if (filters.from) {
           parts.push(Prisma.sql`r.created_at >= ${filters.from}`);

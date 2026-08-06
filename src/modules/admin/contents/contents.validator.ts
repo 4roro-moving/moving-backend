@@ -30,7 +30,9 @@ export const listAdminReviewsQuerySchema = z
     keyword: z.string().trim().min(1).max(100).optional(),
     isHidden: booleanQuerySchema,
     sort: z
-      .enum(["LATEST", "OLDEST", "RATING_HIGH", "RATING_LOW", "REPORT_HIGH"])
+      .enum(["LATEST", "OLDEST", "RATING_HIGH", "RATING_LOW", "REPORT_HIGH"], {
+        error: "정렬 기준이 올바르지 않습니다.",
+      })
       .default("LATEST"),
     from: dateQuerySchema,
     to: dateQuerySchema,
