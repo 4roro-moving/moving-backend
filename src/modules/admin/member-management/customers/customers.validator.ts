@@ -30,7 +30,12 @@ export const listCustomerQuerySchema = z
       .positive("조회 개수는 1 이상이어야 합니다.")
       .max(MAX_LIMIT, `조회 개수는 ${String(MAX_LIMIT)} 이하여야 합니다.`)
       .default(20),
-    keyword: z.string().trim().min(1).max(100).optional(),
+    keyword: z
+      .string()
+      .trim()
+      .min(1, "검색어를 입력해 주세요.")
+      .max(100, "검색어는 100자 이하여야 합니다.")
+      .optional(),
     status: customerStatusSchema.optional(),
     fromDate: dateQuerySchema,
     toDate: dateQuerySchema,
