@@ -31,5 +31,20 @@ registerRouterDocs(adminCustomerRouter, {
       ].join("\n"),
       responses: { 200: "조회 성공" },
     },
+
+    "GET /:id": {
+      summary: "고객 상세 조회",
+      description: [
+        "관리자가 특정 고객(CUSTOMER)의 상세 정보를 조회합니다.",
+        "",
+        "- 계정/프로필 + 견적·리뷰·신고·정지 이력 요약(각 최근 5건)을 함께 반환합니다.",
+        "- `role=CUSTOMER` 만 조회 가능하며, Mover 또는 존재하지 않는 id 는 404입니다.",
+        "- 탈퇴 회원(`WITHDRAWN`)도 상세 조회는 가능합니다.",
+      ].join("\n"),
+      responses: {
+        200: "조회 성공",
+        404: "해당 회원을 찾을 수 없습니다.",
+      },
+    },
   },
 });

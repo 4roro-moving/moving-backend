@@ -1,9 +1,23 @@
 import type { Prisma } from "@prisma/client";
 
+import { AppError } from "../../../../lib/app-error";
 import { buildPagination } from "../../../../utils/pagination.util";
 
-import { customersRepository, type CustomerListRow } from "./customers.repository";
-import type { CustomerListItem, CustomerStatus, ListCustomerQuery } from "./customers.type";
+import {
+  customersRepository,
+  type CustomerDetailRow,
+  type CustomerListRow,
+  type EstimateHistoryRow,
+  type ReportHistoryRow,
+  type ReviewHistoryRow,
+  type SuspensionHistoryRow,
+} from "./customers.repository";
+import type {
+  CustomerDetail,
+  CustomerListItem,
+  CustomerStatus,
+  ListCustomerQuery,
+} from "./customers.type";
 
 /**
  * KST(Asia/Seoul) 달력 날짜의 시작 시각을 UTC로 변환합니다.
@@ -91,6 +105,102 @@ function toCustomerListItem(customer: CustomerListRow): CustomerListItem {
   };
 }
 
+function toEstimateHistoryItem(item: EstimateHistoryRow) {
+  return {
+    id: item.id,
+    moveType: item.moveType,
+    status: item.status,
+    moveDate: item.moveDate,
+    createdAt: item.createdAt,
+  };
+}
+
+function toReviewHistoryItem(item: ReviewHistoryRow) {
+  return {
+    id: item.id,
+    moverId: item.moverId,
+    moverNickname: item.mover.moverProfile?.nickname ?? item.mover.name,
+    rating: item.rating,
+    content: item.content,
+    isHidden: item.isHidden,
+    createdAt: item.createdAt,
+  };
+}
+
+function toReportHistoryItem(item: ReportHistoryRow) {
+  return {
+    id: item.id,
+    targetType: item.targetType,
+    targetId: item.targetId,
+    reason: item.reason,
+    status: item.status,
+    createdAt: item.createdAt,
+  };
+}
+
+function toSuspensionHistoryItem(item: SuspensionHistoryRow) {
+  return {
+    id: item.id,
+    action: item.action,
+    reason: item.reason,
+    createdAt: item.createdAt,
+  };
+}
+
+function toCustomerDetail(
+  customer: CustomerDetailRow,
+  histories: {
+    estimateHistory: Awaited<ReturnType<typeof customersRepository.findEstimateHistory>>;
+    reviewHistory: Awaited<ReturnType<typeof customersRepository.findReviewHistory>>;
+    filedReports: Awaited<ReturnType<typeof customersRepository.findFiledReportHistory>>;
+    receivedReports: Awaited<ReturnType<typeof customersRepository.findReceivedReportHistory>>;
+    suspensionHistory: Awaited<ReturnType<typeof customersRepository.findSuspensionHistory>>;
+  },
+): CustomerDetail {
+  const profile = customer.customerProfile;
+
+  return {
+    account: {
+      id: customer.id,
+      email: customer.email,
+      name: customer.name,
+      phone: customer.phone,
+      authProvider: customer.authProvider,
+      status: resolveCustomerStatus(customer),
+      isProfileCompleted: customer.isProfileCompleted,
+      createdAt: customer.createdAt,
+      updatedAt: customer.updatedAt,
+    },
+    profile: {
+      imageUrl: profile?.imageUrl ?? null,
+      serviceAreas: profile?.serviceAreas.map((area) => area.region.name) ?? [],
+      serviceTypes: profile?.serviceTypes.map((type) => type.moveType) ?? [],
+    },
+    estimateHistory: {
+      totalCount: histories.estimateHistory.totalCount,
+      items: histories.estimateHistory.items.map(toEstimateHistoryItem),
+    },
+    reviewHistory: {
+      totalCount: histories.reviewHistory.totalCount,
+      items: histories.reviewHistory.items.map(toReviewHistoryItem),
+    },
+    reportHistory: {
+      filed: {
+        totalCount: histories.filedReports.totalCount,
+        items: histories.filedReports.items.map(toReportHistoryItem),
+      },
+      received: {
+        totalCount: histories.receivedReports.totalCount,
+        items: histories.receivedReports.items.map(toReportHistoryItem),
+      },
+    },
+    suspensionHistory: {
+      totalCount: histories.suspensionHistory.totalCount,
+      items: histories.suspensionHistory.items.map(toSuspensionHistoryItem),
+    },
+  };
+}
+
 export const customersService = {
   /**
    * 관리자용 일반 고객(CUSTOMER) 목록을 조회합니다.
@@ -109,5 +219,34 @@ export const customersService = {
       items: customers.map(toCustomerListItem),
       pagination: buildPagination(totalCount, page, limit),
     };
+  },
+
+  /**
+   * 관리자용 일반 고객(CUSTOMER) 상세를 조회합니다.
+   * Mover/존재하지 않는 id 는 USER_NOT_FOUND, 탈퇴 회원은 조회 가능합니다.
+   */
+  async getCustomerDetail(customerId: string): Promise<CustomerDetail> {
+    const customer = await customersRepository.findCustomerById(customerId);
+
+    if (!customer) {
+      throw new AppError("USER_NOT_FOUND");
+    }
+
+    const [estimateHistory, reviewHistory, filedReports, receivedReports, suspensionHistory] =
+      await Promise.all([
+        customersRepository.findEstimateHistory({ customerId }),
+        customersRepository.findReviewHistory({ customerId }),
+        customersRepository.findFiledReportHistory({ customerId }),
+        customersRepository.findReceivedReportHistory({ customerId }),
+        customersRepository.findSuspensionHistory({ customerId }),
+      ]);
+
+    return toCustomerDetail(customer, {
+      estimateHistory,
+      reviewHistory,
+      filedReports,
+      receivedReports,
+      suspensionHistory,
+    });
   },
 };

@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 
 import { sendResponse } from "../../../../utils/response.util";
 import { customersService } from "./customers.service";
-import type { ListCustomerQuery } from "./customers.type";
+import type { CustomerIdParam, ListCustomerQuery } from "./customers.type";
 
 export const customersController = {
   // GET /api/admin/users
@@ -13,5 +13,13 @@ export const customersController = {
     return sendResponse(res, 200, result.items, {
       pagination: result.pagination,
     });
+  },
+
+  // GET /api/admin/users/:id
+  getCustomerDetail: async (_req: Request, res: Response) => {
+    const { id } = res.locals.params as CustomerIdParam;
+    const detail = await customersService.getCustomerDetail(id);
+
+    return sendResponse(res, 200, detail);
   },
 };

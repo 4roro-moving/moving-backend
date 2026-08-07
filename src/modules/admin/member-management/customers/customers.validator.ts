@@ -13,6 +13,13 @@ export const customerStatusSchema = z.enum(["ACTIVE", "SUSPENDED", "WITHDRAWN"],
 });
 
 /**
+ * 고객 상세 조회 경로 파라미터.
+ */
+export const customerIdParamSchema = z.object({
+  id: z.uuid("올바른 회원 ID가 아닙니다."),
+});
+
+/**
  * 관리자 고객 목록 조회 쿼리.
  * status 미지정 시 ACTIVE + SUSPENDED 만 조회 (WITHDRAWN 제외).
  */

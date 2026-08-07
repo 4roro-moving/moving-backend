@@ -222,6 +222,13 @@ export const ERROR_CODES = {
     code: "TERMS_VERSION_DUPLICATED",
     message: "같은 유형에 이미 존재하는 버전입니다.",
   },
+
+  // 2026.08.06 - [추가] 관리자 고객 상세
+  USER_NOT_FOUND: {
+    status: 404,
+    code: "USER_NOT_FOUND",
+    message: "해당 회원을 찾을 수 없습니다.",
+  },
 } as const;
 
 // ErrorCode의 key 타입
