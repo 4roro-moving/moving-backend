@@ -13,6 +13,8 @@ import type {
   UpdateProfileInput,
 } from "./profile.type";
 
+import { getProfileImageUrl } from "../../../utils/image-url";
+
 type CustomerProfileWithRelations = NonNullable<
   Awaited<ReturnType<typeof profileRepository.findProfileByUserId>>
 >;
@@ -85,7 +87,7 @@ const mapProfileResponse = (profile: CustomerProfileWithRelations): ProfileRespo
     phone: profile.user.phone,
     hasPassword: profile.user.password !== null,
 
-    imageUrl: profile.imageUrl,
+    imageUrl: getProfileImageUrl(profile.imageUrl),
 
     regions: profile.serviceAreas.map(({ region }) => ({
       id: region.id,

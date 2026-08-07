@@ -13,6 +13,8 @@ import type {
   UpdateProfileInput,
 } from "./profile.type";
 
+import { getProfileImageUrl } from "../../../utils/image-url";
+
 const PASSWORD_SALT_ROUNDS = 10;
 
 /*
@@ -113,7 +115,7 @@ const mapProfileResponse = (
     hasPassword: profile.user.password !== null,
 
     nickname: profile.nickname,
-    imageUrl: profile.imageUrl,
+    imageUrl: getProfileImageUrl(profile.imageUrl),
     career: profile.career,
     shortIntro: profile.shortIntro,
     description: profile.description,
