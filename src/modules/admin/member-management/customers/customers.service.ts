@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 import { AppError } from "../../../../lib/app-error";
 import { buildPagination } from "../../../../utils/pagination.util";
+import { runTransaction } from "../../../../utils/transaction";
 
 import {
   customersRepository,
@@ -17,6 +18,8 @@ import type {
   CustomerListItem,
   CustomerStatus,
   ListCustomerQuery,
+  UpdateCustomerStatusBody,
+  UpdateCustomerStatusResponse,
 } from "./customers.type";
 
 /**
@@ -247,6 +250,51 @@ export const customersService = {
       filedReports,
       receivedReports,
       suspensionHistory,
+    });
+  },
+
+  async updateCustomerStatus({
+    customerId,
+    adminId,
+    input,
+  }: {
+    customerId: string;
+    adminId: string;
+    input: UpdateCustomerStatusBody;
+  }): Promise<UpdateCustomerStatusResponse> {
+    if (customerId === adminId) {
+      throw new AppError("SELF_ACTION_NOT_ALLOWED");
+    }
+
+    return runTransaction(async (tx) => {
+      const customer = await customersRepository.findCustomerForStatusChange(customerId, tx);
+
+      if (!customer) {
+        throw new AppError("USER_NOT_FOUND");
+      }
+
+      const shouldBeActive = input.action === "RELEASE";
+
+      if (customer.isActive === shouldBeActive) {
+        throw new AppError("ALREADY_PROCESSED");
+      }
+
+      const { user, suspension } = await customersRepository.changeCustomerStatus(
+        {
+          customerId,
+          adminId,
+          action: input.action,
+          reason: input.reason,
+          ...(input.internalNote !== undefined ? { internalNote: input.internalNote } : {}),
+        },
+        tx,
+      );
+
+      return {
+        id: user.id,
+        status: shouldBeActive ? "ACTIVE" : "SUSPENDED",
+        suspension,
+      };
     });
   },
 };

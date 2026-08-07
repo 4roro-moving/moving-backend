@@ -13,11 +13,25 @@ import type {
   customerIdParamSchema,
   customerStatusSchema,
   listCustomerQuerySchema,
+  updateCustomerStatusBodySchema,
 } from "./customers.validator";
 
 export type CustomerStatus = z.infer<typeof customerStatusSchema>;
 export type ListCustomerQuery = z.infer<typeof listCustomerQuerySchema>;
 export type CustomerIdParam = z.infer<typeof customerIdParamSchema>;
+export type UpdateCustomerStatusBody = z.infer<typeof updateCustomerStatusBodySchema>;
+
+export type UpdateCustomerStatusResponse = {
+  id: string;
+  status: "ACTIVE" | "SUSPENDED";
+  suspension: {
+    id: number;
+    action: "SUSPEND" | "RELEASE";
+    reason: string;
+    adminId: string;
+    createdAt: Date;
+  };
+};
 
 export type CustomerListItem = {
   id: string;

@@ -31,7 +31,6 @@ registerRouterDocs(adminCustomerRouter, {
       ].join("\n"),
       responses: { 200: "조회 성공" },
     },
-
     "GET /:id": {
       summary: "고객 상세 조회",
       description: [
@@ -45,6 +44,22 @@ registerRouterDocs(adminCustomerRouter, {
         200: "조회 성공",
         404: "해당 회원을 찾을 수 없습니다.",
         422: "회원 ID 형식이 올바르지 않습니다.",
+      },
+    },
+    "PATCH /:id/status": {
+      summary: "고객 계정 정지/해제",
+      description: [
+        "관리자가 일반 고객(CUSTOMER)의 계정 상태를 정지 또는 해제합니다.",
+        "- `SUSPEND`: OPEN 견적 요청과 연관 SENT 견적/PENDING 수정 요청을 취소합니다.",
+        "- `RELEASE`: 계정만 활성화하며, 기존 자동 취소 데이터는 복구하지 않습니다.",
+        "- 탈퇴 회원, Mover, 자기 자신은 상태 변경할 수 없습니다.",
+      ].join("\n"),
+      responses: {
+        200: "처리 성공",
+        400: "자기 자신의 계정 상태는 변경할 수 없습니다.",
+        404: "해당 고객을 찾을 수 없습니다.",
+        409: "이미 요청한 상태로 처리된 회원입니다.",
+        422: "입력값이 올바르지 않습니다.",
       },
     },
   },

@@ -6,7 +6,11 @@ import { authenticate, authorize } from "../../../../middlewares/auth";
 import { validate } from "../../../../middlewares/validate";
 import { asyncHandler } from "../../../../utils/async-handler.util";
 import { customersController } from "./customers.controller";
-import { customerIdParamSchema, listCustomerQuerySchema } from "./customers.validator";
+import {
+  customerIdParamSchema,
+  listCustomerQuerySchema,
+  updateCustomerStatusBodySchema,
+} from "./customers.validator";
 
 /**
  * 관리자 고객(회원) 라우터 (/api/admin/users)
@@ -28,6 +32,13 @@ adminCustomerRouter
   .get(
     validate({ params: customerIdParamSchema }),
     asyncHandler(customersController.getCustomerDetail),
+  );
+
+adminCustomerRouter
+  .route("/:id/status")
+  .patch(
+    validate({ params: customerIdParamSchema, body: updateCustomerStatusBodySchema }),
+    asyncHandler(customersController.updateCustomerStatus),
   );
 
 export default adminCustomerRouter;

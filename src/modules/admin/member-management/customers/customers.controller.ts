@@ -2,7 +2,11 @@ import type { Request, Response } from "express";
 
 import { sendResponse } from "../../../../utils/response.util";
 import { customersService } from "./customers.service";
-import type { CustomerIdParam, ListCustomerQuery } from "./customers.type";
+import type {
+  CustomerIdParam,
+  ListCustomerQuery,
+  UpdateCustomerStatusBody,
+} from "./customers.type";
 
 export const customersController = {
   // GET /api/admin/users
@@ -21,5 +25,17 @@ export const customersController = {
     const detail = await customersService.getCustomerDetail(id);
 
     return sendResponse(res, 200, detail);
+  },
+
+  updateCustomerStatus: async (req: Request, res: Response) => {
+    const { id } = res.locals.params as CustomerIdParam;
+    const input = res.locals.body as UpdateCustomerStatusBody;
+    const result = await customersService.updateCustomerStatus({
+      customerId: id,
+      adminId: req.admin!.id,
+      input,
+    });
+
+    return sendResponse(res, 200, result);
   },
 };

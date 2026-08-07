@@ -12,11 +12,16 @@ export const customerStatusSchema = z.enum(["ACTIVE", "SUSPENDED", "WITHDRAWN"],
   error: "회원 상태는 ACTIVE, SUSPENDED, WITHDRAWN 중 하나여야 합니다.",
 });
 
-/**
- * 고객 상세 조회 경로 파라미터.
- */
 export const customerIdParamSchema = z.object({
   id: z.uuid("올바른 회원 ID가 아닙니다."),
+});
+
+export const updateCustomerStatusBodySchema = z.object({
+  action: z.enum(["SUSPEND", "RELEASE"], {
+    error: "처리 동작은 SUSPEND 또는 RELEASE여야 합니다.",
+  }),
+  reason: z.string().trim().min(1, "처리 사유를 입력해 주세요.").max(500),
+  internalNote: z.string().trim().max(1000).optional(),
 });
 
 /**

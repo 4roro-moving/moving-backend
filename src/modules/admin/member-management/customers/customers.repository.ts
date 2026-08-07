@@ -249,4 +249,114 @@ export const customersRepository = {
 
     return { items, totalCount };
   },
+
+  findCustomerForStatusChange(customerId: string, db: DbClient = prisma) {
+    return db.user.findFirst({
+      where: { id: customerId, role: "CUSTOMER", deletedAt: null },
+      select: { id: true, isActive: true },
+    });
+  },
+
+  async changeCustomerStatus(
+    {
+      customerId,
+      adminId,
+      action,
+      reason,
+      internalNote,
+    }: {
+      customerId: string;
+      adminId: string;
+      action: "SUSPEND" | "RELEASE";
+      reason: string;
+      internalNote?: string;
+    },
+    db: DbClient = prisma,
+  ) {
+    const isActive = action === "RELEASE";
+    const now = new Date();
+
+    if (action === "SUSPEND") {
+      const openRequests = await db.estimateRequest.findMany({
+        where: { customerId, status: "OPEN" },
+        select: {
+          id: true,
+          estimates: { where: { status: "SENT" }, select: { moverId: true } },
+          chatRooms: { select: { id: true } },
+        },
+      });
+      const requestIds = openRequests.map((request) => request.id);
+
+      if (requestIds.length > 0) {
+        await Promise.all([
+          db.estimate.updateMany({
+            where: { estimateRequestId: { in: requestIds }, status: "SENT" },
+            data: { status: "CANCELED", canceledAt: now },
+          }),
+          db.estimateRevision.updateMany({
+            where: {
+              status: "PENDING",
+              estimate: { estimateRequestId: { in: requestIds } },
+            },
+            data: { status: "CANCELED" },
+          }),
+          db.estimateRequest.updateMany({
+            where: { id: { in: requestIds }, status: "OPEN" },
+            data: { status: "CANCELED", isActive: false, canceledAt: now },
+          }),
+          db.chatMessage.createMany({
+            data: openRequests.flatMap((request) =>
+              request.chatRooms.map((room) => ({
+                roomId: room.id,
+                senderId: adminId,
+                type: "SYSTEM" as const,
+                content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
+              })),
+            ),
+          }),
+          db.notification.createMany({
+            data: openRequests.flatMap((request) =>
+              request.estimates.map((estimate) => ({
+                userId: estimate.moverId,
+                type: "ESTIMATE_REQUEST_CANCELED" as const,
+                title: "견적 요청 취소",
+                content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
+                linkUrl: null,
+                expiresAt: null,
+                sourceId: `admin-suspend:${customerId}:${String(request.id)}`,
+              })),
+            ),
+            skipDuplicates: true,
+          }),
+        ]);
+      }
+    }
+
+    const [user, suspension] = await Promise.all([
+      db.user.update({ where: { id: customerId }, data: { isActive }, select: { id: true } }),
+      db.userSuspension.create({
+        data: {
+          userId: customerId,
+          adminId,
+          action,
+          reason,
+          ...(internalNote !== undefined ? { internalNote } : {}),
+        },
+        select: { id: true, action: true, reason: true, adminId: true, createdAt: true },
+      }),
+      db.activityLog.create({
+        data: {
+          actorId: adminId,
+          actorRole: "ADMIN",
+          action: "UPDATE",
+          targetType: "USER",
+          targetId: customerId,
+          memo: `${action}: ${reason}`,
+          createdAt: now,
+        },
+      }),
+    ]);
+
+    return { user, suspension };
+  },
 };
