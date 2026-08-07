@@ -1,3 +1,4 @@
+import { PENDING_REQUESTS } from "./pendingSeeds.js";
 import { toReviewEstimateRequests } from "./reviewSeeds.js";
 
 /*
@@ -8,7 +9,7 @@ import { toReviewEstimateRequests } from "./reviewSeeds.js";
 const BASE_ESTIMATE_REQUESTS = [
   {
     key: "customer1-open-request",
-    customerEmail: "customer1@test.com",
+    customerEmail: "customer001@test.com",
     moveType: "HOME",
     moveDateOffsetDays: 21,
     expiresInDays: 7,
@@ -28,7 +29,7 @@ const BASE_ESTIMATE_REQUESTS = [
   },
   {
     key: "customer2-confirmed-request",
-    customerEmail: "customer2@test.com",
+    customerEmail: "customer002@test.com",
     moveType: "OFFICE",
     moveDateOffsetDays: 30,
     expiresInDays: 10,
@@ -48,7 +49,7 @@ const BASE_ESTIMATE_REQUESTS = [
   },
   {
     key: "customer3-open-small-request",
-    customerEmail: "customer3@test.com",
+    customerEmail: "customer003@test.com",
     moveType: "SMALL",
     moveDateOffsetDays: 14,
     expiresInDays: 5,
@@ -68,7 +69,7 @@ const BASE_ESTIMATE_REQUESTS = [
   },
   {
     key: "customer1-pending-request",
-    customerEmail: "customer1@test.com",
+    customerEmail: "customer004@test.com",
     moveType: "SMALL",
     moveDateOffsetDays: 18,
     expiresInDays: 7,
@@ -88,7 +89,7 @@ const BASE_ESTIMATE_REQUESTS = [
   },
   {
     key: "customer1-pending-design-request",
-    customerEmail: "customer1@test.com",
+    customerEmail: "customer005@test.com",
     moveType: "HOME",
     moveDateOffsetDays: 28,
     expiresInDays: 14,
@@ -108,7 +109,7 @@ const BASE_ESTIMATE_REQUESTS = [
   },
   {
     key: "customer3-pending-office-request",
-    customerEmail: "customer3@test.com",
+    customerEmail: "customer006@test.com",
     moveType: "OFFICE",
     moveDateOffsetDays: 25,
     expiresInDays: 9,
@@ -130,7 +131,11 @@ const BASE_ESTIMATE_REQUESTS = [
 
 const REVIEW_ESTIMATE_REQUESTS = toReviewEstimateRequests();
 
-/** 기존 견적 요청 + 리뷰용 COMPLETED 요청 */
-export const ESTIMATE_REQUESTS = [...BASE_ESTIMATE_REQUESTS, ...REVIEW_ESTIMATE_REQUESTS];
+/** 기존 견적 요청 + 리뷰용 COMPLETED 요청 + 대기중 OPEN 요청 */
+export const ESTIMATE_REQUESTS = [
+  ...BASE_ESTIMATE_REQUESTS,
+  ...REVIEW_ESTIMATE_REQUESTS,
+  ...PENDING_REQUESTS,
+];
 
 export type EstimateRequestSeedKey = (typeof ESTIMATE_REQUESTS)[number]["key"];

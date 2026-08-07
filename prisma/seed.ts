@@ -60,14 +60,15 @@ async function main(): Promise<void> {
   console.log("");
   console.log("────────────────────────────────────");
   console.log(`공통 비밀번호: ${TEST_PASSWORD}`);
-  console.log("관리자 계정: admin1@test.com ~ admin2@test.com");
-  console.log("고객 계정: customer1@test.com ~ customer8@test.com");
-  console.log("기사 계정: mover1@test.com ~ mover8@test.com");
+  console.log("관리자 계정: admin1@test.com ~ admin10@test.com");
+  console.log("고객 계정: customer001@test.com ~ customer100@test.com");
+  console.log("기사 계정: mover001@test.com ~ mover100@test.com");
   console.log("견적 요청 및 견적 테스트 데이터 생성 완료");
   console.log("리뷰 테스트 데이터 생성 완료");
+  console.log("  · 고객별 완료 이사 2건(리뷰 작성 1건 + 리뷰 미작성 1건) 생성");
   console.log("공지 / FAQ / 문의 / 신고 / 정지 이력 / 활동 로그 생성 완료");
   console.log("");
-  console.log("※ customer3@test.com 은 정지 상태로 생성됩니다.");
+  console.log("※ customer003@test.com 은 정지 상태로 생성됩니다.");
   console.log("────────────────────────────────────");
   console.log("");
 }
