@@ -468,7 +468,11 @@ export const moverSentEstimateService = {
         throw new AppError("ESTIMATE_NOT_FOUND");
       }
 
-      await lockEstimateRequestForUpdate(tx, initialEstimate.estimateRequest.id);
+      const locked = await lockEstimateRequestForUpdate(tx, initialEstimate.estimateRequest.id);
+
+      if (!locked) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+      }
 
       const estimate = await moverSentEstimateRepository.findDetail(moverId, estimateId, tx);
 
