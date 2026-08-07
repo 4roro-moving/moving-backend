@@ -106,30 +106,47 @@ function buildKeywordIlikeSql(keyword: string): Prisma.Sql {
   return Prisma.sql`(r.content ILIKE ${pattern} ESCAPE '\\' OR c.name ILIKE ${pattern} ESCAPE '\\')`;
 }
 
-function buildReportedExistsWhereSql(filters: AdminReviewListFilters): Prisma.Sql {
-  const parts: Prisma.Sql[] = [
-    Prisma.sql`EXISTS (
-      SELECT 1
-      FROM reports AS rp
-      WHERE rp.target_type = CAST(${ReportTargetType.REVIEW} AS "ReportTargetType")
-        AND rp.target_id = CAST(r.id AS TEXT)
-    )`,
-  ];
+/** isHidden / keyword / from / to 공통 필터 조건 */
+function buildFilterWhereParts(filters: AdminReviewListFilters): Prisma.Sql[] {
+  const parts: Prisma.Sql[] = [];
 
   if (filters.isHidden !== undefined) {
     parts.push(Prisma.sql`r.is_hidden = ${filters.isHidden}`);
   }
-
   if (filters.keyword) {
     parts.push(buildKeywordIlikeSql(filters.keyword));
   }
-
   if (filters.from) {
     parts.push(Prisma.sql`r.created_at >= ${filters.from}`);
   }
-
   if (filters.to) {
     parts.push(Prisma.sql`r.created_at <= ${filters.to}`);
+  }
+
+  return parts;
+}
+
+function buildReportedExistsSql(): Prisma.Sql {
+  return Prisma.sql`EXISTS (
+    SELECT 1
+    FROM reports AS rp
+    WHERE rp.target_type = CAST(${ReportTargetType.REVIEW} AS "ReportTargetType")
+      AND rp.target_id = CAST(r.id AS TEXT)
+  )`;
+}
+
+/** 공통 필터 + (선택) 신고 존재 조건을 조합합니다. */
+function buildRawWhereSql(filters: AdminReviewListFilters, reportedOnly: boolean): Prisma.Sql {
+  const parts: Prisma.Sql[] = [];
+
+  if (reportedOnly) {
+    parts.push(buildReportedExistsSql());
+  }
+
+  parts.push(...buildFilterWhereParts(filters));
+
+  if (parts.length === 0) {
+    return Prisma.sql`TRUE`;
   }
 
   return Prisma.join(parts, " AND ");
@@ -171,26 +188,7 @@ async function findReviewsByRawSql(
   db: DbClient,
 ): Promise<{ reviews: AdminReviewRow[]; totalCount: number }> {
   const { skip, take, filters, sort, reportedOnly } = params;
-  const whereSql = reportedOnly
-    ? buildReportedExistsWhereSql(filters)
-    : (() => {
-        const parts: Prisma.Sql[] = [Prisma.sql`TRUE`];
-
-        if (filters.isHidden !== undefined) {
-          parts.push(Prisma.sql`r.is_hidden = ${filters.isHidden}`);
-        }
-        if (filters.keyword) {
-          parts.push(buildKeywordIlikeSql(filters.keyword));
-        }
-        if (filters.from) {
-          parts.push(Prisma.sql`r.created_at >= ${filters.from}`);
-        }
-        if (filters.to) {
-          parts.push(Prisma.sql`r.created_at <= ${filters.to}`);
-        }
-
-        return Prisma.join(parts, " AND ");
-      })();
+  const whereSql = buildRawWhereSql(filters, reportedOnly);
   const orderSql = buildReportedOrderBySql(sort);
   const fromSql = filters.keyword
     ? Prisma.sql`FROM reviews AS r INNER JOIN "User" AS c ON c.id = r.customer_id`
