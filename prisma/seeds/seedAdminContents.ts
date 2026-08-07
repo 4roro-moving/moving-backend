@@ -245,6 +245,47 @@ export async function seedAdminContents(prisma: PrismaClient, adminIds: string[]
     suspensionCount += 1;
   }
 
+  /**
+   * 추가 정지 회원 2명 (총 3명 정지 상태 유지).
+   * customers[4], customers[5] = customer005, customer006
+   */
+  const extraSuspendReasons = [
+    {
+      reason: "반복적인 노쇼로 인한 이용 제한입니다.",
+      internalNote: "최근 30일 내 예약 부도 3회 확인",
+    },
+    {
+      reason: "부적절한 채팅 메시지 신고 누적으로 인한 이용 제한입니다.",
+      internalNote: "욕설 신고 다건 접수",
+    },
+  ];
+
+  for (let i = 0; i < extraSuspendReasons.length; i += 1) {
+    const target = customers[4 + i];
+    const info = extraSuspendReasons[i];
+
+    if (target === undefined || info === undefined) {
+      continue;
+    }
+
+    await prisma.user.update({
+      where: { id: target.id },
+      data: { isActive: false },
+    });
+
+    await prisma.userSuspension.create({
+      data: {
+        userId: target.id,
+        adminId,
+        action: "SUSPEND",
+        reason: info.reason,
+        internalNote: info.internalNote,
+      },
+    });
+
+    suspensionCount += 1;
+  }
+
   /** 정지 후 해제된 회원 */
   const releasedUser = customers[3];
 
