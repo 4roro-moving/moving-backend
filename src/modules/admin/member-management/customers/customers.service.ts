@@ -5,12 +5,21 @@ import { buildPagination } from "../../../../utils/pagination.util";
 import { customersRepository, type CustomerListRow } from "./customers.repository";
 import type { CustomerListItem, CustomerStatus, ListCustomerQuery } from "./customers.type";
 
-function toStartOfDay(date: string): Date {
-  return new Date(`${date}T00:00:00.000Z`);
+/**
+ * KST(Asia/Seoul) 달력 날짜의 시작 시각을 UTC로 변환합니다.
+ * DB의 createdAt은 UTC timestamp로 저장되므로, 관리자 화면의 날짜 기준에 맞춰 조회 범위만 UTC로 변환합니다.
+ */
+export function toKstStartOfDay(date: string): Date {
+  const [year = NaN, month = NaN, day = NaN] = date.split("-").map(Number);
+
+  return new Date(Date.UTC(year, month - 1, day, -9));
 }
 
-function toEndOfDay(date: string): Date {
-  return new Date(`${date}T23:59:59.999Z`);
+/** KST 달력 날짜의 마지막 시각을 UTC로 변환합니다. */
+export function toKstEndOfDay(date: string): Date {
+  const [year = NaN, month = NaN, day = NaN] = date.split("-").map(Number);
+
+  return new Date(Date.UTC(year, month - 1, day, 14, 59, 59, 999));
 }
 
 /**
@@ -62,8 +71,8 @@ function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput
 
   if (query.fromDate || query.toDate) {
     where.createdAt = {
-      ...(query.fromDate ? { gte: toStartOfDay(query.fromDate) } : {}),
-      ...(query.toDate ? { lte: toEndOfDay(query.toDate) } : {}),
+      ...(query.fromDate ? { gte: toKstStartOfDay(query.fromDate) } : {}),
+      ...(query.toDate ? { lte: toKstEndOfDay(query.toDate) } : {}),
     };
   }
 

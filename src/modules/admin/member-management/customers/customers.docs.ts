@@ -25,7 +25,7 @@ registerRouterDocs(adminCustomerRouter, {
         "",
         "- `keyword`: 이름·이메일 부분일치(대소문자 무시)",
         "- `status`: ACTIVE | SUSPENDED | WITHDRAWN (미지정 시 탈퇴 회원 제외)",
-        "- `fromDate` / `toDate`: 가입일 기간 검색 (YYYY-MM-DD)",
+        "- `fromDate` / `toDate`: 가입일 기간 검색 (YYYY-MM-DD, KST 기준)",
         "- 정렬: createdAt DESC (최신 가입순)",
         "- 기사님 목록은 `GET /api/admin/movers` 에서 별도 제공",
       ].join("\n"),
