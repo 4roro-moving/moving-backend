@@ -42,7 +42,7 @@ export type AdminReviewListFilters = {
   to?: Date;
 };
 
-export type AdminReviewSort = "LATEST" | "OLDEST" | "RATING_HIGH" | "RATING_LOW";
+export type AdminReviewSort = "LATEST" | "OLDEST" | "RATING_HIGH" | "RATING_LOW" | "REPORT_HIGH";
 
 type FindManyParams = {
   skip: number;
@@ -87,37 +87,66 @@ function toPrismaOrderBy(sort: AdminReviewSort): Prisma.ReviewOrderByWithRelatio
       return [{ rating: "desc" }, { createdAt: "desc" }, { id: "desc" }];
     case "RATING_LOW":
       return [{ rating: "asc" }, { createdAt: "desc" }, { id: "desc" }];
+    case "REPORT_HIGH":
+      // Prisma orderBy 로는 report count 정렬이 불가 — raw SQL 경로를 사용합니다.
+      return [{ createdAt: "desc" }, { id: "desc" }];
     case "LATEST":
     default:
       return [{ createdAt: "desc" }, { id: "desc" }];
   }
 }
 
-function buildReportedExistsWhereSql(filters: AdminReviewListFilters): Prisma.Sql {
-  const parts: Prisma.Sql[] = [
-    Prisma.sql`EXISTS (
-      SELECT 1
-      FROM reports AS rp
-      WHERE rp.target_type = CAST(${ReportTargetType.REVIEW} AS "ReportTargetType")
-        AND rp.target_id = CAST(r.id AS TEXT)
-    )`,
-  ];
+/** ILIKE 와일드카드(%, _)와 escape 문자(\)를 리터럴로 검색하기 위해 이스케이프합니다. */
+function escapeIlikePattern(value: string): string {
+  return value.replace(/\\/g, "\\\\").replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
+function buildKeywordIlikeSql(keyword: string): Prisma.Sql {
+  const pattern = `%${escapeIlikePattern(keyword)}%`;
+  return Prisma.sql`(r.content ILIKE ${pattern} ESCAPE '\\' OR c.name ILIKE ${pattern} ESCAPE '\\')`;
+}
+
+/** isHidden / keyword / from / to 공통 필터 조건 */
+function buildFilterWhereParts(filters: AdminReviewListFilters): Prisma.Sql[] {
+  const parts: Prisma.Sql[] = [];
 
   if (filters.isHidden !== undefined) {
     parts.push(Prisma.sql`r.is_hidden = ${filters.isHidden}`);
   }
-
   if (filters.keyword) {
-    const pattern = `%${filters.keyword}%`;
-    parts.push(Prisma.sql`(r.content ILIKE ${pattern} OR c.name ILIKE ${pattern})`);
+    parts.push(buildKeywordIlikeSql(filters.keyword));
   }
-
   if (filters.from) {
     parts.push(Prisma.sql`r.created_at >= ${filters.from}`);
   }
-
   if (filters.to) {
     parts.push(Prisma.sql`r.created_at <= ${filters.to}`);
+  }
+
+  return parts;
+}
+
+function buildReportedExistsSql(): Prisma.Sql {
+  return Prisma.sql`EXISTS (
+    SELECT 1
+    FROM reports AS rp
+    WHERE rp.target_type = CAST(${ReportTargetType.REVIEW} AS "ReportTargetType")
+      AND rp.target_id = CAST(r.id AS TEXT)
+  )`;
+}
+
+/** 공통 필터 + (선택) 신고 존재 조건을 조합합니다. */
+function buildRawWhereSql(filters: AdminReviewListFilters, reportedOnly: boolean): Prisma.Sql {
+  const parts: Prisma.Sql[] = [];
+
+  if (reportedOnly) {
+    parts.push(buildReportedExistsSql());
+  }
+
+  parts.push(...buildFilterWhereParts(filters));
+
+  if (parts.length === 0) {
+    return Prisma.sql`TRUE`;
   }
 
   return Prisma.join(parts, " AND ");
@@ -131,6 +160,13 @@ function buildReportedOrderBySql(sort: AdminReviewSort): Prisma.Sql {
       return Prisma.sql`r.rating DESC, r.created_at DESC, r.id DESC`;
     case "RATING_LOW":
       return Prisma.sql`r.rating ASC, r.created_at DESC, r.id DESC`;
+    case "REPORT_HIGH":
+      return Prisma.sql`(
+        SELECT COUNT(*)::int
+        FROM reports AS rp
+        WHERE rp.target_type = CAST(${ReportTargetType.REVIEW} AS "ReportTargetType")
+          AND rp.target_id = CAST(r.id AS TEXT)
+      ) DESC, r.created_at DESC, r.id DESC`;
     case "LATEST":
     default:
       return Prisma.sql`r.created_at DESC, r.id DESC`;
@@ -138,20 +174,21 @@ function buildReportedOrderBySql(sort: AdminReviewSort): Prisma.Sql {
 }
 
 /**
- * 신고가 존재하는 리뷰만 DB EXISTS 로 필터링합니다.
- * 전체 신고 targetId 를 메모리로 올리지 않습니다.
+ * 신고 건수 정렬 또는 신고 존재 필터가 필요할 때 raw SQL 로 조회합니다.
+ * Prisma orderBy 로는 report count 정렬이 불가합니다.
  */
-async function findReportedReviewsWithCount(
+async function findReviewsByRawSql(
   params: {
     skip: number;
     take: number;
     filters: AdminReviewListFilters;
     sort: AdminReviewSort;
+    reportedOnly: boolean;
   },
   db: DbClient,
 ): Promise<{ reviews: AdminReviewRow[]; totalCount: number }> {
-  const { skip, take, filters, sort } = params;
-  const whereSql = buildReportedExistsWhereSql(filters);
+  const { skip, take, filters, sort, reportedOnly } = params;
+  const whereSql = buildRawWhereSql(filters, reportedOnly);
   const orderSql = buildReportedOrderBySql(sort);
   const fromSql = filters.keyword
     ? Prisma.sql`FROM reviews AS r INNER JOIN "User" AS c ON c.id = r.customer_id`
@@ -197,8 +234,8 @@ export const contentsRepository = {
     { skip, take, filters, sort, reportedOnly }: FindManyParams,
     db: DbClient = prisma,
   ) {
-    if (reportedOnly) {
-      return findReportedReviewsWithCount({ skip, take, filters, sort }, db);
+    if (reportedOnly || sort === "REPORT_HIGH") {
+      return findReviewsByRawSql({ skip, take, filters, sort, reportedOnly }, db);
     }
 
     const where = toPrismaWhere(filters);

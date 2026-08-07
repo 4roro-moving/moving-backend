@@ -1,7 +1,7 @@
 import { Prisma, type PrismaClient } from "@prisma/client";
 
 import type { EstimateRequestSeedKey } from "./estimateRequests.js";
-import { REVIEW_SEED_ITEMS, REVIEW_STAT_MOVER_EMAILS } from "./reviewSeeds.js";
+import { REVIEW_SEED_ITEMS } from "./reviewSeeds.js";
 
 export interface ConfirmedEstimateSeedRef {
   requestKey: EstimateRequestSeedKey;
@@ -23,12 +23,26 @@ export async function seedReviews(
     reviewByRequestKey.has(estimate.requestKey),
   );
 
+  // 리뷰가 실제로 달리는 기사(=통계 재계산 대상)의 moverId 를 모읍니다.
+  const statMoverIds = new Set<string>();
+  let reviewedCount = 0;
+  let pendingCount = 0;
+
   await prisma.$transaction(
     async (tx) => {
       for (const target of targets) {
         const reviewSeed = reviewByRequestKey.get(target.requestKey);
 
         if (!reviewSeed) {
+          continue;
+        }
+
+        /*
+         * rating 이 null 인 건은 "리뷰 미작성" 상태로 둡니다.
+         * (COMPLETED 요청 + CONFIRMED 견적만 존재 → 고객이 직접 리뷰 작성 가능)
+         */
+        if (reviewSeed.rating === null || reviewSeed.content === null) {
+          pendingCount += 1;
           continue;
         }
 
@@ -52,13 +66,14 @@ export async function seedReviews(
           },
         });
 
-        console.log(`  ✅ 리뷰 upsert: ${reviewSeed.moverEmail} / ${target.requestKey}`);
+        statMoverIds.add(target.moverId);
+        reviewedCount += 1;
       }
 
       const seedMovers = await tx.user.findMany({
         where: {
-          email: {
-            in: [...REVIEW_STAT_MOVER_EMAILS],
+          id: {
+            in: [...statMoverIds],
           },
           role: "MOVER",
         },
@@ -118,5 +133,7 @@ export async function seedReviews(
     },
   );
 
-  console.log(`⭐ 리뷰 ${targets.length}개 생성 및 프로필 통계 갱신 완료`);
+  console.log(
+    `⭐ 리뷰 ${reviewedCount}개 작성 / ${pendingCount}개 미작성(리뷰 대기) · 프로필 통계 갱신 완료`,
+  );
 }

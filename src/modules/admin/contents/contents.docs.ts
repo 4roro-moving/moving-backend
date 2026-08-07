@@ -25,7 +25,7 @@ registerRouterDocs(adminReviewRouter, {
         "",
         "- `keyword`: 작성자명·본문 검색",
         "- `isHidden`: 숨김 여부 필터",
-        "- `sort`: LATEST | OLDEST | RATING_HIGH | RATING_LOW",
+        "- `sort`: LATEST | OLDEST | RATING_HIGH | RATING_LOW | REPORT_HIGH",
         "- `reportedOnly`: 신고 누적 콘텐츠만 조회",
         "- 각 항목에 `latestModeration`(최신 숨김/복구 사유)을 포함합니다.",
       ].join("\n"),
