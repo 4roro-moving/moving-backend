@@ -46,6 +46,27 @@ const BASE_ESTIMATES: readonly EstimateSeed[] = [
   },
 
   /*
+   * customer1: 대기 중인 견적 화면 확인용
+   * OPEN 요청에 SENT 견적을 연결해 /api/estimates/pending 응답을 보장
+   */
+  {
+    requestKey: "customer1-pending-design-request",
+    moverEmail: "mover3@test.com",
+    price: 360000,
+    comment: "대기 중인 견적 화면 확인을 위한 가정이사 견적입니다.",
+    status: "SENT",
+    isDesignated: false,
+  },
+  {
+    requestKey: "customer1-pending-design-request",
+    moverEmail: "mover5@test.com",
+    price: 400000,
+    comment: "대기 중인 견적 카드 비교를 위한 베테랑 기사 견적입니다.",
+    status: "SENT",
+    isDesignated: true,
+  },
+
+  /*
    * customer2: 확정 견적 상세 확인용
    * mover2의 견적이 확정된 상태
    */

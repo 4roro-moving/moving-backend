@@ -87,6 +87,26 @@ const BASE_ESTIMATE_REQUESTS = [
     isActive: true,
   },
   {
+    key: "customer1-pending-design-request",
+    customerEmail: "customer1@test.com",
+    moveType: "HOME",
+    moveDateOffsetDays: 28,
+    expiresInDays: 14,
+
+    fromRegion: "서울",
+    fromZipCode: "06236",
+    fromAddress: "서울특별시 강남구 테헤란로 123",
+    fromDetailAddress: "대기견적 확인용 1201호",
+
+    toRegion: "경기",
+    toZipCode: "13529",
+    toAddress: "경기도 성남시 분당구 판교역로 166",
+    toDetailAddress: "대기견적 확인용 801호",
+
+    status: "OPEN",
+    isActive: true,
+  },
+  {
     key: "customer3-pending-office-request",
     customerEmail: "customer3@test.com",
     moveType: "OFFICE",

@@ -567,7 +567,7 @@ export const estimateRequestService = {
           userId: moverId,
           type: "DESIGNATED_REQUEST_RECEIVED",
           title: "지정 견적 요청이 도착했어요",
-          content: "고객님이 회원님을 지정하여 견적을 요청했습니다.",
+          content: MOVE_TYPE_LABEL[request.moveType],
           linkUrl: `/mover/estimate-requests/${String(estimateRequestId)}`,
           expiresAt: null,
         },

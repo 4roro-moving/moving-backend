@@ -165,6 +165,15 @@ enum EstimateRevisionStatus {
   CANCELED
 }
 
+/// Refresh Token 세션 용도
+///
+/// USER  : 일반 사용자 인증 세션
+/// ADMIN : 관리자 인증 세션
+enum RefreshTokenSessionType {
+  USER
+  ADMIN
+}
+
 // ---------------------------------------------------------------------------
 // 관리자 기능 Enum
 // ---------------------------------------------------------------------------
@@ -418,24 +427,27 @@ model User {
 /// 로그인할 수 있도록 1:N 구조로 관리합니다.
 model RefreshToken {
   /// PK.
-  id        Int       @id @default(autoincrement())
+  id          Int                     @id @default(autoincrement())
   /// 토큰 소유 사용자.
-  userId    String    @db.Uuid
+  userId      String                  @db.Uuid
   /// Refresh Token 의 해시값. 원문은 저장하지 않으며 중복 불가입니다.
-  tokenHash String    @unique
+  tokenHash   String                  @unique
+  /// Refresh Token 세션 용도.
+  /// 일반 사용자 인증과 관리자 인증의 조회·폐기 범위를 구분합니다.
+  sessionType RefreshTokenSessionType @default(USER)
   /// 토큰 만료 시각.
-  expiresAt DateTime
+  expiresAt   DateTime
   /// 폐기 시각. 로그아웃/강제 만료 시 채워지며, 값이 있으면 사용 불가입니다.
-  revokedAt DateTime?
+  revokedAt   DateTime?
   /// 소유 사용자 관계. 계정 삭제 시 함께 삭제(Cascade).
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// 발급 시각.
-  createdAt DateTime  @default(now())
+  createdAt   DateTime                @default(now())
   /// 수정 시각.
-  updatedAt DateTime  @updatedAt
+  updatedAt   DateTime                @updatedAt
 
   /// 사용자별 토큰 조회 최적화.
-  @@index([userId])
+  @@index([userId, sessionType])
   /// 만료 토큰 정리(스케줄러) 조회 최적화.
   @@index([expiresAt])
 }
@@ -597,13 +609,13 @@ model CustomerServiceArea {
 /// 화면 표시명(서울/인천/제주 등) 매핑은 프론트에서 처리합니다.
 model Region {
   /// PK.
-  id   Int    @id @default(autoincrement())
+  id                   Int                   @id @default(autoincrement())
   /// 공식 지역명. 중복 불가입니다.
-  name String @unique
+  name                 String                @unique
   /// 지도 마커에 사용하는 지역 대표 위도.
-  latitude  Float
+  latitude             Float
   /// 지도 마커에 사용하는 지역 대표 경도.
-  longitude Float
+  longitude            Float
   /// 이 지역을 서비스하는 기사님 목록(역방향).
   moverServiceAreas    MoverServiceArea[]
   /// 이 지역을 관심 지역으로 둔 고객 목록(역방향).
