@@ -218,6 +218,12 @@ type DesignateParams = {
   moverId: string;
 };
 
+type CancelDesignatedMoverParams = {
+  estimateRequestId: number;
+  customerId: string;
+  moverId: string;
+};
+
 export const estimateRequestService = {
   /**
    * 견적 요청을 생성하고 매칭된 기사님들에게 알림을 보낸다. 진행 중인 견적 요청이 이미 존재하면 에러를 던진다.
@@ -561,7 +567,6 @@ export const estimateRequestService = {
 
       await estimateRequestRepository.createDesignation(estimateRequestId, moverId, tx);
 
-      // 알림 DB 저장은 지정 처리와 같은 트랜잭션에 포함(알림 필수), SSE 는 커밋 후.
       const notification = await notificationService.createNotification(
         {
           userId: moverId,
@@ -579,9 +584,53 @@ export const estimateRequestService = {
       return { detail, notification, moverId };
     });
 
-    // 커밋 이후 SSE 전송
     notificationService.sendNotification(result.moverId, result.notification);
 
     return result.detail;
+  },
+
+  /**
+   * 지정한 기사님 한 명의 견적 요청을 취소
+   */
+  async cancelDesignatedMover({
+    estimateRequestId,
+    customerId,
+    moverId,
+  }: CancelDesignatedMoverParams): Promise<EstimateRequestDetail> {
+    return prisma.$transaction(async (tx) => {
+      const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
+
+      assertEditable(request, "지금은 지정 견적 요청을 취소할 수 없는 상태입니다.");
+
+      if (request.expiresAt.getTime() <= Date.now()) {
+        throw new AppError("REQUEST_NOT_EDITABLE", {
+          message: "만료된 견적 요청입니다.",
+        });
+      }
+
+      const designation = await estimateRequestRepository.findDesignation(
+        estimateRequestId,
+        moverId,
+        tx,
+      );
+
+      if (!designation) {
+        throw new AppError("DESIGNATION_NOT_FOUND");
+      }
+
+      const estimate = await estimateRequestRepository.findEstimateByMover(
+        estimateRequestId,
+        moverId,
+        tx,
+      );
+
+      if (estimate) {
+        throw new AppError("DESIGNATION_CANCEL_NOT_ALLOWED");
+      }
+
+      await estimateRequestRepository.deleteDesignation(estimateRequestId, moverId, tx);
+
+      return findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
+    });
   },
 };
