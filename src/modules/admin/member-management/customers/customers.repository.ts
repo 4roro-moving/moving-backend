@@ -149,7 +149,7 @@ export const customersRepository = {
       db.estimateRequest.findMany({
         where,
         select: estimateHistorySelect,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         take,
       }),
       db.estimateRequest.count({ where }),
@@ -168,7 +168,7 @@ export const customersRepository = {
       db.review.findMany({
         where,
         select: reviewHistorySelect,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         take,
       }),
       db.review.count({ where }),
@@ -187,7 +187,7 @@ export const customersRepository = {
       db.report.findMany({
         where,
         select: reportHistorySelect,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         take,
       }),
       db.report.count({ where }),
@@ -222,7 +222,7 @@ export const customersRepository = {
       db.report.findMany({
         where,
         select: reportHistorySelect,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         take,
       }),
       db.report.count({ where }),
@@ -241,7 +241,7 @@ export const customersRepository = {
       db.userSuspension.findMany({
         where,
         select: suspensionHistorySelect,
-        orderBy: { createdAt: "desc" },
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         take,
       }),
       db.userSuspension.count({ where }),
