@@ -6,6 +6,7 @@ import { lockEstimateRequestForUpdate } from "../../../utils/estimate-request-lo
 import { runTransaction } from "../../../utils/transaction";
 import { notificationService } from "../../notification/notification.service";
 import { getRejectionNotificationExpiresAt } from "./mover-estimate.notification-policy";
+import { assertCompletableEstimate } from "./mover-estimate.completion-policy";
 import {
   moverEstimateRequestRepository,
   moverSentEstimateRepository,
@@ -457,5 +458,47 @@ export const moverSentEstimateService = {
   async getDetail(moverId: string, estimateId: number) {
     const row = await moverSentEstimateRepository.findDetail(moverId, estimateId);
     return mapSentEstimate(row);
+  },
+
+  async complete(moverId: string, estimateId: number) {
+    return runTransaction(async (tx) => {
+      const initialEstimate = await moverSentEstimateRepository.findDetail(moverId, estimateId, tx);
+
+      if (!initialEstimate) {
+        throw new AppError("ESTIMATE_NOT_FOUND");
+      }
+
+      await lockEstimateRequestForUpdate(tx, initialEstimate.estimateRequest.id);
+
+      const estimate = await moverSentEstimateRepository.findDetail(moverId, estimateId, tx);
+
+      if (!estimate) {
+        throw new AppError("ESTIMATE_NOT_FOUND");
+      }
+
+      assertCompletableEstimate(estimate);
+
+      const completedAt = new Date();
+      const result = await moverSentEstimateRepository.completeConfirmedRequest(
+        estimate.estimateRequest.id,
+        estimate.id,
+        completedAt,
+        tx,
+      );
+
+      if (result.count !== 1) {
+        throw new AppError("CONFLICT", {
+          message: "견적 상태가 변경되어 이사 완료 처리하지 못했습니다.",
+        });
+      }
+
+      const completedEstimate = await moverSentEstimateRepository.findDetail(
+        moverId,
+        estimateId,
+        tx,
+      );
+
+      return mapSentEstimate(completedEstimate);
+    });
   },
 };
