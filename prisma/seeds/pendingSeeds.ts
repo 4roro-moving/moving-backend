@@ -18,6 +18,8 @@ import { moverEmail, MOVER_COUNT } from "./movers.js";
 
 /** 대기중 견적을 받을 고객 번호 범위 */
 export const PENDING_CUSTOMER_START = 11;
+const CHAT_SENT_ESTIMATE_START = 11;
+const CHAT_SENT_ESTIMATE_END = 19;
 export const PENDING_CUSTOMER_END = 30; // 총 20명
 
 const MOVE_TYPES = ["SMALL", "HOME", "OFFICE"] as const;
@@ -42,6 +44,12 @@ const PENDING_COMMENTS = [
   "포장부터 운반까지 꼼꼼하게 도와드리겠습니다.",
   "합리적인 가격으로 신속하게 처리해드리겠습니다.",
   "경력을 살려 파손 없이 이사해드리겠습니다.",
+] as const;
+
+const CHAT_SENT_ESTIMATE_COMMENTS = [
+  "채팅 기능 확인을 위해 조율 가능한 보낸 견적입니다.",
+  "일정과 주소를 확인했고 안전하게 진행 가능한 견적입니다.",
+  "견적 조율과 채팅 진입 테스트를 위한 미완료 견적입니다.",
 ] as const;
 
 export interface PendingRequestSeed {
@@ -120,4 +128,18 @@ function buildPending(): {
 const built = buildPending();
 
 export const PENDING_REQUESTS: readonly PendingRequestSeed[] = built.requests;
-export const PENDING_ESTIMATES: readonly PendingEstimateSeed[] = built.estimates;
+export const PENDING_ESTIMATES: readonly PendingEstimateSeed[] = [
+  ...built.estimates,
+  ...Array.from({ length: CHAT_SENT_ESTIMATE_END - CHAT_SENT_ESTIMATE_START + 1 }, (_, index) => {
+    const seedIndex = CHAT_SENT_ESTIMATE_START + index;
+
+    return {
+      requestKey: `pending-c${String(seedIndex).padStart(3, "0")}`,
+      moverEmail: moverEmail(seedIndex),
+      price: 220000 + index * 10000,
+      comment: CHAT_SENT_ESTIMATE_COMMENTS[index % CHAT_SENT_ESTIMATE_COMMENTS.length]!,
+      status: "SENT" as const,
+      isDesignated: seedIndex % 2 === 1,
+    };
+  }),
+];
