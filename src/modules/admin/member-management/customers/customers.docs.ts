@@ -44,6 +44,7 @@ registerRouterDocs(adminCustomerRouter, {
       responses: {
         200: "조회 성공",
         404: "해당 회원을 찾을 수 없습니다.",
+        422: "회원 ID 형식이 올바르지 않습니다.",
       },
     },
   },
