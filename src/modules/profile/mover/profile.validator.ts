@@ -33,9 +33,14 @@ const nicknameSchema = z
   .min(2, { error: "닉네임은 2자 이상이어야 합니다." })
   .max(20, { error: "닉네임은 20자 이하여야 합니다." });
 
-const imageUrlSchema = z.url({
-  error: "올바른 이미지 URL 형식이 아닙니다.",
-});
+const uuidPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+
+const profileImageKeySchema = z
+  .string()
+  .trim()
+  .regex(new RegExp(`^profiles/${uuidPattern}/${uuidPattern}\\.(jpg|png|webp)$`, "i"), {
+    error: "올바른 프로필 이미지 Key 형식이 아닙니다.",
+  });
 
 const careerSchema = z.preprocess(
   (value) => {
@@ -116,7 +121,7 @@ export const createProfileSchema = z.strictObject({
   phone: phoneSchema.optional(),
 
   nickname: nicknameSchema,
-  imageUrl: imageUrlSchema.optional(),
+  imageUrl: profileImageKeySchema.optional(),
   career: careerSchema,
   shortIntro: shortIntroSchema,
   description: descriptionSchema,
@@ -189,7 +194,7 @@ export const updateProfileSchema = z
   .strictObject({
     nickname: nicknameSchema.optional(),
 
-    imageUrl: imageUrlSchema.nullable().optional(),
+    imageUrl: profileImageKeySchema.nullable().optional(),
 
     career: careerSchema.optional(),
 

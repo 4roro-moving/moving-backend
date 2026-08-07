@@ -28,9 +28,14 @@ const passwordSchema = z
     message: "비밀번호는 UTF-8 기준 72바이트 이하로 입력해주세요.",
   });
 
-const imageUrlSchema = z.url({
-  message: "올바른 이미지 URL이 아닙니다.",
-});
+const uuidPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+
+const profileImageKeySchema = z
+  .string()
+  .trim()
+  .regex(new RegExp(`^profiles/${uuidPattern}/${uuidPattern}\\.(jpg|png|webp)$`, "i"), {
+    message: "올바른 프로필 이미지 Key 형식이 아닙니다.",
+  });
 
 const regionIdsSchema = z
   .array(
@@ -70,7 +75,7 @@ const serviceTypesSchema = z
  */
 export const createProfileSchema = z.strictObject({
   phone: phoneSchema.optional(),
-  imageUrl: imageUrlSchema.optional(),
+  imageUrl: profileImageKeySchema.optional(),
   regionIds: regionIdsSchema,
   serviceTypes: serviceTypesSchema,
 });
@@ -163,7 +168,7 @@ export const updateBasicInfoSchema = z
  */
 export const updateProfileSchema = z
   .strictObject({
-    imageUrl: imageUrlSchema.nullable().optional(),
+    imageUrl: profileImageKeySchema.nullable().optional(),
     regionIds: regionIdsSchema.optional(),
     serviceTypes: serviceTypesSchema.optional(),
   })
