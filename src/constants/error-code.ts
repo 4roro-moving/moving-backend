@@ -235,7 +235,7 @@ export const ERROR_CODES = {
     message: "해당 회원을 찾을 수 없습니다.",
   },
   SELF_ACTION_NOT_ALLOWED: {
-    status: 400,
+    status: 403,
     code: "SELF_ACTION_NOT_ALLOWED",
     message: "관리자는 자신의 계정 상태를 변경할 수 없습니다.",
   },
