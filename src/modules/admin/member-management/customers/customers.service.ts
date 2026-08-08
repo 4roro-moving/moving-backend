@@ -1,4 +1,4 @@
-import { RefreshTokenSessionType, type Prisma } from "@prisma/client";
+import { NotificationType, RefreshTokenSessionType, type Prisma } from "@prisma/client";
 
 import { AppError } from "../../../../lib/app-error";
 import { authRepository } from "../../../auth/auth.repository";
@@ -277,22 +277,71 @@ export const customersService = {
 
       const shouldBeActive = input.action === "RELEASE";
 
-      const changed = await customersRepository.changeCustomerStatus(
-        {
-          customerId,
-          adminId,
-          action: input.action,
-          reason: input.reason,
-          ...(input.internalNote !== undefined ? { internalNote: input.internalNote } : {}),
-        },
+      const { count } = await customersRepository.updateCustomerIsActiveIfCurrent(
+        { customerId, isActive: shouldBeActive },
         tx,
       );
 
-      if (!changed) {
+      if (count === 0) {
         throw new AppError("CUSTOMER_STATUS_ALREADY_PROCESSED");
       }
 
-      const { user, suspension } = changed;
+      const now = new Date();
+
+      if (input.action === "SUSPEND") {
+        const openRequests = await customersRepository.findOpenRequestsForSuspension(
+          customerId,
+          tx,
+        );
+        const requestIds = openRequests.map((request) => request.id);
+
+        if (requestIds.length > 0) {
+          const systemMessages = openRequests.flatMap((request) =>
+            request.chatRooms.map((room) => ({
+              roomId: room.id,
+              senderId: adminId,
+              type: "SYSTEM" as const,
+              content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
+            })),
+          );
+          const notifications = openRequests.flatMap((request) =>
+            request.estimates.map((estimate) => ({
+              userId: estimate.moverId,
+              type: NotificationType.ESTIMATE_REQUEST_CANCELED_BY_ACCOUNT_SUSPENSION,
+              title: "견적 요청 취소",
+              content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
+              linkUrl: null,
+              expiresAt: null,
+              sourceId: `admin-suspend:${customerId}:${String(request.id)}`,
+            })),
+          );
+
+          await Promise.all([
+            customersRepository.cancelSentEstimates(requestIds, now, tx),
+            customersRepository.cancelPendingEstimateRevisions(requestIds, tx),
+            customersRepository.cancelOpenEstimateRequests(requestIds, now, tx),
+            customersRepository.createSystemMessages(systemMessages, tx),
+            customersRepository.createNotifications(notifications, tx),
+          ]);
+        }
+      }
+
+      const [suspension] = await Promise.all([
+        customersRepository.createCustomerSuspension(
+          {
+            customerId,
+            adminId,
+            action: input.action,
+            reason: input.reason,
+            ...(input.internalNote !== undefined ? { internalNote: input.internalNote } : {}),
+          },
+          tx,
+        ),
+        customersRepository.createCustomerStatusActivityLog(
+          { customerId, adminId, action: input.action, reason: input.reason, createdAt: now },
+          tx,
+        ),
+      ]);
 
       if (input.action === "SUSPEND") {
         await authRepository.revokeAllRefreshTokensByUserId(
@@ -303,7 +352,7 @@ export const customersService = {
       }
 
       return {
-        id: user.id,
+        id: customerId,
         status: shouldBeActive ? "ACTIVE" : "SUSPENDED",
         suspension,
       };

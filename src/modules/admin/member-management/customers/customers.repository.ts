@@ -1,4 +1,4 @@
-import { NotificationType, type Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../../../lib/prisma";
 import type { DbClient } from "../../../../utils/transaction";
@@ -257,7 +257,62 @@ export const customersRepository = {
     });
   },
 
-  async changeCustomerStatus(
+  updateCustomerIsActiveIfCurrent(
+    { customerId, isActive }: { customerId: string; isActive: boolean },
+    db: DbClient = prisma,
+  ) {
+    return db.user.updateMany({
+      where: {
+        id: customerId,
+        role: "CUSTOMER",
+        deletedAt: null,
+        isActive: !isActive,
+      },
+      data: { isActive },
+    });
+  },
+
+  findOpenRequestsForSuspension(customerId: string, db: DbClient = prisma) {
+    return db.estimateRequest.findMany({
+      where: { customerId, status: "OPEN" },
+      select: {
+        id: true,
+        estimates: { where: { status: "SENT" }, select: { moverId: true } },
+        chatRooms: { select: { id: true } },
+      },
+    });
+  },
+
+  cancelSentEstimates(requestIds: number[], canceledAt: Date, db: DbClient = prisma) {
+    return db.estimate.updateMany({
+      where: { estimateRequestId: { in: requestIds }, status: "SENT" },
+      data: { status: "CANCELED", canceledAt },
+    });
+  },
+
+  cancelPendingEstimateRevisions(requestIds: number[], db: DbClient = prisma) {
+    return db.estimateRevision.updateMany({
+      where: { status: "PENDING", estimate: { estimateRequestId: { in: requestIds } } },
+      data: { status: "CANCELED" },
+    });
+  },
+
+  cancelOpenEstimateRequests(requestIds: number[], canceledAt: Date, db: DbClient = prisma) {
+    return db.estimateRequest.updateMany({
+      where: { id: { in: requestIds }, status: "OPEN" },
+      data: { status: "CANCELED", isActive: false, canceledAt },
+    });
+  },
+
+  createSystemMessages(data: Prisma.ChatMessageCreateManyInput[], db: DbClient = prisma) {
+    return db.chatMessage.createMany({ data });
+  },
+
+  createNotifications(data: Prisma.NotificationCreateManyInput[], db: DbClient = prisma) {
+    return db.notification.createMany({ data, skipDuplicates: true });
+  },
+
+  createCustomerSuspension(
     {
       customerId,
       adminId,
@@ -273,103 +328,44 @@ export const customersRepository = {
     },
     db: DbClient = prisma,
   ) {
-    const isActive = action === "RELEASE";
-    const now = new Date();
-
-    const { count } = await db.user.updateMany({
-      where: {
-        id: customerId,
-        role: "CUSTOMER",
-        deletedAt: null,
-        isActive: !isActive,
+    return db.userSuspension.create({
+      data: {
+        userId: customerId,
+        adminId,
+        action,
+        reason,
+        ...(internalNote !== undefined ? { internalNote } : {}),
       },
-      data: { isActive },
+      select: { id: true, action: true, reason: true, adminId: true, createdAt: true },
     });
+  },
 
-    if (count === 0) {
-      return null;
-    }
-
-    if (action === "SUSPEND") {
-      const openRequests = await db.estimateRequest.findMany({
-        where: { customerId, status: "OPEN" },
-        select: {
-          id: true,
-          estimates: { where: { status: "SENT" }, select: { moverId: true } },
-          chatRooms: { select: { id: true } },
-        },
-      });
-      const requestIds = openRequests.map((request) => request.id);
-
-      if (requestIds.length > 0) {
-        await Promise.all([
-          db.estimate.updateMany({
-            where: { estimateRequestId: { in: requestIds }, status: "SENT" },
-            data: { status: "CANCELED", canceledAt: now },
-          }),
-          db.estimateRevision.updateMany({
-            where: {
-              status: "PENDING",
-              estimate: { estimateRequestId: { in: requestIds } },
-            },
-            data: { status: "CANCELED" },
-          }),
-          db.estimateRequest.updateMany({
-            where: { id: { in: requestIds }, status: "OPEN" },
-            data: { status: "CANCELED", isActive: false, canceledAt: now },
-          }),
-          db.chatMessage.createMany({
-            data: openRequests.flatMap((request) =>
-              request.chatRooms.map((room) => ({
-                roomId: room.id,
-                senderId: adminId,
-                type: "SYSTEM" as const,
-                content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
-              })),
-            ),
-          }),
-          db.notification.createMany({
-            data: openRequests.flatMap((request) =>
-              request.estimates.map((estimate) => ({
-                userId: estimate.moverId,
-                type: NotificationType.ESTIMATE_REQUEST_CANCELED_BY_ACCOUNT_SUSPENSION,
-                title: "견적 요청 취소",
-                content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
-                linkUrl: null,
-                expiresAt: null,
-                sourceId: `admin-suspend:${customerId}:${String(request.id)}`,
-              })),
-            ),
-            skipDuplicates: true,
-          }),
-        ]);
-      }
-    }
-
-    const [suspension] = await Promise.all([
-      db.userSuspension.create({
-        data: {
-          userId: customerId,
-          adminId,
-          action,
-          reason,
-          ...(internalNote !== undefined ? { internalNote } : {}),
-        },
-        select: { id: true, action: true, reason: true, adminId: true, createdAt: true },
-      }),
-      db.activityLog.create({
-        data: {
-          actorId: adminId,
-          actorRole: "ADMIN",
-          action: "UPDATE",
-          targetType: "USER",
-          targetId: customerId,
-          memo: `${action}: ${reason}`,
-          createdAt: now,
-        },
-      }),
-    ]);
-
-    return { user: { id: customerId }, suspension };
+  createCustomerStatusActivityLog(
+    {
+      customerId,
+      adminId,
+      action,
+      reason,
+      createdAt,
+    }: {
+      customerId: string;
+      adminId: string;
+      action: "SUSPEND" | "RELEASE";
+      reason: string;
+      createdAt: Date;
+    },
+    db: DbClient = prisma,
+  ) {
+    return db.activityLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "UPDATE",
+        targetType: "USER",
+        targetId: customerId,
+        memo: `${action}: ${reason}`,
+        createdAt,
+      },
+    });
   },
 };
