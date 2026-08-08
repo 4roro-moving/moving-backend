@@ -38,7 +38,7 @@ registerRouterDocs(profileRouter, {
         "- 발급된 Presigned URL의 유효시간은 180초입니다.",
         "- 이미지 Key는 `profiles/{userId}/{uuid}.{extension}` 형식으로 생성됩니다.",
         "- 백엔드에서 인증된 사용자 정보를 기반으로 이미지 Key를 생성합니다.",
-        "- 반환된 Presigned URL에는 지정된 이미지 한 개만 업로드할 수 있습니다.",
+        "- 반환된 Presigned URL은 180초 동안 지정된 S3 Key에 PUT 업로드할 수 있습니다.",
         "- 프론트엔드는 반환된 Presigned URL로 S3에 PUT 요청하여 이미지를 직접 업로드합니다.",
         "- 이미지 파일은 백엔드 서버를 거치지 않고 S3로 직접 업로드됩니다.",
       ].join("\n"),

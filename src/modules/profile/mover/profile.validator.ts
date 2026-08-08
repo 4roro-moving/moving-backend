@@ -1,6 +1,8 @@
 import { MoveType } from "@prisma/client";
 import { z } from "zod";
 
+import { profileImageKeySchema } from "../profile-image.validator";
+
 const nameSchema = z
   .string()
   .trim()
@@ -32,15 +34,6 @@ const nicknameSchema = z
   .trim()
   .min(2, { error: "닉네임은 2자 이상이어야 합니다." })
   .max(20, { error: "닉네임은 20자 이하여야 합니다." });
-
-const uuidPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
-
-const profileImageKeySchema = z
-  .string()
-  .trim()
-  .regex(new RegExp(`^profiles/${uuidPattern}/${uuidPattern}\\.(jpg|png|webp)$`, "i"), {
-    error: "올바른 프로필 이미지 Key 형식이 아닙니다.",
-  });
 
 const careerSchema = z.preprocess(
   (value) => {

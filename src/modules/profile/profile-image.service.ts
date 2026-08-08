@@ -19,7 +19,9 @@ const ALLOWED_PROFILE_IMAGE_CONTENT_TYPES = new Set(["image/jpeg", "image/png", 
 const bucketName = process.env.AWS_S3_BUCKET;
 
 if (!bucketName) {
-  throw new Error("AWS_S3_BUCKET 환경변수가 설정되지 않았습니다.");
+  throw new AppError("INTERNAL_SERVER_ERROR", {
+    message: "AWS_S3_BUCKET 환경변수가 설정되지 않았습니다.",
+  });
 }
 
 /*
