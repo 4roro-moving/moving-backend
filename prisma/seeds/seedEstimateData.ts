@@ -11,6 +11,17 @@ function addDays(baseDate: Date, days: number): Date {
   return date;
 }
 
+/** 대량 createMany 시 파라미터 한도를 피하기 위한 청크 분할 */
+function chunk<T>(items: readonly T[], size: number): T[][] {
+  const result: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    result.push(items.slice(i, i + size));
+  }
+  return result;
+}
+
+const CREATE_CHUNK_SIZE = 500;
+
 /*
  * 리뷰 시드 연동을 위해 반환값을 추가했습니다.
  * - 확정 견적 ref를 seedReviews에 넘겨 Review.estimateId를 연결합니다.
@@ -91,6 +102,9 @@ export async function seedEstimateData(
   // seedReviews에서 Review 생성 시 사용할 확정 견적 목록
   const confirmedEstimates: ConfirmedEstimateSeedRef[] = [];
 
+  // requestKey → 시드 요청 매핑 (CONFIRMED 처리 시 O(1) 조회용)
+  const requestSeedByKey = new Map(ESTIMATE_REQUESTS.map((r) => [r.key, r] as const));
+
   /*
    * 기존 견적 요청 삭제부터 관련 데이터 재생성까지
    * 하나의 트랜잭션으로 처리합니다.
@@ -118,84 +132,105 @@ export async function seedEstimateData(
       const estimateRequestIdMap = new Map<EstimateRequestSeedKey, number>();
 
       /*
-       * 견적 요청 생성
+       * 견적 요청 생성 (배치)
+       * ---------------------------------------------------------------
+       * 규모가 커져(수천 건) 단건 create 루프는 느리므로 createMany 로 일괄
+       * 생성한다. createMany 는 생성된 id 를 돌려주지 않으므로, 각 요청의
+       * fromDetailAddress(시드가 넣은 고유 값)로 재조회해 id 를 복원한다.
+       * (scenarioSeeds 가 fromDetailAddress 에 요청 key 를 포함한 고유 문자열을 넣어둔다)
        */
-      for (const requestData of ESTIMATE_REQUESTS) {
+      const requestCreateData = ESTIMATE_REQUESTS.map((requestData) => {
         const customerId = customerIdMap.get(requestData.customerEmail);
-
         const fromRegionId = regionIdMap.get(requestData.fromRegion);
-
         const toRegionId = regionIdMap.get(requestData.toRegion);
 
         if (!customerId) {
           throw new Error(`고객 ID를 찾을 수 없습니다: ${requestData.customerEmail}`);
         }
-
         if (fromRegionId === undefined) {
           throw new Error(`출발 지역을 찾을 수 없습니다: ${requestData.fromRegion}`);
         }
-
         if (toRegionId === undefined) {
           throw new Error(`도착 지역을 찾을 수 없습니다: ${requestData.toRegion}`);
         }
 
-        const estimateRequest = await tx.estimateRequest.create({
+        return {
+          key: requestData.key,
           data: {
             customerId,
-
             moveType: requestData.moveType,
             moveDate: addDays(now, requestData.moveDateOffsetDays),
-
             fromZipCode: requestData.fromZipCode,
             fromAddress: requestData.fromAddress,
+            // 시드가 넣은 고유 상세주소를 그대로 사용(재조회 키)
             fromDetailAddress: requestData.fromDetailAddress,
             fromRegionId,
-
             toZipCode: requestData.toZipCode,
             toAddress: requestData.toAddress,
             toDetailAddress: requestData.toDetailAddress,
             toRegionId,
-
             status: requestData.status,
             isActive: requestData.isActive,
             expiresAt: addDays(now, requestData.expiresInDays),
           },
-        });
+        };
+      });
 
-        estimateRequestIdMap.set(requestData.key, estimateRequest.id);
-
-        console.log(`  ✅ 견적 요청 생성: ${requestData.customerEmail} / ${requestData.key}`);
+      for (const part of chunk(
+        requestCreateData.map((r) => r.data),
+        CREATE_CHUNK_SIZE,
+      )) {
+        await tx.estimateRequest.createMany({ data: part });
       }
 
-      /*
-       * 기사님 견적 생성
-       */
-      for (const estimateData of ESTIMATES) {
-        const estimateRequestId = estimateRequestIdMap.get(estimateData.requestKey);
+      // fromDetailAddress(고유) → 요청 key 역매핑
+      const keyByDetailAddress = new Map(
+        requestCreateData.map((r) => [r.data.fromDetailAddress, r.key] as const),
+      );
 
+      // 방금 만든 요청들을 재조회해 key → id 매핑 복원
+      const createdRequests = await tx.estimateRequest.findMany({
+        where: {
+          customerId: { in: [...customerIdMap.values()] },
+        },
+        select: { id: true, fromDetailAddress: true },
+      });
+
+      for (const row of createdRequests) {
+        const key = row.fromDetailAddress
+          ? keyByDetailAddress.get(row.fromDetailAddress)
+          : undefined;
+        if (key) {
+          estimateRequestIdMap.set(key, row.id);
+        }
+      }
+
+      console.log(`  ✅ 견적 요청 ${requestCreateData.length}건 생성 완료 (배치)`);
+
+      /*
+       * 기사님 견적 생성 (배치)
+       * ---------------------------------------------------------------
+       * 규모가 수천 건이라 단건 create 루프는 트랜잭션 timeout(P2028)을
+       * 유발한다. createMany 로 일괄 생성하고, 생성된 id 는
+       * (estimateRequestId, moverId) 조합으로 재조회해 복원한다.
+       * 이 조합은 Estimate @@unique 라 견적을 유일하게 식별한다.
+       */
+      const estimateCreateData = ESTIMATES.map((estimateData) => {
+        const estimateRequestId = estimateRequestIdMap.get(estimateData.requestKey);
         const moverId = moverIdMap.get(estimateData.moverEmail);
 
         if (estimateRequestId === undefined) {
           throw new Error(`견적 요청을 찾을 수 없습니다: ${estimateData.requestKey}`);
         }
-
         if (!moverId) {
           throw new Error(`기사님을 찾을 수 없습니다: ${estimateData.moverEmail}`);
         }
 
-        /*
-         * 지정 견적이면 DesignatedMover 관계도 함께 생성합니다.
-         */
-        if (estimateData.isDesignated) {
-          await tx.designatedMover.create({
-            data: {
-              estimateRequestId,
-              moverId,
-            },
-          });
-        }
-
-        const estimate = await tx.estimate.create({
+        return {
+          requestKey: estimateData.requestKey,
+          estimateRequestId,
+          moverId,
+          status: estimateData.status,
           data: {
             estimateRequestId,
             moverId,
@@ -203,62 +238,107 @@ export async function seedEstimateData(
             comment: estimateData.comment,
             status: estimateData.status,
             isDesignated: estimateData.isDesignated,
-
             confirmedAt: estimateData.status === "CONFIRMED" ? now : null,
           },
-        });
+        };
+      });
 
-        /*
-         * 확정 견적은 Estimate 상태뿐 아니라
-         * EstimateRequest.confirmedEstimateId도 연결합니다.
-         *
-         * 리뷰 시드 추가 후 변경점:
-         * - 요청 status가 COMPLETED면 CONFIRMED로 덮어쓰지 않음
-         *   (리뷰 작성 조건: Estimate CONFIRMED + Request COMPLETED)
-         * - 확정 견적 ref를 모아 seedReviews에 전달
-         */
-        if (estimateData.status === "CONFIRMED") {
-          const requestSeed = ESTIMATE_REQUESTS.find(
-            (request) => request.key === estimateData.requestKey,
-          );
+      // 1) 지정 견적의 DesignatedMover 일괄 생성
+      const designatedData = estimateCreateData
+        .filter((e) => e.data.isDesignated)
+        .map((e) => ({ estimateRequestId: e.estimateRequestId, moverId: e.moverId }));
 
-          if (!requestSeed) {
-            throw new Error(`견적 요청 시드를 찾을 수 없습니다: ${estimateData.requestKey}`);
-          }
+      if (designatedData.length > 0) {
+        for (const part of chunk(designatedData, CREATE_CHUNK_SIZE)) {
+          await tx.designatedMover.createMany({ data: part });
+        }
+      }
 
-          const customerId = customerIdMap.get(requestSeed.customerEmail);
+      // 2) 견적 일괄 생성
+      for (const part of chunk(
+        estimateCreateData.map((e) => e.data),
+        CREATE_CHUNK_SIZE,
+      )) {
+        await tx.estimate.createMany({ data: part });
+      }
 
-          if (!customerId) {
-            throw new Error(`고객 ID를 찾을 수 없습니다: ${requestSeed.customerEmail}`);
-          }
+      // 3) (estimateRequestId, moverId) → estimateId 복원
+      const createdEstimates = await tx.estimate.findMany({
+        where: {
+          estimateRequestId: { in: [...estimateRequestIdMap.values()] },
+        },
+        select: { id: true, estimateRequestId: true, moverId: true },
+      });
 
-          const nextRequestStatus = requestSeed.status === "COMPLETED" ? "COMPLETED" : "CONFIRMED";
+      const estimateIdByPair = new Map<string, number>();
+      for (const row of createdEstimates) {
+        estimateIdByPair.set(`${row.estimateRequestId}|${row.moverId}`, row.id);
+      }
 
-          await tx.estimateRequest.update({
-            where: {
-              id: estimateRequestId,
-            },
-            data: {
-              status: nextRequestStatus,
-              isActive: false,
-              confirmedEstimateId: estimate.id,
-            },
-          });
+      // 4) CONFIRMED 견적: 수집 후 요청 update 를 병렬 청크로 처리
+      const confirmedUpdates: {
+        estimateRequestId: number;
+        nextStatus: "COMPLETED" | "CONFIRMED";
+        confirmedEstimateId: number;
+      }[] = [];
 
-          confirmedEstimates.push({
-            requestKey: estimateData.requestKey,
-            estimateId: estimate.id,
-            customerId,
-            moverId,
-          });
+      for (const e of estimateCreateData) {
+        if (e.status !== "CONFIRMED") {
+          continue;
         }
 
-        console.log(`  ✅ 견적 생성: ${estimateData.moverEmail} → ${estimateData.requestKey}`);
+        const estimateId = estimateIdByPair.get(`${e.estimateRequestId}|${e.moverId}`);
+        if (estimateId === undefined) {
+          throw new Error(`생성된 견적 id 를 찾을 수 없습니다: ${e.requestKey} / ${e.moverId}`);
+        }
+
+        const requestSeed = requestSeedByKey.get(e.requestKey);
+        if (!requestSeed) {
+          throw new Error(`견적 요청 시드를 찾을 수 없습니다: ${e.requestKey}`);
+        }
+
+        const customerId = customerIdMap.get(requestSeed.customerEmail);
+        if (!customerId) {
+          throw new Error(`고객 ID를 찾을 수 없습니다: ${requestSeed.customerEmail}`);
+        }
+
+        const nextRequestStatus = requestSeed.status === "COMPLETED" ? "COMPLETED" : "CONFIRMED";
+
+        confirmedUpdates.push({
+          estimateRequestId: e.estimateRequestId,
+          nextStatus: nextRequestStatus,
+          confirmedEstimateId: estimateId,
+        });
+
+        confirmedEstimates.push({
+          requestKey: e.requestKey,
+          estimateId,
+          customerId,
+          moverId: e.moverId,
+        });
       }
+
+      // 행마다 confirmedEstimateId 가 달라 updateMany 불가 → 병렬 청크 update
+      for (const part of chunk(confirmedUpdates, CREATE_CHUNK_SIZE)) {
+        await Promise.all(
+          part.map((u) =>
+            tx.estimateRequest.update({
+              where: { id: u.estimateRequestId },
+              data: {
+                status: u.nextStatus,
+                isActive: false,
+                confirmedEstimateId: u.confirmedEstimateId,
+              },
+            }),
+          ),
+        );
+      }
+
+      console.log(`  ✅ 견적 ${ESTIMATES.length}건 생성 완료 (배치)`);
     },
     {
-      maxWait: 15_000,
-      timeout: 120_000,
+      maxWait: 30_000,
+      timeout: 300_000,
     },
   );
 

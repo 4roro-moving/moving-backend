@@ -1,12 +1,12 @@
 import type { EstimateRequestStatus, EstimateStatus, MoveType } from "@prisma/client";
 
-import logger from "../../../config/logger";
 import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
 import { lockEstimateRequestForUpdate } from "../../../utils/estimate-request-lock.util";
 import { runTransaction } from "../../../utils/transaction";
 import { notificationService } from "../../notification/notification.service";
 import { getRejectionNotificationExpiresAt } from "./mover-estimate.notification-policy";
+import { assertCompletableEstimate } from "./mover-estimate.completion-policy";
 import {
   moverEstimateRequestRepository,
   moverSentEstimateRepository,
@@ -266,32 +266,26 @@ export const moverEstimateRequestService = {
         tx,
       );
 
+      const notification = await notificationService.createNotification(
+        {
+          userId: estimateRequest.customerId,
+          type: "ESTIMATE_RECEIVED",
+          title: "견적 도착",
+          content: `${profile.nickname} 기사님의 ${MOVE_TYPE_LABEL[estimateRequest.moveType]} 견적`,
+          linkUrl: null,
+          expiresAt: estimateRequest.expiresAt,
+        },
+        tx,
+      );
+
       return {
         estimate,
         customerId: estimateRequest.customerId,
-        moverNickname: profile.nickname,
-        moveType: estimateRequest.moveType,
-        expiresAt: estimateRequest.expiresAt,
+        notification,
       };
     });
 
-    // 2026.08.03 정슬기 - [수정] 알림 실패가 견적 전송 성공 응답을 덮지 않도록 격리
-    try {
-      await notificationService.createNotification({
-        userId: result.customerId,
-        type: "ESTIMATE_RECEIVED",
-        title: "견적 도착",
-        content: `${result.moverNickname} 기사님의 ${MOVE_TYPE_LABEL[result.moveType]} 견적`,
-        linkUrl: null,
-        expiresAt: result.expiresAt,
-      });
-    } catch (error) {
-      logger.error("Failed to create ESTIMATE_RECEIVED notification.", {
-        error,
-        estimateId: result.estimate.id,
-        customerId: result.customerId,
-      });
-    }
+    notificationService.sendNotification(result.customerId, result.notification);
 
     return result.estimate;
   },
@@ -306,7 +300,14 @@ export const moverEstimateRequestService = {
         throw new AppError("MOVER_NOT_FOUND");
       }
 
-      //견적 요청 조회
+      // 취소/견적 전송 트랜잭션과 직렬화한 뒤 최신 상태 재확인
+      const locked = await lockEstimateRequestForUpdate(tx, estimateRequestId);
+
+      if (!locked) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+      }
+
+      //견적 요청 조회 (잠금 이후 최신 상태)
       const estimateRequest =
         await moverEstimateRequestRepository.findEstimateRequestForMoverAction(
           estimateRequestId,
@@ -371,30 +372,27 @@ export const moverEstimateRequestService = {
         tx,
       );
 
+      const notificationCreatedAt = new Date();
+      const notification = await notificationService.createNotification(
+        {
+          userId: estimateRequest.customerId,
+          type: "ESTIMATE_REQUEST_REJECTED",
+          title: "견적 요청 반려",
+          content: profile.nickname,
+          linkUrl: null,
+          expiresAt: getRejectionNotificationExpiresAt(notificationCreatedAt),
+        },
+        tx,
+      );
+
       return {
         rejection,
         customerId: estimateRequest.customerId,
-        moverNickname: profile.nickname,
+        notification,
       };
     });
 
-    // 2026.08.03 정슬기 - [수정] 알림 실패가 반려 성공 응답을 덮지 않도록 격리
-    try {
-      await notificationService.createNotification({
-        userId: result.customerId,
-        type: "ESTIMATE_REQUEST_REJECTED",
-        title: "견적 요청 반려",
-        content: result.moverNickname,
-        linkUrl: null,
-        expiresAt: getRejectionNotificationExpiresAt(new Date()),
-      });
-    } catch (error) {
-      logger.error("Failed to create ESTIMATE_REQUEST_REJECTED notification.", {
-        error,
-        rejectionId: result.rejection.id,
-        customerId: result.customerId,
-      });
-    }
+    notificationService.sendNotification(result.customerId, result.notification);
 
     return result.rejection;
   },
@@ -460,5 +458,51 @@ export const moverSentEstimateService = {
   async getDetail(moverId: string, estimateId: number) {
     const row = await moverSentEstimateRepository.findDetail(moverId, estimateId);
     return mapSentEstimate(row);
+  },
+
+  async complete(moverId: string, estimateId: number) {
+    return runTransaction(async (tx) => {
+      const initialEstimate = await moverSentEstimateRepository.findDetail(moverId, estimateId, tx);
+
+      if (!initialEstimate) {
+        throw new AppError("ESTIMATE_NOT_FOUND");
+      }
+
+      const locked = await lockEstimateRequestForUpdate(tx, initialEstimate.estimateRequest.id);
+
+      if (!locked) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+      }
+
+      const estimate = await moverSentEstimateRepository.findDetail(moverId, estimateId, tx);
+
+      if (!estimate) {
+        throw new AppError("ESTIMATE_NOT_FOUND");
+      }
+
+      assertCompletableEstimate(estimate);
+
+      const completedAt = new Date();
+      const result = await moverSentEstimateRepository.completeConfirmedRequest(
+        estimate.estimateRequest.id,
+        estimate.id,
+        completedAt,
+        tx,
+      );
+
+      if (result.count !== 1) {
+        throw new AppError("CONFLICT", {
+          message: "견적 상태가 변경되어 이사 완료 처리하지 못했습니다.",
+        });
+      }
+
+      const completedEstimate = await moverSentEstimateRepository.findDetail(
+        moverId,
+        estimateId,
+        tx,
+      );
+
+      return mapSentEstimate(completedEstimate);
+    });
   },
 };

@@ -19,15 +19,24 @@ export async function seedAdminContents(prisma: PrismaClient, adminIds: string[]
 
   const customers = await prisma.user.findMany({
     where: { role: "CUSTOMER" },
-    select: { id: true },
+    select: { id: true, email: true },
     orderBy: { email: "asc" },
   });
 
   const movers = await prisma.user.findMany({
     where: { role: "MOVER" },
-    select: { id: true },
+    select: { id: true, email: true },
     orderBy: { email: "asc" },
   });
+
+  /*
+   * 레거시 인덱스 참조(customers[0] 등)를 없애고 email 로 명시 조회한다.
+   * 계정은 항상 100명 생성되므로 아래 대상은 존재가 보장된다.
+   */
+  const customerByEmail = new Map(customers.map((u) => [u.email, u]));
+  const moverByEmail = new Map(movers.map((u) => [u.email, u]));
+  const pickCustomer = (email: string) => customerByEmail.get(email);
+  const pickMover = (email: string) => moverByEmail.get(email);
 
   if (customers.length === 0 || movers.length === 0) {
     console.log("고객 또는 기사 계정이 없어 관리자 콘텐츠 시드를 건너뜁니다.");
@@ -152,7 +161,7 @@ export async function seedAdminContents(prisma: PrismaClient, adminIds: string[]
 
   /** 리뷰 신고 (처리 대기) */
   const firstReview = reviews[0];
-  const reporter0 = customers[0];
+  const reporter0 = pickCustomer("customer001@test.com");
 
   if (firstReview !== undefined && reporter0 !== undefined) {
     await prisma.report.create({
@@ -171,7 +180,7 @@ export async function seedAdminContents(prisma: PrismaClient, adminIds: string[]
 
   /** 리뷰 신고 (처리 완료 - 숨김 처리됨) */
   const secondReview = reviews[1];
-  const reporter1 = customers[1];
+  const reporter1 = pickCustomer("customer002@test.com");
 
   if (secondReview !== undefined && reporter1 !== undefined) {
     await prisma.report.create({
@@ -197,8 +206,8 @@ export async function seedAdminContents(prisma: PrismaClient, adminIds: string[]
   }
 
   /** 기사 신고 (처리 대기) */
-  const reporter2 = customers[2];
-  const reportedMover = movers[0];
+  const reporter2 = pickCustomer("customer003@test.com");
+  const reportedMover = pickMover("mover001@test.com");
 
   if (reporter2 !== undefined && reportedMover !== undefined) {
     await prisma.report.create({
@@ -223,32 +232,87 @@ export async function seedAdminContents(prisma: PrismaClient, adminIds: string[]
 
   let suspensionCount = 0;
 
-  /** 정지 상태인 회원 (문의로 이의 제기 중) */
-  const suspendedUser = customers[2];
+  /*
+   * 정지 대상 = 각 10명 배치의 9번 위치.
+   *   고객: customer009, 019, 029, ... 099  (10명)
+   *   기사: mover009,   019, 029, ... 099   (10명)
+   * 규칙 기반으로 통일해 100번까지 일관되게 정지 상태를 만든다.
+   */
+  const SUSPEND_REASONS = [
+    {
+      reason: "허위 리뷰 작성으로 인한 이용 제한입니다.",
+      internalNote: "동일 IP 에서 리뷰 5건 연속 작성 확인",
+    },
+    {
+      reason: "반복적인 노쇼로 인한 이용 제한입니다.",
+      internalNote: "최근 30일 내 예약 부도 3회 확인",
+    },
+    {
+      reason: "부적절한 채팅 메시지 신고 누적으로 인한 이용 제한입니다.",
+      internalNote: "욕설 신고 다건 접수",
+    },
+    {
+      reason: "허위 견적 및 노쇼 신고 누적으로 인한 이용 제한입니다.",
+      internalNote: "확정 후 미방문 신고 다건 접수",
+    },
+  ] as const;
 
-  if (suspendedUser !== undefined) {
+  const pad3 = (n: number) => String(n).padStart(3, "0");
+  const suspendTargets = [] as { user: ReturnType<typeof pickCustomer>; seq: number }[];
+
+  for (let batch = 0; batch < 10; batch += 1) {
+    const no = batch * 10 + 9; // 9, 19, 29, ... 99
+    suspendTargets.push({ user: pickCustomer(`customer${pad3(no)}@test.com`), seq: batch });
+    suspendTargets.push({ user: pickMover(`mover${pad3(no)}@test.com`), seq: batch });
+  }
+
+  for (const { user, seq } of suspendTargets) {
+    if (user === undefined) {
+      continue;
+    }
+
+    const info = SUSPEND_REASONS[seq % SUSPEND_REASONS.length]!;
+
     await prisma.user.update({
-      where: { id: suspendedUser.id },
+      where: { id: user.id },
       data: { isActive: false },
     });
 
     await prisma.userSuspension.create({
       data: {
-        userId: suspendedUser.id,
+        userId: user.id,
         adminId,
         action: "SUSPEND",
-        reason: "허위 리뷰 작성으로 인한 이용 제한입니다.",
-        internalNote: "동일 IP 에서 리뷰 5건 연속 작성 확인",
+        reason: info.reason,
+        internalNote: info.internalNote,
       },
     });
 
     suspensionCount += 1;
   }
 
-  /** 정지 후 해제된 회원 */
-  const releasedUser = customers[3];
+  // 활동 로그(hide memo) 등에서 참조할 대표 정지 계정
+  const suspendedUser = pickCustomer("customer009@test.com");
 
-  if (releasedUser !== undefined) {
+  /*
+   * 정지 → 해제된 회원 = 각 10명 배치의 10번 위치.
+   *   고객: customer010, 020, ... 100
+   *   기사: mover010,   020, ... 100
+   * SUSPEND 후 RELEASE 이력을 남기되, 최종 상태는 active(해제됨)로 둔다.
+   * (user.isActive 를 false 로 바꾸지 않으므로 현재 이용 가능 상태)
+   */
+  const releasedTargets = [] as ReturnType<typeof pickCustomer>[];
+  for (let batch = 0; batch < 10; batch += 1) {
+    const no = batch * 10 + 10; // 10, 20, ... 100
+    releasedTargets.push(pickCustomer(`customer${pad3(no)}@test.com`));
+    releasedTargets.push(pickMover(`mover${pad3(no)}@test.com`));
+  }
+
+  for (const releasedUser of releasedTargets) {
+    if (releasedUser === undefined) {
+      continue;
+    }
+
     await prisma.userSuspension.create({
       data: {
         userId: releasedUser.id,

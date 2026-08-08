@@ -338,6 +338,7 @@ const moverSentEstimateSelect = {
       toDetailAddress: true,
       toRegion: { select: { id: true, name: true } },
       status: true,
+      confirmedEstimateId: true,
       createdAt: true,
       completedAt: true,
       customer: { select: { id: true, name: true } },
@@ -386,6 +387,26 @@ export const moverSentEstimateRepository = {
     return db.estimate.findFirst({
       where: { id: estimateId, moverId },
       select: moverSentEstimateSelect,
+    });
+  },
+
+  completeConfirmedRequest(
+    estimateRequestId: number,
+    estimateId: number,
+    completedAt: Date,
+    db: DbClient = prisma,
+  ) {
+    return db.estimateRequest.updateMany({
+      where: {
+        id: estimateRequestId,
+        status: "CONFIRMED",
+        confirmedEstimateId: estimateId,
+      },
+      data: {
+        status: "COMPLETED",
+        isActive: false,
+        completedAt,
+      },
     });
   },
 };
