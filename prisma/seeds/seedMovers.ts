@@ -6,7 +6,6 @@ export async function seedMovers(
   prisma: PrismaClient,
   passwordHash: string,
   regionIdMap: Map<string, number>,
-  adminId: string | null,
 ): Promise<void> {
   console.log("기사님 계정을 생성합니다.");
 
@@ -55,13 +54,6 @@ export async function seedMovers(
         confirmedCount: mover.confirmedCount,
         averageRating: mover.averageRating,
         reviewCount: mover.reviewCount,
-        businessNumber: mover.businessNumber,
-        businessName: mover.businessName,
-        licenseFileKey: `mover-licenses/${mover.email}.jpg`,
-        approvalStatus: mover.approvalStatus,
-        approvedBy: mover.approvalStatus === "PENDING" ? null : adminId,
-        approvedAt: mover.approvalStatus === "PENDING" ? null : new Date(),
-        rejectReason: "rejectReason" in mover ? mover.rejectReason : null,
       },
 
       create: {
@@ -74,13 +66,6 @@ export async function seedMovers(
         confirmedCount: mover.confirmedCount,
         averageRating: mover.averageRating,
         reviewCount: mover.reviewCount,
-        businessNumber: mover.businessNumber,
-        businessName: mover.businessName,
-        licenseFileKey: `mover-licenses/${mover.email}.jpg`,
-        approvalStatus: mover.approvalStatus,
-        approvedBy: mover.approvalStatus === "PENDING" ? null : adminId,
-        approvedAt: mover.approvalStatus === "PENDING" ? null : new Date(),
-        rejectReason: "rejectReason" in mover ? mover.rejectReason : null,
       },
     });
 
