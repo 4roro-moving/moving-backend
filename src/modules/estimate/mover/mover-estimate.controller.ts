@@ -75,6 +75,16 @@ const getSentEstimateDetail: RequestHandler = async (req, res) => {
   });
 };
 
+const completeSentEstimate: RequestHandler = async (req, res) => {
+  const { estimateId } = res.locals.params as MoverSentEstimateIdParam;
+  const result = await moverSentEstimateService.complete(getMoverId(req), estimateId);
+
+  res.status(200).json({
+    success: true,
+    data: result,
+  });
+};
+
 // 기사가 고객의 견적 요청에 견적을 전송
 const sendEstimate: RequestHandler = async (req, res) => {
   const { estimateRequestId } = res.locals.params as SendEstimateParam;
@@ -114,6 +124,7 @@ export const moverEstimateController = {
   getRejections,
   getSentEstimates,
   getSentEstimateDetail,
+  completeSentEstimate,
   sendEstimate,
   rejectEstimate,
 };

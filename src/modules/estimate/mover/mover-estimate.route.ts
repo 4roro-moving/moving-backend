@@ -28,6 +28,14 @@ moverEstimateRouter.get(
   asyncHandler(moverEstimateController.getList),
 );
 
+// 기사님이 본인의 확정 견적을 실제 이사 완료 상태로 전환
+moverEstimateRouter.patch(
+  "/sent/:estimateId/complete",
+  ...moverOnly,
+  validate({ params: moverSentEstimateIdParamSchema }),
+  asyncHandler(moverEstimateController.completeSentEstimate),
+);
+
 /*
 - 2026.07.30 add 윤소정
 기사 견적 반려 내역 조회
