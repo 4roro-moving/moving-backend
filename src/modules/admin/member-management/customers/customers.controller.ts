@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 
+import { AppError } from "../../../../lib/app-error";
 import { sendResponse } from "../../../../utils/response.util";
 import { customersService } from "./customers.service";
 import type {
@@ -30,9 +31,14 @@ export const customersController = {
   updateCustomerStatus: async (req: Request, res: Response) => {
     const { id } = res.locals.params as CustomerIdParam;
     const input = req.body as UpdateCustomerStatusBody;
+
+    if (!req.admin) {
+      throw new AppError("UNAUTHORIZED");
+    }
+
     const result = await customersService.updateCustomerStatus({
       customerId: id,
-      adminId: req.admin!.id,
+      adminId: req.admin.id,
       input,
     });
 
