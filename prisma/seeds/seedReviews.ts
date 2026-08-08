@@ -128,8 +128,8 @@ export async function seedReviews(
       }
     },
     {
-      maxWait: 15_000,
-      timeout: 120_000,
+      maxWait: 30_000,
+      timeout: 300_000,
     },
   );
 
