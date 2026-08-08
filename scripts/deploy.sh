@@ -14,23 +14,50 @@ export PATH="$NVM_DIR/versions/node/v22.23.2/bin:$PATH"
 PROJECT_DIR="/home/ubuntu/moving-backend"
 PROCESS_NAME="moving-backend"
 HEALTH_CHECK_URL="http://localhost/api/health"
+RELEASE_FILE="/tmp/moving-backend-release.tar.gz"
+
+ARTIFACT_URL="${1:-}"
+
+if [ -z "$ARTIFACT_URL" ]; then
+  echo "❌ Deployment artifact URL is required."
+  exit 1
+fi
 
 cd "$PROJECT_DIR"
 
-echo "📦 Installing dependencies..."
-npm ci
+echo "⬇️ Downloading deployment package..."
 
-echo "🛠 Generating Prisma Client..."
-npx prisma generate
+curl \
+  --fail \
+  --location \
+  --silent \
+  --show-error \
+  "$ARTIFACT_URL" \
+  --output "$RELEASE_FILE"
 
-echo "🏗 Building application..."
-npm run build
+echo "🛑 Stopping application..."
 
-echo "🗄 Applying database migrations..."
-npx prisma migrate deploy
+pm2 stop "$PROCESS_NAME" || true
 
-echo "🚀 Restarting PM2 process..."
-pm2 restart "$PROCESS_NAME" --update-env
+echo "🧹 Removing previous build..."
+
+rm -rf "$PROJECT_DIR/dist"
+rm -rf "$PROJECT_DIR/node_modules"
+
+echo "📦 Extracting deployment package..."
+
+tar -xzf "$RELEASE_FILE" -C "$PROJECT_DIR"
+
+rm -f "$RELEASE_FILE"
+
+echo "🚀 Starting application..."
+
+pm2 delete "$PROCESS_NAME" || true
+
+pm2 start "$PROJECT_DIR/dist/server.js" \
+  --name "$PROCESS_NAME" \
+  --time
+
 pm2 save
 
 echo "🩺 Checking application health..."
