@@ -45,12 +45,10 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
         run: npx prisma migrate deploy
 
-      - name: Remove development dependencies
-        run: npm prune --omit=dev
-
       - name: Create deployment package
         run: |
           tar -czf moving-backend-release.tar.gz \
+            src \
             dist \
             node_modules \
             package.json \
@@ -94,6 +92,8 @@ jobs:
             --arg command "sudo -iu ubuntu bash -lc 'cd /home/ubuntu/moving-backend && git fetch origin dev && git reset --hard origin/dev && bash scripts/deploy.sh \"${ARTIFACT_URL}\"'" \
             '{commands: [$command]}' \
             > ssm-commands.json
+
+          echo "===== SSM command payload created ====="
 
       - name: Send deployment command
         id: deploy

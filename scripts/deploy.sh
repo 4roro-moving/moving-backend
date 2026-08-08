@@ -39,7 +39,7 @@ echo "🛑 Stopping application..."
 
 pm2 stop "$PROCESS_NAME" || true
 
-echo "🧹 Removing previous build..."
+echo "🧹 Removing previous deployment files..."
 
 rm -rf "$PROJECT_DIR/dist"
 rm -rf "$PROJECT_DIR/node_modules"
@@ -54,9 +54,10 @@ echo "🚀 Starting application..."
 
 pm2 delete "$PROCESS_NAME" || true
 
-pm2 start "$PROJECT_DIR/dist/server.js" \
+pm2 start "$PROJECT_DIR/node_modules/.bin/tsx" \
   --name "$PROCESS_NAME" \
-  --time
+  --time \
+  -- "$PROJECT_DIR/src/server.ts"
 
 pm2 save
 
