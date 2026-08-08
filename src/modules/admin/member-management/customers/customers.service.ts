@@ -289,7 +289,7 @@ export const customersService = {
       );
 
       if (!changed) {
-        throw new AppError("ALREADY_PROCESSED");
+        throw new AppError("CUSTOMER_STATUS_ALREADY_PROCESSED");
       }
 
       const { user, suspension } = changed;

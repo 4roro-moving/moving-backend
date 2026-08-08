@@ -239,9 +239,9 @@ export const ERROR_CODES = {
     code: "SELF_ACTION_NOT_ALLOWED",
     message: "관리자는 자신의 계정 상태를 변경할 수 없습니다.",
   },
-  ALREADY_PROCESSED: {
+  CUSTOMER_STATUS_ALREADY_PROCESSED: {
     status: 409,
-    code: "ALREADY_PROCESSED",
+    code: "CUSTOMER_STATUS_ALREADY_PROCESSED",
     message: "이미 요청한 상태로 처리된 회원입니다.",
   },
 } as const;

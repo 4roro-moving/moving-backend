@@ -58,7 +58,7 @@ registerRouterDocs(adminCustomerRouter, {
         200: "처리 성공",
         403: "자기 자신의 계정 상태는 변경할 수 없습니다.",
         404: "해당 고객을 찾을 수 없습니다.",
-        409: "이미 요청한 상태로 처리된 회원입니다.",
+        409: "CUSTOMER_STATUS_ALREADY_PROCESSED - 이미 요청한 상태로 처리된 회원입니다.",
         422: "입력값이 올바르지 않습니다.",
       },
     },
