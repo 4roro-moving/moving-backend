@@ -64,11 +64,19 @@ async function main(): Promise<void> {
   console.log("고객 계정: customer001@test.com ~ customer100@test.com");
   console.log("기사 계정: mover001@test.com ~ mover100@test.com");
   console.log("견적 요청 및 견적 테스트 데이터 생성 완료");
-  console.log("리뷰 테스트 데이터 생성 완료");
-  console.log("  · 고객별 완료 이사 2건(리뷰 작성 1건 + 리뷰 미작성 1건) 생성");
+  console.log("  · 계정은 10명 배치로 구성, 배치 내 위치(끝자리)별 케이스 반복(~100번)");
+  console.log("    - 1~2번 : 새 계정 (진행 요청·과거 이력 없음)");
+  console.log("    - 3~4번 : REQUESTED (내가 견적요청, 견적 대기)");
+  console.log("    - 5~6번 : QUOTED (기사 견적 도착)");
+  console.log("    - 7~8번 : QUOTED (+ 과거 미작성 리뷰 보유)");
+  console.log("    - 9번   : 정지된 계정");
+  console.log("    - 10번  : 정지 → 해제된 계정 (현재 active)");
+  console.log("  · 1~2번을 제외한 계정은 과거 완료이사 + 작성/미작성 리뷰 보유");
+  console.log("  · 기사별 받은 리뷰 0~50건 랜덤 분포");
   console.log("공지 / FAQ / 문의 / 신고 / 정지 이력 / 활동 로그 생성 완료");
   console.log("");
-  console.log("※ customer003@test.com 은 정지 상태로 생성됩니다.");
+  console.log("※ 정지 계정: customer/mover 009·019·…·099 (배치별 9번)");
+  console.log("※ 정지→해제 계정: customer/mover 010·020·…·100 (배치별 10번)");
   console.log("────────────────────────────────────");
   console.log("");
 }
