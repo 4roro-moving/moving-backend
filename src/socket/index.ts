@@ -9,6 +9,19 @@ import { registerChatSocketHandlers } from "../modules/chat/chat.socket";
 
 let io: SocketIOServer | null = null;
 
+/** 정지·탈퇴 처리 직후 해당 사용자의 기존 Socket.IO 연결을 종료합니다. */
+export const disconnectUserSockets = (userId: string): void => {
+  if (!io) {
+    return;
+  }
+
+  for (const socket of io.sockets.sockets.values()) {
+    if (socket.data.user?.id === userId) {
+      socket.disconnect(true);
+    }
+  }
+};
+
 export const initializeSocket = (httpServer: HttpServer): SocketIOServer => {
   const socketServer = new SocketIOServer(httpServer, {
     cors: {

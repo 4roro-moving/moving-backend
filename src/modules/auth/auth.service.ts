@@ -242,7 +242,11 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
    * 비활성화되었거나 탈퇴 처리된 사용자는
    * 새로운 로그인 세션을 생성할 수 없다.
    */
-  if (!user.isActive || user.deletedAt !== null) {
+  if (!user.isActive && user.deletedAt === null) {
+    throw new AppError("ACCOUNT_SUSPENDED");
+  }
+
+  if (user.deletedAt !== null) {
     throw new AppError("FORBIDDEN", {
       message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
     });
@@ -311,7 +315,11 @@ type OAuthUser = NonNullable<
 >;
 
 const createOAuthLoginResponse = async (user: OAuthUser): Promise<AuthResponse> => {
-  if (!user.isActive || user.deletedAt !== null) {
+  if (!user.isActive && user.deletedAt === null) {
+    throw new AppError("ACCOUNT_SUSPENDED");
+  }
+
+  if (user.deletedAt !== null) {
     throw new AppError("FORBIDDEN", {
       message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
     });
@@ -597,7 +605,11 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
    * 비활성화되었거나 탈퇴 처리된 사용자는
    * 기존 Refresh Token이 남아 있더라도 재발급할 수 없다.
    */
-  if (!user.isActive || user.deletedAt !== null) {
+  if (!user.isActive && user.deletedAt === null) {
+    throw new AppError("ACCOUNT_SUSPENDED");
+  }
+
+  if (user.deletedAt !== null) {
     throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않거나 만료된 Refresh Token입니다.",
     });

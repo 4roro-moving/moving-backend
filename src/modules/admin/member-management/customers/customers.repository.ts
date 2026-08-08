@@ -1,14 +1,11 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { prisma } from "../../../../lib/prisma";
 import type { DbClient } from "../../../../utils/transaction";
 
 export const CUSTOMER_HISTORY_LIMIT = 5;
 
-/**
- * 고객 목록 조회에 공통으로 사용하는 select.
- * password, providerUserId 등 민감 정보는 포함하지 않습니다.
- */
+/** 고객 목록 조회에 공통으로 사용하는 select */
 const customerListSelect = {
   id: true,
   email: true,
@@ -248,5 +245,163 @@ export const customersRepository = {
     ]);
 
     return { items, totalCount };
+  },
+
+  findCustomerForStatusChange(customerId: string, db: DbClient = prisma) {
+    return db.user.findFirst({
+      where: { id: customerId, role: "CUSTOMER", deletedAt: null },
+      select: { id: true, isActive: true },
+    });
+  },
+
+  updateCustomerIsActiveIfCurrent(
+    { customerId, isActive }: { customerId: string; isActive: boolean },
+    db: DbClient = prisma,
+  ) {
+    return db.user.updateMany({
+      where: {
+        id: customerId,
+        role: "CUSTOMER",
+        deletedAt: null,
+        isActive: !isActive,
+      },
+      data: { isActive },
+    });
+  },
+
+  /** 고객 정지 시 취소 가능한 견적 요청(PENDING/OPEN)을 잠금 처리합니다. */
+  async lockCancelableRequestsForSuspension(
+    customerId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<number[]> {
+    const rows = await db.$queryRaw<Array<{ id: number }>>(
+      Prisma.sql`
+        SELECT id
+        FROM estimate_requests
+        WHERE customer_id = ${customerId}::uuid
+          AND is_active = true
+          AND status IN ('PENDING', 'OPEN')
+        FOR UPDATE
+      `,
+    );
+
+    return rows.map((row) => row.id);
+  },
+
+  findCancelableRequestsForSuspension(requestIds: number[], db: DbClient = prisma) {
+    return db.estimateRequest.findMany({
+      where: { id: { in: requestIds }, status: { in: ["PENDING", "OPEN"] }, isActive: true },
+      select: {
+        id: true,
+        status: true,
+        isActive: true,
+        estimates: { where: { status: "SENT" }, select: { moverId: true } },
+        designatedMovers: { select: { moverId: true } },
+        chatRooms: { select: { id: true } },
+      },
+    });
+  },
+
+  cancelSentEstimates(requestIds: number[], canceledAt: Date, db: DbClient = prisma) {
+    return db.estimate.updateMany({
+      where: { estimateRequestId: { in: requestIds }, status: "SENT" },
+      data: { status: "CANCELED", canceledAt },
+    });
+  },
+
+  cancelPendingEstimateRevisions(requestIds: number[], db: DbClient = prisma) {
+    return db.estimateRevision.updateMany({
+      where: { status: "PENDING", estimate: { estimateRequestId: { in: requestIds } } },
+      data: { status: "CANCELED" },
+    });
+  },
+
+  cancelPendingOrOpenEstimateRequests(
+    requestIds: number[],
+    canceledAt: Date,
+    db: DbClient = prisma,
+  ) {
+    return db.$queryRaw<Array<{ id: number }>>(
+      Prisma.sql`
+        UPDATE estimate_requests
+        SET status = 'CANCELED', is_active = false, canceled_at = ${canceledAt}
+        WHERE id IN (${Prisma.join(requestIds)})
+          AND status IN ('PENDING', 'OPEN')
+          AND is_active = true
+        RETURNING id
+      `,
+    );
+  },
+
+  createEstimateRequestHistories(
+    data: Prisma.EstimateRequestHistoryCreateManyInput[],
+    db: DbClient = prisma,
+  ) {
+    return db.estimateRequestHistory.createMany({ data });
+  },
+
+  createSystemMessages(data: Prisma.ChatMessageCreateManyInput[], db: DbClient = prisma) {
+    return db.chatMessage.createMany({ data });
+  },
+
+  createNotifications(data: Prisma.NotificationCreateManyInput[], db: DbClient = prisma) {
+    return db.notification.createMany({ data, skipDuplicates: true });
+  },
+
+  createCustomerSuspension(
+    {
+      customerId,
+      adminId,
+      action,
+      reason,
+      internalNote,
+    }: {
+      customerId: string;
+      adminId: string;
+      action: "SUSPEND" | "RELEASE";
+      reason: string;
+      internalNote?: string;
+    },
+    db: DbClient = prisma,
+  ) {
+    return db.userSuspension.create({
+      data: {
+        userId: customerId,
+        adminId,
+        action,
+        reason,
+        ...(internalNote !== undefined ? { internalNote } : {}),
+      },
+      select: { id: true, action: true, reason: true, adminId: true, createdAt: true },
+    });
+  },
+
+  createCustomerStatusActivityLog(
+    {
+      customerId,
+      adminId,
+      action,
+      reason,
+      createdAt,
+    }: {
+      customerId: string;
+      adminId: string;
+      action: "SUSPEND" | "RELEASE";
+      reason: string;
+      createdAt: Date;
+    },
+    db: DbClient = prisma,
+  ) {
+    return db.activityLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "UPDATE",
+        targetType: "USER",
+        targetId: customerId,
+        memo: `${action}: ${reason}`,
+        createdAt,
+      },
+    });
   },
 };

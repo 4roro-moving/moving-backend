@@ -18,6 +18,12 @@ export const ERROR_CODES = {
     message: "접근 권한이 없습니다.",
   },
 
+  ACCOUNT_SUSPENDED: {
+    status: 403,
+    code: "ACCOUNT_SUSPENDED",
+    message: "이용이 제한된 계정입니다. 자세한 사항은 고객센터로 문의해 주세요.",
+  },
+
   NOT_FOUND: {
     status: 404,
     code: "NOT_FOUND",
@@ -222,12 +228,21 @@ export const ERROR_CODES = {
     code: "TERMS_VERSION_DUPLICATED",
     message: "같은 유형에 이미 존재하는 버전입니다.",
   },
-
-  // 2026.08.06 - [추가] 관리자 고객 상세
+  // 관리자 고객 상세 / 상태 변경
   USER_NOT_FOUND: {
     status: 404,
     code: "USER_NOT_FOUND",
     message: "해당 회원을 찾을 수 없습니다.",
+  },
+  SELF_ACTION_NOT_ALLOWED: {
+    status: 403,
+    code: "SELF_ACTION_NOT_ALLOWED",
+    message: "관리자는 자신의 계정 상태를 변경할 수 없습니다.",
+  },
+  CUSTOMER_STATUS_ALREADY_PROCESSED: {
+    status: 409,
+    code: "CUSTOMER_STATUS_ALREADY_PROCESSED",
+    message: "이미 요청한 상태로 처리된 회원입니다.",
   },
 } as const;
 
