@@ -20,8 +20,12 @@ export const updateCustomerStatusBodySchema = z.object({
   action: z.enum(["SUSPEND", "RELEASE"], {
     error: "처리 동작은 SUSPEND 또는 RELEASE여야 합니다.",
   }),
-  reason: z.string().trim().min(1, "처리 사유를 입력해 주세요.").max(500),
-  internalNote: z.string().trim().max(1000).optional(),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "처리 사유를 입력해 주세요.")
+    .max(500, "처리 사유는 500자 이하여야 합니다."),
+  internalNote: z.string().trim().max(1000, "내부 메모는 1000자 이하여야 합니다.").optional(),
 });
 
 /**
