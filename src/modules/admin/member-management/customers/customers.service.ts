@@ -289,14 +289,14 @@ export const customersService = {
       const now = new Date();
 
       if (input.action === "SUSPEND") {
-        const openRequests = await customersRepository.findOpenRequestsForSuspension(
+        const cancelableRequests = await customersRepository.findCancelableRequestsForSuspension(
           customerId,
           tx,
         );
-        const requestIds = openRequests.map((request) => request.id);
+        const requestIds = cancelableRequests.map((request) => request.id);
 
         if (requestIds.length > 0) {
-          const systemMessages = openRequests.flatMap((request) =>
+          const systemMessages = cancelableRequests.flatMap((request) =>
             request.chatRooms.map((room) => ({
               roomId: room.id,
               senderId: adminId,
@@ -304,7 +304,7 @@ export const customersService = {
               content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
             })),
           );
-          const notifications = openRequests.flatMap((request) =>
+          const notifications = cancelableRequests.flatMap((request) =>
             request.estimates.map((estimate) => ({
               userId: estimate.moverId,
               type: NotificationType.ESTIMATE_REQUEST_CANCELED_BY_ACCOUNT_SUSPENSION,
@@ -315,11 +315,26 @@ export const customersService = {
               sourceId: `admin-suspend:${customerId}:${String(request.id)}`,
             })),
           );
+          const histories: Prisma.EstimateRequestHistoryCreateManyInput[] = cancelableRequests.map(
+            (request) => ({
+              estimateRequestId: request.id,
+              changedBy: adminId,
+              type: "CANCELED",
+              previousData: { status: request.status, isActive: request.isActive },
+              changedData: {
+                status: "CANCELED",
+                isActive: false,
+                canceledAt: now.toISOString(),
+                cancelReason: "ACCOUNT_SUSPENSION",
+              },
+            }),
+          );
 
           await Promise.all([
             customersRepository.cancelSentEstimates(requestIds, now, tx),
             customersRepository.cancelPendingEstimateRevisions(requestIds, tx),
-            customersRepository.cancelOpenEstimateRequests(requestIds, now, tx),
+            customersRepository.cancelPendingOrOpenEstimateRequests(requestIds, now, tx),
+            customersRepository.createEstimateRequestHistories(histories, tx),
             customersRepository.createSystemMessages(systemMessages, tx),
             customersRepository.createNotifications(notifications, tx),
           ]);

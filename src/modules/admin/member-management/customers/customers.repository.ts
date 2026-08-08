@@ -272,11 +272,13 @@ export const customersRepository = {
     });
   },
 
-  findOpenRequestsForSuspension(customerId: string, db: DbClient = prisma) {
+  findCancelableRequestsForSuspension(customerId: string, db: DbClient = prisma) {
     return db.estimateRequest.findMany({
-      where: { customerId, status: "OPEN" },
+      where: { customerId, status: { in: ["PENDING", "OPEN"] }, isActive: true },
       select: {
         id: true,
+        status: true,
+        isActive: true,
         estimates: { where: { status: "SENT" }, select: { moverId: true } },
         chatRooms: { select: { id: true } },
       },
@@ -297,11 +299,22 @@ export const customersRepository = {
     });
   },
 
-  cancelOpenEstimateRequests(requestIds: number[], canceledAt: Date, db: DbClient = prisma) {
+  cancelPendingOrOpenEstimateRequests(
+    requestIds: number[],
+    canceledAt: Date,
+    db: DbClient = prisma,
+  ) {
     return db.estimateRequest.updateMany({
-      where: { id: { in: requestIds }, status: "OPEN" },
+      where: { id: { in: requestIds }, status: { in: ["PENDING", "OPEN"] }, isActive: true },
       data: { status: "CANCELED", isActive: false, canceledAt },
     });
+  },
+
+  createEstimateRequestHistories(
+    data: Prisma.EstimateRequestHistoryCreateManyInput[],
+    db: DbClient = prisma,
+  ) {
+    return db.estimateRequestHistory.createMany({ data });
   },
 
   createSystemMessages(data: Prisma.ChatMessageCreateManyInput[], db: DbClient = prisma) {
