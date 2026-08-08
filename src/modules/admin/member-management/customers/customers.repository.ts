@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { NotificationType, type Prisma } from "@prisma/client";
 
 import { prisma } from "../../../../lib/prisma";
 import type { DbClient } from "../../../../utils/transaction";
@@ -318,7 +318,7 @@ export const customersRepository = {
             data: openRequests.flatMap((request) =>
               request.estimates.map((estimate) => ({
                 userId: estimate.moverId,
-                type: "ESTIMATE_REQUEST_CANCELED" as const,
+                type: NotificationType.ESTIMATE_REQUEST_CANCELED_BY_ACCOUNT_SUSPENSION,
                 title: "견적 요청 취소",
                 content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
                 linkUrl: null,

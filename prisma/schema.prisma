@@ -142,6 +142,8 @@ enum NotificationType {
   INQUIRY_ANSWERED // 관리자 문의 응답
   CONTENT_HIDDEN // (작성자) 콘텐츠가 관리자에 의해 숨김 처리됨
   CONTENT_RESTORED // (작성자) 숨김 콘텐츠가 관리자에 의해 복구됨
+  ESTIMATE_REQUEST_CANCELED_BY_ACCOUNT_SUSPENSION // (기사) 고객 계정이 정지되어 견적 요청 취소됨
+  ESTIMATE_CANCELED_BY_ACCOUNT_SUSPENSION // (고객) 기사 계정이 정지되어 견적 취소됨
 }
 
 /// 채팅 메시지 유형
