@@ -29,7 +29,7 @@ export const customersController = {
 
   updateCustomerStatus: async (req: Request, res: Response) => {
     const { id } = res.locals.params as CustomerIdParam;
-    const input = res.locals.body as UpdateCustomerStatusBody;
+    const input = req.body as UpdateCustomerStatusBody;
     const result = await customersService.updateCustomerStatus({
       customerId: id,
       adminId: req.admin!.id,
