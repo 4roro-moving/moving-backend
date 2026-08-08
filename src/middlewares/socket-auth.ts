@@ -27,7 +27,11 @@ export const socketAuthenticate = async (
       select: { isActive: true, deletedAt: true },
     });
 
-    if (!user || !user.isActive || user.deletedAt !== null) {
+    if (user && !user.isActive && user.deletedAt === null) {
+      throw new AppError("ACCOUNT_SUSPENDED");
+    }
+
+    if (!user || user.deletedAt !== null) {
       throw new AppError("FORBIDDEN", {
         message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
       });
@@ -39,7 +43,12 @@ export const socketAuthenticate = async (
     };
 
     next();
-  } catch {
+  } catch (error) {
+    if (error instanceof AppError) {
+      next(error);
+      return;
+    }
+
     next(
       new AppError("UNAUTHORIZED", {
         message: "유효하지 않은 Access Token입니다.",

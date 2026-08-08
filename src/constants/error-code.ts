@@ -18,6 +18,12 @@ export const ERROR_CODES = {
     message: "접근 권한이 없습니다.",
   },
 
+  ACCOUNT_SUSPENDED: {
+    status: 403,
+    code: "ACCOUNT_SUSPENDED",
+    message: "이용이 제한된 계정입니다. 자세한 사항은 고객센터로 문의해 주세요.",
+  },
+
   NOT_FOUND: {
     status: 404,
     code: "NOT_FOUND",

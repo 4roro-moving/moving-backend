@@ -30,7 +30,11 @@ export const authenticate: RequestHandler = async (req, _res, next) => {
       select: { isActive: true, deletedAt: true },
     });
 
-    if (!user || !user.isActive || user.deletedAt !== null) {
+    if (user && !user.isActive && user.deletedAt === null) {
+      throw new AppError("ACCOUNT_SUSPENDED");
+    }
+
+    if (!user || user.deletedAt !== null) {
       throw new AppError("FORBIDDEN", {
         message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
       });
