@@ -1,7 +1,11 @@
 import { z } from "zod";
 
+import { ADMIN_REVIEW_SORTS } from "./contents.constants";
+
 const MAX_PAGE = 10000;
 const MAX_REASON_LENGTH = 500;
+/** 프론트와 동일: 공백 제외 최소 글자 수 */
+const HIDE_REASON_MIN_NON_SPACE = 10;
 
 const booleanQuerySchema = z
   .enum(["true", "false"])
@@ -30,7 +34,7 @@ export const listAdminReviewsQuerySchema = z
     keyword: z.string().trim().min(1).max(100).optional(),
     isHidden: booleanQuerySchema,
     sort: z
-      .enum(["LATEST", "OLDEST", "RATING_HIGH", "RATING_LOW", "REPORT_HIGH"], {
+      .enum(ADMIN_REVIEW_SORTS, {
         error: "정렬 기준이 올바르지 않습니다.",
       })
       .default("LATEST"),
@@ -55,13 +59,25 @@ export const reviewIdParamSchema = z.object({
     .positive("올바른 리뷰 ID가 아닙니다."),
 });
 
-/** 숨김 처리 body. reason 필수 (DB CHECK 와 동일 정책) */
+function countNonSpaceChars(value: string): number {
+  return value.replace(/\s/g, "").length;
+}
+
+/** 숨김 처리 body. reason 필수 — 공백 제외 최소 10자 (프론트와 동일) */
 export const hideContentBodySchema = z.object({
   reason: z
     .string()
     .trim()
     .min(1, "처리 사유를 입력해 주세요.")
-    .max(MAX_REASON_LENGTH, `처리 사유는 ${String(MAX_REASON_LENGTH)}자 이하여야 합니다.`),
+    .max(MAX_REASON_LENGTH, `처리 사유는 ${String(MAX_REASON_LENGTH)}자 이하여야 합니다.`)
+    .superRefine((value, ctx) => {
+      if (countNonSpaceChars(value) < HIDE_REASON_MIN_NON_SPACE) {
+        ctx.addIssue({
+          code: "custom",
+          message: `처리 사유는 공백 제외 ${String(HIDE_REASON_MIN_NON_SPACE)}자 이상이어야 합니다.`,
+        });
+      }
+    }),
 });
 
 /** 복구 body. reason 은 선택(권장) */

@@ -2,6 +2,7 @@ import { z } from "zod";
 
 import { registerRouterDocs } from "../../../config/openapi-router";
 
+import { ADMIN_REVIEW_SORTS } from "./contents.constants";
 import { adminReviewRouter } from "./contents.route";
 
 const authHeaderSchema = z.object({
@@ -25,7 +26,7 @@ registerRouterDocs(adminReviewRouter, {
         "",
         "- `keyword`: 작성자명·본문 검색",
         "- `isHidden`: 숨김 여부 필터",
-        "- `sort`: LATEST | OLDEST | RATING_HIGH | RATING_LOW | REPORT_HIGH",
+        `- \`sort\`: ${ADMIN_REVIEW_SORTS.join(" | ")}`,
         "- `reportedOnly`: 신고 누적 콘텐츠만 조회",
         "- 각 항목에 `latestModeration`(최신 숨김/복구 사유)을 포함합니다.",
       ].join("\n"),
@@ -38,6 +39,7 @@ registerRouterDocs(adminReviewRouter, {
         "리뷰를 숨김 처리합니다.",
         "",
         "- `isHidden` 을 true 로 변경합니다.",
+        "- `reason` 은 공백 제외 최소 10자 이상이어야 합니다.",
         "- ActivityLog(HIDE) + memo(사유)를 기록합니다.",
         "- 작성자에게 CONTENT_HIDDEN 알림을 발송합니다.",
         "- 이미 숨김이면 409 CONTENT_ALREADY_HIDDEN 을 반환합니다.",

@@ -7,6 +7,9 @@ import type {
   unhideContentBodySchema,
 } from "./contents.validator";
 
+export type { AdminReviewSort } from "./contents.constants";
+export { ADMIN_REVIEW_SORTS } from "./contents.constants";
+
 export type ListAdminReviewsQuery = z.infer<typeof listAdminReviewsQuerySchema>;
 export type ReviewIdParam = z.infer<typeof reviewIdParamSchema>;
 export type HideContentBody = z.infer<typeof hideContentBodySchema>;

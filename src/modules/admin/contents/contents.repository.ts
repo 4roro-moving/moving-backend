@@ -3,6 +3,14 @@ import { LogAction, LogTargetType, Prisma, ReportTargetType, UserRole } from "@p
 import { prisma } from "../../../lib/prisma";
 import type { DbClient } from "../../../utils/transaction";
 
+import {
+  ADMIN_REVIEW_SORT_RULES,
+  REPORT_HIGH_TIE_BREAK,
+  type AdminReviewSort,
+  type ReviewSortClause,
+  type ReviewSortField,
+} from "./contents.constants";
+
 const adminReviewSelect = {
   id: true,
   customerId: true,
@@ -42,7 +50,7 @@ export type AdminReviewListFilters = {
   to?: Date;
 };
 
-export type AdminReviewSort = "LATEST" | "OLDEST" | "RATING_HIGH" | "RATING_LOW" | "REPORT_HIGH";
+export type { AdminReviewSort };
 
 type FindManyParams = {
   skip: number;
@@ -51,6 +59,36 @@ type FindManyParams = {
   sort: AdminReviewSort;
   reportedOnly: boolean;
 };
+
+const PRISMA_SORT_FIELD: Record<ReviewSortField, keyof Prisma.ReviewOrderByWithRelationInput> = {
+  createdAt: "createdAt",
+  id: "id",
+  rating: "rating",
+};
+
+const SQL_SORT_FIELD: Record<ReviewSortField, Prisma.Sql> = {
+  createdAt: Prisma.sql`r.created_at`,
+  id: Prisma.sql`r.id`,
+  rating: Prisma.sql`r.rating`,
+};
+
+function clausesToPrismaOrderBy(
+  clauses: readonly ReviewSortClause[],
+): Prisma.ReviewOrderByWithRelationInput[] {
+  return clauses.map((clause) => ({
+    [PRISMA_SORT_FIELD[clause.field]]: clause.dir,
+  }));
+}
+
+function clausesToSqlOrderBy(clauses: readonly ReviewSortClause[]): Prisma.Sql {
+  return Prisma.join(
+    clauses.map((clause) => {
+      const column = SQL_SORT_FIELD[clause.field];
+      return clause.dir === "asc" ? Prisma.sql`${column} ASC` : Prisma.sql`${column} DESC`;
+    }),
+    ", ",
+  );
+}
 
 function toPrismaWhere(filters: AdminReviewListFilters): Prisma.ReviewWhereInput {
   const where: Prisma.ReviewWhereInput = {};
@@ -80,20 +118,12 @@ function toPrismaWhere(filters: AdminReviewListFilters): Prisma.ReviewWhereInput
 }
 
 function toPrismaOrderBy(sort: AdminReviewSort): Prisma.ReviewOrderByWithRelationInput[] {
-  switch (sort) {
-    case "OLDEST":
-      return [{ createdAt: "asc" }, { id: "asc" }];
-    case "RATING_HIGH":
-      return [{ rating: "desc" }, { createdAt: "desc" }, { id: "desc" }];
-    case "RATING_LOW":
-      return [{ rating: "asc" }, { createdAt: "desc" }, { id: "desc" }];
-    case "REPORT_HIGH":
-      // Prisma orderBy 로는 report count 정렬이 불가 — raw SQL 경로를 사용합니다.
-      return [{ createdAt: "desc" }, { id: "desc" }];
-    case "LATEST":
-    default:
-      return [{ createdAt: "desc" }, { id: "desc" }];
+  if (sort === "REPORT_HIGH") {
+    // Prisma orderBy 로는 report count 정렬이 불가 — raw SQL 경로를 사용합니다.
+    return clausesToPrismaOrderBy(REPORT_HIGH_TIE_BREAK);
   }
+
+  return clausesToPrismaOrderBy(ADMIN_REVIEW_SORT_RULES[sort]);
 }
 
 /** ILIKE 와일드카드(%, _)와 escape 문자(\)를 리터럴로 검색하기 위해 이스케이프합니다. */
@@ -153,24 +183,16 @@ function buildRawWhereSql(filters: AdminReviewListFilters, reportedOnly: boolean
 }
 
 function buildReportedOrderBySql(sort: AdminReviewSort): Prisma.Sql {
-  switch (sort) {
-    case "OLDEST":
-      return Prisma.sql`r.created_at ASC, r.id ASC`;
-    case "RATING_HIGH":
-      return Prisma.sql`r.rating DESC, r.created_at DESC, r.id DESC`;
-    case "RATING_LOW":
-      return Prisma.sql`r.rating ASC, r.created_at DESC, r.id DESC`;
-    case "REPORT_HIGH":
-      return Prisma.sql`(
-        SELECT COUNT(*)::int
-        FROM reports AS rp
-        WHERE rp.target_type = CAST(${ReportTargetType.REVIEW} AS "ReportTargetType")
-          AND rp.target_id = CAST(r.id AS TEXT)
-      ) DESC, r.created_at DESC, r.id DESC`;
-    case "LATEST":
-    default:
-      return Prisma.sql`r.created_at DESC, r.id DESC`;
+  if (sort === "REPORT_HIGH") {
+    return Prisma.sql`(
+      SELECT COUNT(*)::int
+      FROM reports AS rp
+      WHERE rp.target_type = CAST(${ReportTargetType.REVIEW} AS "ReportTargetType")
+        AND rp.target_id = CAST(r.id AS TEXT)
+    ) DESC, ${clausesToSqlOrderBy(REPORT_HIGH_TIE_BREAK)}`;
   }
+
+  return clausesToSqlOrderBy(ADMIN_REVIEW_SORT_RULES[sort]);
 }
 
 /**
