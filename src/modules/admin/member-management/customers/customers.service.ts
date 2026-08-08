@@ -277,11 +277,7 @@ export const customersService = {
 
       const shouldBeActive = input.action === "RELEASE";
 
-      if (customer.isActive === shouldBeActive) {
-        throw new AppError("ALREADY_PROCESSED");
-      }
-
-      const { user, suspension } = await customersRepository.changeCustomerStatus(
+      const changed = await customersRepository.changeCustomerStatus(
         {
           customerId,
           adminId,
@@ -291,6 +287,12 @@ export const customersService = {
         },
         tx,
       );
+
+      if (!changed) {
+        throw new AppError("ALREADY_PROCESSED");
+      }
+
+      const { user, suspension } = changed;
 
       if (input.action === "SUSPEND") {
         await authRepository.revokeAllRefreshTokensByUserId(

@@ -276,6 +276,20 @@ export const customersRepository = {
     const isActive = action === "RELEASE";
     const now = new Date();
 
+    const { count } = await db.user.updateMany({
+      where: {
+        id: customerId,
+        role: "CUSTOMER",
+        deletedAt: null,
+        isActive: !isActive,
+      },
+      data: { isActive },
+    });
+
+    if (count === 0) {
+      return null;
+    }
+
     if (action === "SUSPEND") {
       const openRequests = await db.estimateRequest.findMany({
         where: { customerId, status: "OPEN" },
@@ -332,8 +346,7 @@ export const customersRepository = {
       }
     }
 
-    const [user, suspension] = await Promise.all([
-      db.user.update({ where: { id: customerId }, data: { isActive }, select: { id: true } }),
+    const [suspension] = await Promise.all([
       db.userSuspension.create({
         data: {
           userId: customerId,
@@ -357,6 +370,6 @@ export const customersRepository = {
       }),
     ]);
 
-    return { user, suspension };
+    return { user: { id: customerId }, suspension };
   },
 };
