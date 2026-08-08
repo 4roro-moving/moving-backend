@@ -304,17 +304,22 @@ export const customersService = {
               content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
             })),
           );
-          const notifications = cancelableRequests.flatMap((request) =>
-            request.estimates.map((estimate) => ({
-              userId: estimate.moverId,
+          const notifications = cancelableRequests.flatMap((request) => {
+            const moverIds = new Set([
+              ...request.estimates.map((estimate) => estimate.moverId),
+              ...request.designatedMovers.map((designation) => designation.moverId),
+            ]);
+
+            return [...moverIds].map((moverId) => ({
+              userId: moverId,
               type: NotificationType.ESTIMATE_REQUEST_CANCELED_BY_ACCOUNT_SUSPENSION,
               title: "견적 요청 취소",
               content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
               linkUrl: null,
               expiresAt: null,
               sourceId: `admin-suspend:${customerId}:${String(request.id)}`,
-            })),
-          );
+            }));
+          });
           const histories: Prisma.EstimateRequestHistoryCreateManyInput[] = cancelableRequests.map(
             (request) => ({
               estimateRequestId: request.id,

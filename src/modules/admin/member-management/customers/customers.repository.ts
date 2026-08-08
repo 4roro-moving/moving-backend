@@ -280,6 +280,7 @@ export const customersRepository = {
         status: true,
         isActive: true,
         estimates: { where: { status: "SENT" }, select: { moverId: true } },
+        designatedMovers: { select: { moverId: true } },
         chatRooms: { select: { id: true } },
       },
     });
