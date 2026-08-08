@@ -30,15 +30,17 @@ registerRouterDocs(profileRouter, {
     "POST /image/upload-url": {
       summary: "프로필 이미지 업로드 URL 발급",
       description: [
-        "프로필 이미지 업로드에 사용할 URL과 이미지 Key를 발급합니다.",
+        "프로필 이미지 업로드에 사용할 Presigned URL과 이미지 Key를 발급합니다.",
         "",
         "- 고객과 기사님 모두 사용할 수 있습니다.",
         "- 지원하는 이미지 형식은 JPEG, PNG, WebP입니다.",
         "- 이미지 크기는 최대 2MB까지 허용됩니다.",
-        "- 발급된 업로드 URL의 유효시간은 180초입니다.",
+        "- 발급된 Presigned URL의 유효시간은 180초입니다.",
         "- 이미지 Key는 `profiles/{userId}/{uuid}.{extension}` 형식으로 생성됩니다.",
-        "- 현재는 S3 연동 전 단계이므로 실제 업로드가 불가능한 임시 URL을 반환합니다.",
-        "- S3 연동 후에는 Presigned URL을 반환하도록 변경될 예정입니다.",
+        "- 백엔드에서 인증된 사용자 정보를 기반으로 이미지 Key를 생성합니다.",
+        "- 반환된 Presigned URL은 180초 동안 지정된 S3 Key에 PUT 업로드할 수 있습니다.",
+        "- 프론트엔드는 반환된 Presigned URL로 S3에 PUT 요청하여 이미지를 직접 업로드합니다.",
+        "- 이미지 파일은 백엔드 서버를 거치지 않고 S3로 직접 업로드됩니다.",
       ].join("\n"),
       responses: {
         201: "프로필 이미지 업로드 URL 발급 성공",

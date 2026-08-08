@@ -4,6 +4,7 @@ import { Prisma, UserRole } from "@prisma/client";
 import { AppError } from "../../../lib/app-error";
 import { runTransaction } from "../../../utils/transaction";
 
+import { profileImageService } from "../profile-image.service";
 import { profileRepository } from "./profile.repository";
 import type {
   CreateProfileInput,
@@ -11,6 +12,8 @@ import type {
   UpdateBasicInfoInput,
   UpdateProfileInput,
 } from "./profile.type";
+
+import { getProfileImageUrl } from "../../../utils/image-url";
 
 const PASSWORD_SALT_ROUNDS = 10;
 
@@ -112,7 +115,7 @@ const mapProfileResponse = (
     hasPassword: profile.user.password !== null,
 
     nickname: profile.nickname,
-    imageUrl: profile.imageUrl,
+    imageUrl: getProfileImageUrl(profile.imageUrl),
     career: profile.career,
     shortIntro: profile.shortIntro,
     description: profile.description,
@@ -148,6 +151,12 @@ const createProfile = async (
   input: CreateProfileInput,
 ): Promise<ProfileResponse> => {
   const user = validateActiveMover(await profileRepository.findUserById(userId));
+
+  /*
+   * 이미지가 전달된 경우 현재 로그인한 사용자의 Key인지 확인하고,
+   * S3에 실제 객체가 존재하며 형식과 크기가 올바른지 검증한다.
+   */
+  await profileImageService.validateUploadedImage(user.id, input.imageUrl);
 
   const existingProfile = await profileRepository.findProfileByUserId(user.id);
 
@@ -433,9 +442,19 @@ const updateBasicInfo = async (
   try {
     const updatedProfile = await runTransaction(async (tx) => {
       const userUpdateData = {
-        ...(input.name !== undefined && input.name !== user.name && { name: input.name }),
-        ...(input.phone !== undefined && input.phone !== user.phone && { phone: input.phone }),
-        ...(hashedPassword !== undefined && { password: hashedPassword }),
+        ...(input.name !== undefined &&
+          input.name !== user.name && {
+            name: input.name,
+          }),
+
+        ...(input.phone !== undefined &&
+          input.phone !== user.phone && {
+            phone: input.phone,
+          }),
+
+        ...(hashedPassword !== undefined && {
+          password: hashedPassword,
+        }),
       };
 
       if (Object.keys(userUpdateData).length > 0) {
@@ -492,6 +511,14 @@ const updateProfile = async (
 ): Promise<ProfileResponse> => {
   const user = validateActiveMover(await profileRepository.findUserById(userId));
 
+  /*
+   * 새 이미지 Key가 전달된 경우 현재 로그인한 사용자의 Key인지 확인하고,
+   * S3에 실제 객체가 존재하며 형식과 크기가 올바른지 검증한다.
+   *
+   * null은 기존 이미지 삭제 요청이므로 S3 검증 없이 허용한다.
+   */
+  await profileImageService.validateUploadedImage(user.id, input.imageUrl);
+
   const existingProfile = await profileRepository.findProfileByUserId(user.id);
 
   if (!existingProfile) {
@@ -530,7 +557,7 @@ const updateProfile = async (
        * imageUrl:
        * - undefined: 이미지 수정 없음
        * - null: 기존 이미지 삭제
-       * - string: 새 이미지로 변경
+       * - string: 새 이미지 Key로 변경
        */
       const hasProfileUpdate =
         input.nickname !== undefined ||

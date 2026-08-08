@@ -1,6 +1,8 @@
 import { MoveType } from "@prisma/client";
 import { z } from "zod";
 
+import { profileImageKeySchema } from "../profile-image.validator";
+
 const nameSchema = z
   .string()
   .trim()
@@ -27,10 +29,6 @@ const passwordSchema = z
   .refine((password) => Buffer.byteLength(password, "utf8") <= 72, {
     message: "비밀번호는 UTF-8 기준 72바이트 이하로 입력해주세요.",
   });
-
-const imageUrlSchema = z.url({
-  message: "올바른 이미지 URL이 아닙니다.",
-});
 
 const regionIdsSchema = z
   .array(
@@ -70,7 +68,7 @@ const serviceTypesSchema = z
  */
 export const createProfileSchema = z.strictObject({
   phone: phoneSchema.optional(),
-  imageUrl: imageUrlSchema.optional(),
+  imageUrl: profileImageKeySchema.optional(),
   regionIds: regionIdsSchema,
   serviceTypes: serviceTypesSchema,
 });
@@ -87,7 +85,6 @@ export const updateBasicInfoSchema = z
   .strictObject({
     name: nameSchema.optional(),
     phone: phoneSchema.optional(),
-
     currentPassword: passwordSchema.optional(),
     newPassword: passwordSchema.optional(),
     newPasswordConfirm: passwordSchema.optional(),
@@ -163,7 +160,7 @@ export const updateBasicInfoSchema = z
  */
 export const updateProfileSchema = z
   .strictObject({
-    imageUrl: imageUrlSchema.nullable().optional(),
+    imageUrl: profileImageKeySchema.nullable().optional(),
     regionIds: regionIdsSchema.optional(),
     serviceTypes: serviceTypesSchema.optional(),
   })
