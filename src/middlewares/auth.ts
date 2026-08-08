@@ -2,9 +2,10 @@ import type { UserRole } from "@prisma/client";
 import type { RequestHandler } from "express";
 
 import { AppError } from "../lib/app-error";
+import { prisma } from "../lib/prisma";
 import { verifyAccessToken, verifyAccessTokenOptional } from "../utils/jwt";
 
-export const authenticate: RequestHandler = (req, _res, next) => {
+export const authenticate: RequestHandler = async (req, _res, next) => {
   try {
     const authorization = req.header("authorization");
 
@@ -23,6 +24,17 @@ export const authenticate: RequestHandler = (req, _res, next) => {
     }
 
     const payload = verifyAccessToken(token);
+
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { isActive: true, deletedAt: true },
+    });
+
+    if (!user || !user.isActive || user.deletedAt !== null) {
+      throw new AppError("FORBIDDEN", {
+        message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
+      });
+    }
 
     req.user = {
       id: payload.userId,

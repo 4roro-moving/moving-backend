@@ -1,9 +1,13 @@
 import type { ExtendedError, Socket } from "socket.io";
 
 import { AppError } from "../lib/app-error";
+import { prisma } from "../lib/prisma";
 import { verifyAccessToken } from "../utils/jwt";
 
-export const socketAuthenticate = (socket: Socket, next: (err?: ExtendedError) => void): void => {
+export const socketAuthenticate = async (
+  socket: Socket,
+  next: (err?: ExtendedError) => void,
+): Promise<void> => {
   try {
     const token = socket.handshake.auth.token;
 
@@ -17,6 +21,17 @@ export const socketAuthenticate = (socket: Socket, next: (err?: ExtendedError) =
     }
 
     const payload = verifyAccessToken(token);
+
+    const user = await prisma.user.findUnique({
+      where: { id: payload.userId },
+      select: { isActive: true, deletedAt: true },
+    });
+
+    if (!user || !user.isActive || user.deletedAt !== null) {
+      throw new AppError("FORBIDDEN", {
+        message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
+      });
+    }
 
     socket.data.user = {
       id: payload.userId,

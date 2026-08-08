@@ -1,6 +1,8 @@
-import type { Prisma } from "@prisma/client";
+import { RefreshTokenSessionType, type Prisma } from "@prisma/client";
 
 import { AppError } from "../../../../lib/app-error";
+import { authRepository } from "../../../auth/auth.repository";
+import { disconnectUserSockets } from "../../../../socket";
 import { buildPagination } from "../../../../utils/pagination.util";
 import { runTransaction } from "../../../../utils/transaction";
 
@@ -266,7 +268,7 @@ export const customersService = {
       throw new AppError("SELF_ACTION_NOT_ALLOWED");
     }
 
-    return runTransaction(async (tx) => {
+    const result = await runTransaction<UpdateCustomerStatusResponse>(async (tx) => {
       const customer = await customersRepository.findCustomerForStatusChange(customerId, tx);
 
       if (!customer) {
@@ -290,11 +292,25 @@ export const customersService = {
         tx,
       );
 
+      if (input.action === "SUSPEND") {
+        await authRepository.revokeAllRefreshTokensByUserId(
+          customerId,
+          RefreshTokenSessionType.USER,
+          tx,
+        );
+      }
+
       return {
         id: user.id,
         status: shouldBeActive ? "ACTIVE" : "SUSPENDED",
         suspension,
       };
     });
+
+    if (input.action === "SUSPEND") {
+      disconnectUserSockets(customerId);
+    }
+
+    return result;
   },
 };
