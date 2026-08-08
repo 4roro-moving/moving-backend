@@ -289,14 +289,28 @@ export const customersService = {
       const now = new Date();
 
       if (input.action === "SUSPEND") {
-        const cancelableRequests = await customersRepository.findCancelableRequestsForSuspension(
+        const lockedRequestIds = await customersRepository.lockCancelableRequestsForSuspension(
           customerId,
+          tx,
+        );
+        const cancelableRequests = await customersRepository.findCancelableRequestsForSuspension(
+          lockedRequestIds,
           tx,
         );
         const requestIds = cancelableRequests.map((request) => request.id);
 
         if (requestIds.length > 0) {
-          const systemMessages = cancelableRequests.flatMap((request) =>
+          const canceledRequestIds = await customersRepository.cancelPendingOrOpenEstimateRequests(
+            requestIds,
+            now,
+            tx,
+          );
+          const canceledRequestIdSet = new Set(canceledRequestIds.map((request) => request.id));
+          const canceledRequests = cancelableRequests.filter((request) =>
+            canceledRequestIdSet.has(request.id),
+          );
+
+          const systemMessages = canceledRequests.flatMap((request) =>
             request.chatRooms.map((room) => ({
               roomId: room.id,
               senderId: adminId,
@@ -304,7 +318,7 @@ export const customersService = {
               content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
             })),
           );
-          const notifications = cancelableRequests.flatMap((request) => {
+          const notifications = canceledRequests.flatMap((request) => {
             const moverIds = new Set([
               ...request.estimates.map((estimate) => estimate.moverId),
               ...request.designatedMovers.map((designation) => designation.moverId),
@@ -320,7 +334,7 @@ export const customersService = {
               sourceId: `admin-suspend:${customerId}:${String(request.id)}`,
             }));
           });
-          const histories: Prisma.EstimateRequestHistoryCreateManyInput[] = cancelableRequests.map(
+          const histories: Prisma.EstimateRequestHistoryCreateManyInput[] = canceledRequests.map(
             (request) => ({
               estimateRequestId: request.id,
               changedBy: adminId,
@@ -336,9 +350,15 @@ export const customersService = {
           );
 
           await Promise.all([
-            customersRepository.cancelSentEstimates(requestIds, now, tx),
-            customersRepository.cancelPendingEstimateRevisions(requestIds, tx),
-            customersRepository.cancelPendingOrOpenEstimateRequests(requestIds, now, tx),
+            customersRepository.cancelSentEstimates(
+              canceledRequestIds.map((request) => request.id),
+              now,
+              tx,
+            ),
+            customersRepository.cancelPendingEstimateRevisions(
+              canceledRequestIds.map((request) => request.id),
+              tx,
+            ),
             customersRepository.createEstimateRequestHistories(histories, tx),
             customersRepository.createSystemMessages(systemMessages, tx),
             customersRepository.createNotifications(notifications, tx),

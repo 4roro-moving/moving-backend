@@ -1,14 +1,11 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import { prisma } from "../../../../lib/prisma";
 import type { DbClient } from "../../../../utils/transaction";
 
 export const CUSTOMER_HISTORY_LIMIT = 5;
 
-/**
- * 고객 목록 조회에 공통으로 사용하는 select.
- * password, providerUserId 등 민감 정보는 포함하지 않습니다.
- */
+/** 고객 목록 조회에 공통으로 사용하는 select */
 const customerListSelect = {
   id: true,
   email: true,
@@ -272,9 +269,28 @@ export const customersRepository = {
     });
   },
 
-  findCancelableRequestsForSuspension(customerId: string, db: DbClient = prisma) {
+  /** 고객 정지 시 취소 가능한 견적 요청(PENDING/OPEN)을 잠금 처리합니다. */
+  async lockCancelableRequestsForSuspension(
+    customerId: string,
+    db: Prisma.TransactionClient,
+  ): Promise<number[]> {
+    const rows = await db.$queryRaw<Array<{ id: number }>>(
+      Prisma.sql`
+        SELECT id
+        FROM estimate_requests
+        WHERE customer_id = ${customerId}::uuid
+          AND is_active = true
+          AND status IN ('PENDING', 'OPEN')
+        FOR UPDATE
+      `,
+    );
+
+    return rows.map((row) => row.id);
+  },
+
+  findCancelableRequestsForSuspension(requestIds: number[], db: DbClient = prisma) {
     return db.estimateRequest.findMany({
-      where: { customerId, status: { in: ["PENDING", "OPEN"] }, isActive: true },
+      where: { id: { in: requestIds }, status: { in: ["PENDING", "OPEN"] }, isActive: true },
       select: {
         id: true,
         status: true,
@@ -305,10 +321,16 @@ export const customersRepository = {
     canceledAt: Date,
     db: DbClient = prisma,
   ) {
-    return db.estimateRequest.updateMany({
-      where: { id: { in: requestIds }, status: { in: ["PENDING", "OPEN"] }, isActive: true },
-      data: { status: "CANCELED", isActive: false, canceledAt },
-    });
+    return db.$queryRaw<Array<{ id: number }>>(
+      Prisma.sql`
+        UPDATE estimate_requests
+        SET status = 'CANCELED', is_active = false, canceled_at = ${canceledAt}
+        WHERE id IN (${Prisma.join(requestIds)})
+          AND status IN ('PENDING', 'OPEN')
+          AND is_active = true
+        RETURNING id
+      `,
+    );
   },
 
   createEstimateRequestHistories(
