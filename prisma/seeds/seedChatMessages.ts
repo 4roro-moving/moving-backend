@@ -75,6 +75,10 @@ export async function seedChatMessages(prisma: PrismaClient): Promise<void> {
       });
 
       if (staleEstimate) {
+        await tx.estimateRevision.deleteMany({
+          where: { estimateId: staleEstimate.id },
+        });
+
         const staleRoom = await tx.chatRoom.findUnique({
           where: { estimateId: staleEstimate.id },
           select: { id: true },
@@ -130,7 +134,7 @@ export async function seedChatMessages(prisma: PrismaClient): Promise<void> {
 
       const roomBaseCreatedAt = addMinutes(
         baseCreatedAt,
-        estimateIndex * (CHAT_TEST_MESSAGE_COUNT + 1),
+        -estimateIndex * (CHAT_TEST_MESSAGE_COUNT + 1),
       );
       const messages = Array.from({ length: CHAT_TEST_MESSAGE_COUNT }, (_, index) => {
         const isCustomer = index % 2 === 0;
