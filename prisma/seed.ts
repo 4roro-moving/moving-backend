@@ -44,12 +44,12 @@ async function main(): Promise<void> {
 
   console.log("");
 
-  // Review는 estimateId FK가 필요하므로 견적 시드 이후에 실행합니다.
-  // admin 신고 시드(seedAdminContents)가 리뷰 id를 쓰므로 그 전에 둡니다.
   await seedChatMessages(prisma);
 
   console.log("");
 
+  // Review는 estimateId FK가 필요하므로 견적 시드 이후에 실행.
+  // admin 신고 시드(seedAdminContents)가 리뷰 id를 쓰므로 그 전에 위치.
   await seedReviews(prisma, confirmedEstimates);
 
   console.log("");
