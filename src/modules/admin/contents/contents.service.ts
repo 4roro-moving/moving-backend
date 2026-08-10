@@ -1,4 +1,4 @@
-import { LogAction } from "@prisma/client";
+import { LogAction, type NotificationType } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
 import { notificationService } from "../../notification/notification.service";
@@ -125,6 +125,99 @@ async function attachListMeta(reviews: AdminReviewRow[]): Promise<AdminReviewLis
   );
 }
 
+type VisibilityToggleAction = "HIDE" | "UNHIDE";
+
+const VISIBILITY_TOGGLE_CONFIG: Record<
+  VisibilityToggleAction,
+  {
+    expectedHidden: boolean;
+    nextHidden: boolean;
+    conflictError: "CONTENT_ALREADY_HIDDEN" | "CONTENT_NOT_HIDDEN";
+    logAction: typeof LogAction.HIDE | typeof LogAction.UNHIDE;
+    notificationType: NotificationType;
+    notificationTitle: string;
+  }
+> = {
+  HIDE: {
+    expectedHidden: false,
+    nextHidden: true,
+    conflictError: "CONTENT_ALREADY_HIDDEN",
+    logAction: LogAction.HIDE,
+    notificationType: "CONTENT_HIDDEN",
+    notificationTitle: "리뷰가 숨김 처리되었습니다",
+  },
+  UNHIDE: {
+    expectedHidden: true,
+    nextHidden: false,
+    conflictError: "CONTENT_NOT_HIDDEN",
+    logAction: LogAction.UNHIDE,
+    notificationType: "CONTENT_RESTORED",
+    notificationTitle: "리뷰 숨김이 해제되었습니다",
+  },
+};
+
+async function toggleReviewVisibility(params: {
+  adminId: string;
+  reviewId: number;
+  action: VisibilityToggleAction;
+  reason: string | null;
+}): Promise<AdminReviewListItem> {
+  const { adminId, reviewId, action, reason } = params;
+  const config = VISIBILITY_TOGGLE_CONFIG[action];
+
+  const result = await runTransaction(async (tx) => {
+    const review = await contentsRepository.findReviewById(reviewId, tx);
+
+    if (!review) {
+      throw new AppError("CONTENT_NOT_FOUND");
+    }
+
+    const updated = await contentsRepository.updateReviewHiddenIf(
+      reviewId,
+      config.expectedHidden,
+      config.nextHidden,
+      tx,
+    );
+
+    if (!updated) {
+      throw new AppError(config.conflictError);
+    }
+
+    await contentsRepository.createActivityLog(
+      {
+        actorId: adminId,
+        action: config.logAction,
+        targetId: String(reviewId),
+        memo: reason,
+      },
+      tx,
+    );
+
+    const notification = await notificationService.createNotification(
+      {
+        userId: review.customerId,
+        type: config.notificationType,
+        title: config.notificationTitle,
+        content: getMoverNotificationSubject(review),
+        linkUrl: null,
+        expiresAt: null,
+      },
+      tx,
+    );
+
+    return { updated, notification, authorId: review.customerId };
+  });
+
+  notificationService.sendNotification(result.authorId, result.notification);
+
+  const items = await attachListMeta([result.updated]);
+  const item = items[0];
+  if (!item) {
+    throw new AppError("CONTENT_NOT_FOUND");
+  }
+  return item;
+}
+
 export const contentsService = {
   async getReviewList(query: ListAdminReviewsQuery) {
     const { page, limit, sort } = query;
@@ -146,99 +239,20 @@ export const contentsService = {
   },
 
   async hideReview(params: { adminId: string; reviewId: number; input: HideContentBody }) {
-    const { adminId, reviewId, input } = params;
-
-    const result = await runTransaction(async (tx) => {
-      const review = await contentsRepository.findReviewById(reviewId, tx);
-
-      if (!review) {
-        throw new AppError("CONTENT_NOT_FOUND");
-      }
-
-      const updated = await contentsRepository.updateReviewHiddenIf(reviewId, false, true, tx);
-
-      if (!updated) {
-        throw new AppError("CONTENT_ALREADY_HIDDEN");
-      }
-
-      await contentsRepository.createActivityLog(
-        {
-          actorId: adminId,
-          action: LogAction.HIDE,
-          targetId: String(reviewId),
-          memo: input.reason,
-        },
-        tx,
-      );
-
-      const notification = await notificationService.createNotification(
-        {
-          userId: review.customerId,
-          type: "CONTENT_HIDDEN",
-          title: "리뷰가 숨김 처리되었습니다",
-          content: getMoverNotificationSubject(review),
-          linkUrl: null,
-          expiresAt: null,
-        },
-        tx,
-      );
-
-      return { updated, notification, authorId: review.customerId };
+    return toggleReviewVisibility({
+      adminId: params.adminId,
+      reviewId: params.reviewId,
+      action: "HIDE",
+      reason: params.input.reason,
     });
-
-    notificationService.sendNotification(result.authorId, result.notification);
-
-    const [item] = await attachListMeta([result.updated]);
-
-    return item;
   },
 
   async unhideReview(params: { adminId: string; reviewId: number; input: UnhideContentBody }) {
-    const { adminId, reviewId, input } = params;
-    const reason = input.reason ?? null;
-
-    const result = await runTransaction(async (tx) => {
-      const review = await contentsRepository.findReviewById(reviewId, tx);
-
-      if (!review) {
-        throw new AppError("CONTENT_NOT_FOUND");
-      }
-
-      const updated = await contentsRepository.updateReviewHiddenIf(reviewId, true, false, tx);
-
-      if (!updated) {
-        throw new AppError("CONTENT_NOT_HIDDEN");
-      }
-
-      await contentsRepository.createActivityLog(
-        {
-          actorId: adminId,
-          action: LogAction.UNHIDE,
-          targetId: String(reviewId),
-          memo: reason,
-        },
-        tx,
-      );
-
-      const notification = await notificationService.createNotification(
-        {
-          userId: review.customerId,
-          type: "CONTENT_RESTORED",
-          title: "리뷰 숨김이 해제되었습니다",
-          content: getMoverNotificationSubject(review),
-          linkUrl: null,
-          expiresAt: null,
-        },
-        tx,
-      );
-
-      return { updated, notification, authorId: review.customerId };
+    return toggleReviewVisibility({
+      adminId: params.adminId,
+      reviewId: params.reviewId,
+      action: "UNHIDE",
+      reason: params.input.reason ?? null,
     });
-
-    notificationService.sendNotification(result.authorId, result.notification);
-
-    const [item] = await attachListMeta([result.updated]);
-
-    return item;
   },
 };
