@@ -1,10 +1,11 @@
 import type { EstimateRequestStatus, MoveType, Prisma } from "@prisma/client";
 
 import logger from "../../config/logger";
-import { prisma } from "../../lib/prisma";
 import { AppError } from "../../lib/app-error";
-import { buildPagination } from "../../utils/pagination.util";
+import { prisma } from "../../lib/prisma";
 import { lockEstimateRequestForUpdate } from "../../utils/estimate-request-lock.util";
+import { buildPagination } from "../../utils/pagination.util";
+import { runTransaction } from "../../utils/transaction";
 import { notificationService } from "../notification/notification.service";
 
 import {
@@ -591,13 +592,24 @@ export const estimateRequestService = {
 
   /**
    * 지정한 기사님 한 명의 견적 요청을 취소
+   *
+   * 견적 제출과 지정 취소가 동시에 발생할 경우 데이터 정합성이 깨지지 않도록
+   * EstimateRequest 행을 FOR UPDATE로 잠근 뒤 취소 가능 여부를 확인한다.
    */
   async cancelDesignatedMover({
     estimateRequestId,
     customerId,
     moverId,
   }: CancelDesignatedMoverParams): Promise<EstimateRequestDetail> {
-    return prisma.$transaction(async (tx) => {
+    return runTransaction(async (tx) => {
+      // 견적 제출(sendEstimate)과 동일한 요청 행을 잠가 두 작업을 직렬화한다.
+      const locked = await lockEstimateRequestForUpdate(tx, estimateRequestId);
+
+      if (!locked) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+      }
+
+      // 잠금 이후 최신 상태를 기준으로 소유권 및 요청 상태를 확인한다.
       const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
       assertEditable(request, "지금은 지정 견적 요청을 취소할 수 없는 상태입니다.");
@@ -618,6 +630,8 @@ export const estimateRequestService = {
         throw new AppError("DESIGNATION_NOT_FOUND");
       }
 
+      // 요청 행 잠금 이후 견적 존재 여부를 확인해
+      // 견적 제출과 지정 취소 사이의 경쟁 상태를 방지한다.
       const estimate = await estimateRequestRepository.findEstimateByMover(
         estimateRequestId,
         moverId,
