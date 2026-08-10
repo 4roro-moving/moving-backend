@@ -1,5 +1,9 @@
 import { Router } from "express";
 
+import {
+  userLoginAccountRateLimiter,
+  userLoginIpRateLimiter,
+} from "../../middlewares/auth-rate-limit.middleware";
 import { csrfProtection } from "../../middlewares/csrf.middleware";
 import { validate } from "../../middlewares/validate";
 import { asyncHandler } from "../../utils/async-handler.util";
@@ -40,11 +44,16 @@ authRouter.post(
 /*
  * 로컬 로그인
  *
+ * IP 전체 및 IP + Email 기준으로
+ * 로그인 Rate Limit을 적용한다.
+ *
  * 이메일과 비밀번호를 검증한 뒤
  * Access Token과 Refresh Token을 발급한다.
  */
 authRouter.post(
   "/login",
+  userLoginIpRateLimiter,
+  userLoginAccountRateLimiter,
   validate({
     body: authValidator.login,
   }),
