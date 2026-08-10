@@ -313,7 +313,7 @@ export const customersService = {
           const systemMessages = canceledRequests.flatMap((request) =>
             request.chatRooms.map((room) => ({
               roomId: room.id,
-              senderId: adminId,
+              senderId: null,
               type: "SYSTEM" as const,
               content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
             })),

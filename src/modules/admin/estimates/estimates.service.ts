@@ -82,7 +82,8 @@ async function createCancellationSideEffects({
   const chatRoomIds = estimate.chatRoom ? [estimate.chatRoom.id] : [];
   const systemMessages: Prisma.ChatMessageCreateManyInput[] = chatRoomIds.map((roomId) => ({
     roomId,
-    senderId: adminId,
+    // SYSTEM 메시지는 고객·기사·관리자 중 누구의 발화도 아니므로 발신자를 두지 않습니다.
+    senderId: null,
     type: "SYSTEM",
     content: CANCELLATION_MESSAGE,
   }));
