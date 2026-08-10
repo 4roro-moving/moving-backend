@@ -36,6 +36,12 @@ export const ERROR_CODES = {
     message: "이미 존재하는 데이터입니다.",
   },
 
+  TOO_MANY_REQUESTS: {
+    status: 429,
+    code: "TOO_MANY_REQUESTS",
+    message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+  },
+
   INTERNAL_SERVER_ERROR: {
     status: 500,
     code: "INTERNAL_SERVER_ERROR",

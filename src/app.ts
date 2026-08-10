@@ -39,6 +39,14 @@ import { adminTermsRouter, publicTermsRouter } from "./modules/terms/terms.route
 
 const app = express();
 
+/*
+ * Nginx 1단계 Reverse Proxy를 신뢰한다.
+ *
+ * Nginx가 전달하는 X-Forwarded-For를 기반으로
+ * Express의 req.ip가 실제 클라이언트 IP를 사용하도록 한다.
+ */
+app.set("trust proxy", 1);
+
 app.use(
   helmet({
     contentSecurityPolicy: {
