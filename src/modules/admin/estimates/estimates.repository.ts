@@ -16,9 +16,10 @@ const confirmedEstimateSelect = {
       status: true,
       isActive: true,
       confirmedEstimateId: true,
-      chatRooms: { select: { id: true } },
     },
   },
+  // 견적별 채팅방은 1개이므로, 취소 대상 견적의 채팅방만 조회합니다.
+  chatRoom: { select: { id: true } },
 } satisfies Prisma.EstimateSelect;
 
 export type ConfirmedEstimateRow = Prisma.EstimateGetPayload<{

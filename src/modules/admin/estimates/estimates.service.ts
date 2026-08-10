@@ -78,7 +78,8 @@ async function createCancellationSideEffects({
     expiresAt: null,
     sourceId: notificationSourceId,
   }));
-  const chatRoomIds = estimate.estimateRequest.chatRooms.map((room) => room.id);
+  // 다른 기사의 채팅방에는 안내하지 않고, 취소된 확정 견적의 채팅방만 대상으로 합니다.
+  const chatRoomIds = estimate.chatRoom ? [estimate.chatRoom.id] : [];
   const systemMessages: Prisma.ChatMessageCreateManyInput[] = chatRoomIds.map((roomId) => ({
     roomId,
     senderId: adminId,
