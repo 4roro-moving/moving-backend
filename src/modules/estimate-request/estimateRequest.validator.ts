@@ -79,6 +79,14 @@ export const designateMoverSchema = z.object({
   moverId: z.uuid("올바른 기사님 ID가 아닙니다."),
 });
 
+export const cancelDesignatedMoverParamSchema = z.object({
+  estimateRequestId: z.coerce
+    .number()
+    .int("올바른 견적 요청 ID가 아닙니다.")
+    .positive("올바른 견적 요청 ID가 아닙니다."),
+  moverId: z.uuid("올바른 기사님 ID가 아닙니다."),
+});
+
 export const listEstimateRequestQuerySchema = z.object({
   page: z.coerce
     .number({ error: "페이지 번호는 숫자여야 합니다." })

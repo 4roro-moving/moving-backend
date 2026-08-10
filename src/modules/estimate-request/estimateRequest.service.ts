@@ -1,10 +1,11 @@
 import type { EstimateRequestStatus, MoveType, Prisma } from "@prisma/client";
 
 import logger from "../../config/logger";
-import { prisma } from "../../lib/prisma";
 import { AppError } from "../../lib/app-error";
-import { buildPagination } from "../../utils/pagination.util";
+import { prisma } from "../../lib/prisma";
 import { lockEstimateRequestForUpdate } from "../../utils/estimate-request-lock.util";
+import { buildPagination } from "../../utils/pagination.util";
+import { runTransaction } from "../../utils/transaction";
 import { notificationService } from "../notification/notification.service";
 
 import {
@@ -213,6 +214,12 @@ type UpdateParams = {
 };
 
 type DesignateParams = {
+  estimateRequestId: number;
+  customerId: string;
+  moverId: string;
+};
+
+type CancelDesignatedMoverParams = {
   estimateRequestId: number;
   customerId: string;
   moverId: string;
@@ -561,7 +568,6 @@ export const estimateRequestService = {
 
       await estimateRequestRepository.createDesignation(estimateRequestId, moverId, tx);
 
-      // 알림 DB 저장은 지정 처리와 같은 트랜잭션에 포함(알림 필수), SSE 는 커밋 후.
       const notification = await notificationService.createNotification(
         {
           userId: moverId,
@@ -579,9 +585,66 @@ export const estimateRequestService = {
       return { detail, notification, moverId };
     });
 
-    // 커밋 이후 SSE 전송
     notificationService.sendNotification(result.moverId, result.notification);
 
     return result.detail;
+  },
+
+  /**
+   * 지정한 기사님 한 명의 견적 요청을 취소
+   *
+   * 견적 제출과 지정 취소가 동시에 발생할 경우 데이터 정합성이 깨지지 않도록
+   * EstimateRequest 행을 FOR UPDATE로 잠근 뒤 취소 가능 여부를 확인한다.
+   */
+  async cancelDesignatedMover({
+    estimateRequestId,
+    customerId,
+    moverId,
+  }: CancelDesignatedMoverParams): Promise<EstimateRequestDetail> {
+    return runTransaction(async (tx) => {
+      // 견적 제출(sendEstimate)과 동일한 요청 행을 잠가 두 작업을 직렬화한다.
+      const locked = await lockEstimateRequestForUpdate(tx, estimateRequestId);
+
+      if (!locked) {
+        throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
+      }
+
+      // 잠금 이후 최신 상태를 기준으로 소유권 및 요청 상태를 확인한다.
+      const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
+
+      assertEditable(request, "지금은 지정 견적 요청을 취소할 수 없는 상태입니다.");
+
+      if (request.expiresAt.getTime() <= Date.now()) {
+        throw new AppError("REQUEST_NOT_EDITABLE", {
+          message: "만료된 견적 요청입니다.",
+        });
+      }
+
+      const designation = await estimateRequestRepository.findDesignation(
+        estimateRequestId,
+        moverId,
+        tx,
+      );
+
+      if (!designation) {
+        throw new AppError("DESIGNATION_NOT_FOUND");
+      }
+
+      // 요청 행 잠금 이후 견적 존재 여부를 확인해
+      // 견적 제출과 지정 취소 사이의 경쟁 상태를 방지한다.
+      const estimate = await estimateRequestRepository.findEstimateByMover(
+        estimateRequestId,
+        moverId,
+        tx,
+      );
+
+      if (estimate) {
+        throw new AppError("DESIGNATION_CANCEL_NOT_ALLOWED");
+      }
+
+      await estimateRequestRepository.deleteDesignation(estimateRequestId, moverId, tx);
+
+      return findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
+    });
   },
 };

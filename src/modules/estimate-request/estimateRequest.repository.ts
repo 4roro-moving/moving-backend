@@ -260,6 +260,32 @@ export const estimateRequestRepository = {
     });
   },
 
+  findEstimateByMover(estimateRequestId: number, moverId: string, db: Db = prisma) {
+    return db.estimate.findUnique({
+      where: {
+        estimateRequestId_moverId: {
+          estimateRequestId,
+          moverId,
+        },
+      },
+      select: {
+        id: true,
+        status: true,
+      },
+    });
+  },
+
+  deleteDesignation(estimateRequestId: number, moverId: string, db: Db = prisma) {
+    return db.designatedMover.delete({
+      where: {
+        estimateRequestId_moverId: {
+          estimateRequestId,
+          moverId,
+        },
+      },
+    });
+  },
+
   //* 기사님 매칭
 
   /**

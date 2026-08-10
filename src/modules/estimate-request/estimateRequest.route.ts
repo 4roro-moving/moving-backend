@@ -15,6 +15,7 @@ import {
   estimateRequestIdParamSchema,
   listEstimateRequestQuerySchema,
   updateEstimateRequestSchema,
+  cancelDesignatedMoverParamSchema,
 } from "./estimateRequest.validator";
 
 const estimateRequestRouter = Router();
@@ -88,6 +89,14 @@ estimateRequestRouter.post(
     body: designateMoverSchema,
   }),
   asyncHandler(estimateRequestController.designateMover),
+);
+
+estimateRequestRouter.delete(
+  "/:estimateRequestId/designate/:moverId",
+  validate({
+    params: cancelDesignatedMoverParamSchema,
+  }),
+  asyncHandler(estimateRequestController.cancelDesignatedMover),
 );
 
 export default estimateRequestRouter;
