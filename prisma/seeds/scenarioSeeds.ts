@@ -48,17 +48,8 @@ function randInt(rng: () => number, minInclusive: number, maxInclusive: number):
   return minInclusive + Math.floor(rng() * (maxInclusive - minInclusive + 1));
 }
 
-/* ── 승인된 기사 index (7=REJECTED, 8=PENDING 제외) ── */
-const APPROVED_MOVER_INDEXES: number[] = [];
-for (let i = 1; i <= MOVER_COUNT; i += 1) {
-  if (i === 7 || i === 8) {
-    continue;
-  }
-  APPROVED_MOVER_INDEXES.push(i);
-}
-
-function approvedMover(offset: number): string {
-  const idx = APPROVED_MOVER_INDEXES[Math.abs(offset) % APPROVED_MOVER_INDEXES.length]!;
+function scenarioMover(offset: number): string {
+  const idx = (Math.abs(offset) % MOVER_COUNT) + 1;
 
   return moverEmail(idx);
 }
@@ -200,7 +191,7 @@ function buildMoverReviewQuota(): Map<string, number> {
   const rng = makeRng(20260808);
   const quota = new Map<string, number>();
 
-  for (const idx of APPROVED_MOVER_INDEXES) {
+  for (let idx = 1; idx <= MOVER_COUNT; idx += 1) {
     const value = rng() < 0.15 ? 0 : randInt(rng, 1, MOVER_REVIEW_MAX);
     quota.set(moverEmail(idx), value);
   }
@@ -233,7 +224,7 @@ function build(): {
       /* ── (1) 과거: 작성한 리뷰 3건 ── */
       for (let r = 0; r < REVIEWS_WRITTEN_PER_CUSTOMER; r += 1) {
         const key = `c${cid}-reviewed-${r + 1}`;
-        const mover = approvedMover(c * 7 + r);
+        const mover = scenarioMover(c * 7 + r);
         const moveType = MOVE_TYPES[(c + r) % MOVE_TYPES.length]!;
 
         requests.push({
@@ -275,7 +266,7 @@ function build(): {
       /* ── (2) 과거: 작성 가능한(미작성) 리뷰 3건 ── */
       for (let r = 0; r < REVIEWS_PENDING_PER_CUSTOMER; r += 1) {
         const key = `c${cid}-pending-${r + 1}`;
-        const mover = approvedMover(c * 5 + r + 3);
+        const mover = scenarioMover(c * 5 + r + 3);
         const moveType = MOVE_TYPES[(c + r + 1) % MOVE_TYPES.length]!;
 
         requests.push({
@@ -362,11 +353,11 @@ function build(): {
       const quoteCount = 2 + (c % 2); // 2 or 3
       const usedMovers = new Set<string>();
       for (let j = 0; j < quoteCount; j += 1) {
-        let mover = approvedMover(c * 11 + j * 3);
+        let mover = scenarioMover(c * 11 + j * 3);
         // 같은 요청 내 기사 중복 방지 (Estimate unique(reqId, moverId))
         let guard = 0;
-        while (usedMovers.has(mover) && guard < APPROVED_MOVER_INDEXES.length) {
-          mover = approvedMover(c * 11 + j * 3 + guard + 1);
+        while (usedMovers.has(mover) && guard < MOVER_COUNT) {
+          mover = scenarioMover(c * 11 + j * 3 + guard + 1);
           guard += 1;
         }
         usedMovers.add(mover);
@@ -425,7 +416,7 @@ function appendMoverReviewFill(
     }
   }
 
-  for (const idx of APPROVED_MOVER_INDEXES) {
+  for (let idx = 1; idx <= MOVER_COUNT; idx += 1) {
     const mEmail = moverEmail(idx);
     const target = MOVER_REVIEW_QUOTA.get(mEmail) ?? 0;
     const have = already.get(mEmail) ?? 0;

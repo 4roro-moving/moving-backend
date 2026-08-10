@@ -90,7 +90,6 @@ async function createRaceFixture(): Promise<RaceFixture> {
           nickname: moverNickname,
           shortIntro: "race test",
           description: "race integration test mover",
-          approvalStatus: "APPROVED",
           serviceTypes: { create: [{ moveType: "HOME" }] },
           serviceAreas: { create: [{ regionId: region.id }] },
         },

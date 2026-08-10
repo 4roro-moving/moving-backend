@@ -7,7 +7,7 @@
  * ⚠️ email 은 zero-padding(3자리): mover001@test.com
  *    (customers.ts 와 동일한 이유 — orderBy email asc 정합성)
  *
- * ⚠️ nickname / businessNumber 는 스키마상 unique 이므로 중복 없이 생성합니다.
+ * ⚠️ nickname 은 스키마상 unique 이므로 중복 없이 생성합니다.
  */
 
 export const MOVER_COUNT = 100;
@@ -21,8 +21,6 @@ export function moverEmail(index: number): string {
 }
 
 export type MoverMoveType = "SMALL" | "HOME" | "OFFICE";
-export type MoverApprovalStatus = "APPROVED" | "PENDING" | "REJECTED";
-
 export interface MoverSeed {
   email: string;
   name: string;
@@ -36,15 +34,10 @@ export interface MoverSeed {
   reviewCount: number;
   regions: readonly string[];
   moveTypes: readonly MoverMoveType[];
-  businessNumber: string;
-  businessName: string;
-  approvalStatus: MoverApprovalStatus;
-  rejectReason?: string;
 }
 
 /*
  * 기존 1~8번 기사님 — 원본 데이터 그대로 유지.
- * (mover7 REJECTED, mover8 PENDING 등 승인 시나리오 보존)
  */
 const LEGACY_MOVERS: readonly MoverSeed[] = [
   {
@@ -61,9 +54,6 @@ const LEGACY_MOVERS: readonly MoverSeed[] = [
     reviewCount: 0,
     regions: ["서울", "경기", "인천"],
     moveTypes: ["SMALL", "HOME"],
-    businessNumber: "101-45-67891",
-    businessName: "테스트이사1",
-    approvalStatus: "APPROVED",
   },
   {
     email: moverEmail(2),
@@ -78,9 +68,6 @@ const LEGACY_MOVERS: readonly MoverSeed[] = [
     reviewCount: 0,
     regions: ["서울", "경기"],
     moveTypes: ["HOME", "OFFICE"],
-    businessNumber: "102-45-67892",
-    businessName: "테스트이사2",
-    approvalStatus: "APPROVED",
   },
   {
     email: moverEmail(3),
@@ -95,9 +82,6 @@ const LEGACY_MOVERS: readonly MoverSeed[] = [
     reviewCount: 0,
     regions: ["부산", "울산", "경남"],
     moveTypes: ["SMALL", "HOME", "OFFICE"],
-    businessNumber: "103-45-67893",
-    businessName: "테스트이사3",
-    approvalStatus: "APPROVED",
   },
   {
     email: moverEmail(4),
@@ -112,9 +96,6 @@ const LEGACY_MOVERS: readonly MoverSeed[] = [
     reviewCount: 0,
     regions: ["대전", "세종", "충남", "충북"],
     moveTypes: ["SMALL", "HOME"],
-    businessNumber: "104-45-67894",
-    businessName: "테스트이사4",
-    approvalStatus: "APPROVED",
   },
   {
     email: moverEmail(5),
@@ -129,9 +110,6 @@ const LEGACY_MOVERS: readonly MoverSeed[] = [
     reviewCount: 0,
     regions: ["대구", "경북", "경남"],
     moveTypes: ["HOME", "OFFICE"],
-    businessNumber: "105-45-67895",
-    businessName: "테스트이사5",
-    approvalStatus: "APPROVED",
   },
   {
     email: moverEmail(6),
@@ -146,9 +124,6 @@ const LEGACY_MOVERS: readonly MoverSeed[] = [
     reviewCount: 0,
     regions: ["광주", "전남", "전북"],
     moveTypes: ["SMALL", "HOME", "OFFICE"],
-    businessNumber: "106-45-67896",
-    businessName: "테스트이사6",
-    approvalStatus: "APPROVED",
   },
   {
     email: moverEmail(7),
@@ -163,10 +138,6 @@ const LEGACY_MOVERS: readonly MoverSeed[] = [
     reviewCount: 0,
     regions: ["강원", "경기", "서울"],
     moveTypes: ["SMALL", "HOME"],
-    businessNumber: "107-45-67897",
-    businessName: "테스트이사7",
-    approvalStatus: "REJECTED",
-    rejectReason: "사업자등록증 이미지가 흐릿하여 확인이 어렵습니다. 재제출 부탁드립니다.",
   },
   {
     email: moverEmail(8),
@@ -181,9 +152,6 @@ const LEGACY_MOVERS: readonly MoverSeed[] = [
     reviewCount: 0,
     regions: ["제주"],
     moveTypes: ["SMALL", "HOME"],
-    businessNumber: "108-45-67898",
-    businessName: "테스트이사8",
-    approvalStatus: "PENDING",
   },
 ];
 
@@ -287,14 +255,6 @@ function buildMoverName(index: number): string {
   return `${family}${given}`;
 }
 
-function buildBusinessNumber(index: number): string {
-  // 3-2-5 자리 형식. 앞 3자리를 index로 분산해 중복 방지
-  const head = String(100 + index).padStart(3, "0");
-  const tail = String(60000 + index).padStart(5, "0");
-
-  return `${head}-45-${tail}`;
-}
-
 function buildGeneratedMover(index: number): MoverSeed {
   const career = ((index * 7) % 20) + 1; // 1~20년
   const confirmedCount = (index * 13) % 200; // 0~199건
@@ -316,9 +276,6 @@ function buildGeneratedMover(index: number): MoverSeed {
     reviewCount: 0,
     regions,
     moveTypes,
-    businessNumber: buildBusinessNumber(index),
-    businessName: `테스트이사${index}`,
-    approvalStatus: "APPROVED",
   };
 }
 

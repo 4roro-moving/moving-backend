@@ -35,7 +35,7 @@ async function main(): Promise<void> {
 
   console.log("");
 
-  await seedMovers(prisma, passwordHash, regionIdMap, adminIds[0] ?? null);
+  await seedMovers(prisma, passwordHash, regionIdMap);
 
   console.log("");
 
