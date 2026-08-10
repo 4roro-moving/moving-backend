@@ -6,7 +6,8 @@ import { runTransaction } from "../../../utils/transaction";
 import { adminEstimatesRepository, type ConfirmedEstimateRow } from "./estimates.repository";
 import type { CancelAdminEstimateBody, CancelAdminEstimateResponse } from "./estimates.type";
 
-const CANCELLATION_MESSAGE = "관리자 확인으로 확정된 견적 거래가 취소되었습니다.";
+const SYSTEM_CANCELLATION_MESSAGE = "관리자 확인으로 확정된 견적 거래가 취소되었습니다.";
+const NOTIFICATION_CONTENT = "확정 견적 거래";
 
 /** 확정 상태인 견적과 요청의 연결이 올바른지 확인합니다. */
 function assertCancelableConfirmedTrade(
@@ -73,7 +74,7 @@ async function createCancellationSideEffects({
     userId,
     type: NotificationType.ESTIMATE_CANCELED_BY_ADMIN,
     title: "확정 견적 취소",
-    content: CANCELLATION_MESSAGE,
+    content: NOTIFICATION_CONTENT,
     linkUrl: null,
     expiresAt: null,
     sourceId: notificationSourceId,
@@ -85,7 +86,7 @@ async function createCancellationSideEffects({
     // SYSTEM 메시지는 고객·기사·관리자 중 누구의 발화도 아니므로 발신자를 두지 않습니다.
     senderId: null,
     type: "SYSTEM",
-    content: CANCELLATION_MESSAGE,
+    content: SYSTEM_CANCELLATION_MESSAGE,
   }));
 
   await Promise.all([

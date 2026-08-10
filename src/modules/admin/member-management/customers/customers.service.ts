@@ -328,7 +328,8 @@ export const customersService = {
               userId: moverId,
               type: NotificationType.ESTIMATE_REQUEST_CANCELED_BY_ACCOUNT_SUSPENSION,
               title: "견적 요청 취소",
-              content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
+              // 프론트 알림 템플릿의 강조 대상어만 전달합니다.
+              content: "견적 요청",
               linkUrl: null,
               expiresAt: null,
               sourceId: `admin-suspend:${customerId}:${String(request.id)}`,
