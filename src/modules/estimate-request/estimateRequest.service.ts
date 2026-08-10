@@ -499,7 +499,9 @@ export const estimateRequestService = {
             title: "견적 요청 취소",
             // FE: content + " 님이 견적 요청을 취소했어요"
             content: result.customerName,
-            linkUrl: null,
+            //고객이 견적 취소 시 알림 클릭하면 받은 요청 페이지 연결
+            // 기사가 견적을 보낸 경우, 고객이 지정 요청만 한 경우 둘다 알림을 받기 떄문
+            linkUrl: `/estimate/received-requests`,
             expiresAt: null,
           });
         } catch (error) {
@@ -568,7 +570,8 @@ export const estimateRequestService = {
           type: "DESIGNATED_REQUEST_RECEIVED",
           title: "지정 견적 요청이 도착했어요",
           content: MOVE_TYPE_LABEL[request.moveType],
-          linkUrl: `/mover/estimate-requests/${String(estimateRequestId)}`,
+          // 지정 견적 요청이 있는 알림이므로 받은 요청 페이지 연결
+          linkUrl: `/estimate/received-requests`,
           expiresAt: null,
         },
         tx,

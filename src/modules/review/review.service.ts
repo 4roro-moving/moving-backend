@@ -269,6 +269,7 @@ export const reviewService = {
           type: "REVIEW_RECEIVED",
           title: "리뷰 도착",
           content: "고객님이",
+          //기사님이 리뷰를 확인할 수 있는 페이지가 아직 없음 → null 처리
           linkUrl: null,
           expiresAt: null,
         });
