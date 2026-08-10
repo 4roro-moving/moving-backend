@@ -6,6 +6,7 @@ import type {
   estimateRequestIdParamSchema,
   listEstimateRequestQuerySchema,
   updateEstimateRequestSchema,
+  cancelDesignatedMoverParamSchema,
 } from "./estimateRequest.validator";
 
 export type CreateEstimateRequestInput = z.infer<typeof createEstimateRequestSchema>;
@@ -13,6 +14,7 @@ export type UpdateEstimateRequestInput = z.infer<typeof updateEstimateRequestSch
 export type EstimateRequestIdParam = z.infer<typeof estimateRequestIdParamSchema>;
 export type DesignateMoverInput = z.infer<typeof designateMoverSchema>;
 export type ListEstimateRequestQuery = z.infer<typeof listEstimateRequestQuerySchema>;
+export type CancelDesignatedMoverParam = z.infer<typeof cancelDesignatedMoverParamSchema>;
 
 /**
  * 견적 요청 생성 시 전달되는 출발지 / 도착지 주소

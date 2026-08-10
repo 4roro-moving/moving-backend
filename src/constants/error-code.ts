@@ -109,6 +109,12 @@ export const ERROR_CODES = {
     message: "존재하지 않는 기사님입니다.",
   },
 
+  MOVER_PROFILE_REQUIRED: {
+    status: 409,
+    code: "MOVER_PROFILE_REQUIRED",
+    message: "프로필 정보가 없는 기사의 견적은 확정할 수 없습니다.",
+  },
+
   ALREADY_DESIGNATED: {
     status: 409,
     code: "ALREADY_DESIGNATED",
@@ -119,6 +125,18 @@ export const ERROR_CODES = {
     status: 409,
     code: "DESIGNATION_LIMIT_EXCEEDED",
     message: "지정 견적은 최대 3명까지 요청할 수 있습니다.",
+  },
+
+  DESIGNATION_NOT_FOUND: {
+    status: 404,
+    code: "DESIGNATION_NOT_FOUND",
+    message: "지정 견적 요청을 찾을 수 없습니다.",
+  },
+
+  DESIGNATION_CANCEL_NOT_ALLOWED: {
+    status: 409,
+    code: "DESIGNATION_CANCEL_NOT_ALLOWED",
+    message: "이미 견적을 제출한 기사님의 지정 요청은 취소할 수 없습니다.",
   },
 
   // 2026.07.24 정슬기 - [추가] 받은 견적 상세·확정 API용 에러 코드

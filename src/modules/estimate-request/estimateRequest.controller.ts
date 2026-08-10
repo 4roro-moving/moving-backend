@@ -3,6 +3,7 @@ import type { Request, Response } from "express";
 import { AppError } from "../../lib/app-error";
 import { estimateRequestService } from "./estimateRequest.service";
 import type {
+  CancelDesignatedMoverParam,
   CreateEstimateRequestInput,
   DesignateMoverInput,
   EstimateRequestIdParam,
@@ -126,6 +127,25 @@ export const estimateRequestController = {
     });
 
     res.status(201).json({
+      success: true,
+      data: estimateRequest,
+    });
+  },
+
+  /**
+   * DELETE /api/estimate-requests/:estimateRequestId/designate/:moverId
+   * 지정한 기사님 한 명의 지정 견적 요청을 취소
+   */
+  cancelDesignatedMover: async (req: Request, res: Response) => {
+    const { estimateRequestId, moverId } = res.locals.params as CancelDesignatedMoverParam;
+
+    const estimateRequest = await estimateRequestService.cancelDesignatedMover({
+      estimateRequestId,
+      customerId: getCustomerId(req),
+      moverId,
+    });
+
+    res.status(200).json({
       success: true,
       data: estimateRequest,
     });
