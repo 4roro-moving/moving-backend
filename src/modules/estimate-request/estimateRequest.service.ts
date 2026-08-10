@@ -4,7 +4,6 @@ import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { prisma } from "../../lib/prisma";
 import { lockEstimateRequestForUpdate } from "../../utils/estimate-request-lock.util";
-import { getProfileImageUrl } from "../../utils/image-url";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
 import { notificationService } from "../notification/notification.service";
@@ -42,25 +41,6 @@ const EDITABLE_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
 // 2026.08.03 정슬기 - [추가] 취소 허용 상태를 명시적으로 분리
 // 2026.08.03 정슬기 - [수정] repository 상수와 단일화
 export const CANCELABLE_STATUSES = CANCELABLE_ESTIMATE_REQUEST_STATUSES;
-
-/** 견적 요청 응답의 지정 기사 이미지 key를 외부에서 사용할 CloudFront URL로 변환한다. */
-function mapEstimateRequestProfileImageUrls(request: EstimateRequestDetail): EstimateRequestDetail {
-  return {
-    ...request,
-    designatedMovers: request.designatedMovers.map((designatedMover) => ({
-      ...designatedMover,
-      mover: {
-        ...designatedMover.mover,
-        moverProfile: designatedMover.mover.moverProfile
-          ? {
-              ...designatedMover.mover.moverProfile,
-              imageUrl: getProfileImageUrl(designatedMover.mover.moverProfile.imageUrl),
-            }
-          : null,
-      },
-    })),
-  };
-}
 
 /**
  * 취소 가능 여부를 검증한다.
@@ -187,6 +167,45 @@ async function findOwnedRequestOrThrow(
   return request;
 }
 
+type EstimateRequestResponse = Omit<EstimateRequestDetail, "designatedMovers" | "rejections"> & {
+  designatedMovers: Array<
+    EstimateRequestDetail["designatedMovers"][number] & {
+      rejection: {
+        reason: string;
+        rejectedAt: Date;
+      } | null;
+    }
+  >;
+};
+
+/**
+ * 고객 견적 요청 응답 변환
+ * - 지정 기사 반려 정보만 designatedMovers에 병합
+ * - 일반 반려 내역은 고객에게 노출하지 않음
+ * // 2026.08.10 정슬기 - [추가]
+ */
+function toEstimateRequestResponse(request: EstimateRequestDetail): EstimateRequestResponse {
+  const { rejections, designatedMovers, ...rest } = request;
+
+  const rejectionByMoverId = new Map(
+    rejections.map((rejection) => [
+      rejection.moverId,
+      {
+        reason: rejection.reason,
+        rejectedAt: rejection.createdAt,
+      },
+    ]),
+  );
+
+  return {
+    ...rest,
+    designatedMovers: designatedMovers.map((designatedMover) => ({
+      ...designatedMover,
+      rejection: rejectionByMoverId.get(designatedMover.moverId) ?? null,
+    })),
+  };
+}
+
 /**
  * [D] 수정/지정이 가능한 상태인지 검증한다.
  * PENDING 또는 OPEN 이 아니면 에러를 던진다.
@@ -249,7 +268,10 @@ export const estimateRequestService = {
   /**
    * 견적 요청을 생성하고 매칭된 기사님들에게 알림을 보낸다. 진행 중인 견적 요청이 이미 존재하면 에러를 던진다.
    */
-  async createEstimateRequest({ customerId, input }: CreateParams): Promise<EstimateRequestDetail> {
+  async createEstimateRequest({
+    customerId,
+    input,
+  }: CreateParams): Promise<EstimateRequestResponse> {
     const moveDate = resolveMoveDate(input.moveDate);
     const expiresAt = resolveExpiresAt(moveDate);
 
@@ -334,25 +356,25 @@ export const estimateRequestService = {
       notificationService.sendNotification(userId, notification);
     }
 
-    return mapEstimateRequestProfileImageUrls(result.created);
+    return toEstimateRequestResponse(result.created);
   },
 
   /**
    * 진행 중인 견적 요청을 조회하고 없으면 null 을 반환
    */
-  async getActiveEstimateRequest(customerId: string): Promise<EstimateRequestDetail | null> {
+  async getActiveEstimateRequest(customerId: string): Promise<EstimateRequestResponse | null> {
     const request = await estimateRequestRepository.findActiveByCustomerId(customerId);
 
-    return request ? mapEstimateRequestProfileImageUrls(request) : null;
+    return request ? toEstimateRequestResponse(request) : null;
   },
 
   async getEstimateRequestById(
     estimateRequestId: number,
     customerId: string,
-  ): Promise<EstimateRequestDetail> {
+  ): Promise<EstimateRequestResponse> {
     const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, prisma);
 
-    return mapEstimateRequestProfileImageUrls(request);
+    return toEstimateRequestResponse(request);
   },
 
   async getMyEstimateRequestList(customerId: string, query: ListEstimateRequestQuery) {
@@ -366,7 +388,7 @@ export const estimateRequestService = {
     });
 
     return {
-      estimateRequests: items.map(mapEstimateRequestProfileImageUrls),
+      estimateRequests: items.map(toEstimateRequestResponse),
       pagination: buildPagination(totalCount, page, limit),
     };
   },
@@ -379,7 +401,7 @@ export const estimateRequestService = {
     customerId,
     input,
   }: UpdateParams): Promise<EstimateRequestDetail> {
-    const updated = await prisma.$transaction(async (tx) => {
+    return prisma.$transaction(async (tx) => {
       const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
       assertEditable(request);
@@ -430,8 +452,6 @@ export const estimateRequestService = {
 
       return updated;
     });
-
-    return mapEstimateRequestProfileImageUrls(updated);
   },
 
   /**
@@ -532,9 +552,7 @@ export const estimateRequestService = {
             title: "견적 요청 취소",
             // FE: content + " 님이 견적 요청을 취소했어요"
             content: result.customerName,
-            //고객이 견적 취소 시 알림 클릭하면 받은 요청 페이지 연결
-            // 기사가 견적을 보낸 경우, 고객이 지정 요청만 한 경우 둘다 알림을 받기 떄문
-            linkUrl: `/estimate/received-requests`,
+            linkUrl: null,
             expiresAt: null,
           });
         } catch (error) {
@@ -547,7 +565,7 @@ export const estimateRequestService = {
       }),
     );
 
-    return mapEstimateRequestProfileImageUrls(result.canceled);
+    return result.canceled;
   },
 
   /**
@@ -602,8 +620,7 @@ export const estimateRequestService = {
           type: "DESIGNATED_REQUEST_RECEIVED",
           title: "지정 견적 요청이 도착했어요",
           content: MOVE_TYPE_LABEL[request.moveType],
-          // 지정 견적 요청이 있는 알림이므로 받은 요청 페이지 연결
-          linkUrl: `/estimate/received-requests`,
+          linkUrl: `/mover/estimate-requests/${String(estimateRequestId)}`,
           expiresAt: null,
         },
         tx,
@@ -616,7 +633,7 @@ export const estimateRequestService = {
 
     notificationService.sendNotification(result.moverId, result.notification);
 
-    return mapEstimateRequestProfileImageUrls(result.detail);
+    return result.detail;
   },
 
   /**
@@ -630,7 +647,7 @@ export const estimateRequestService = {
     customerId,
     moverId,
   }: CancelDesignatedMoverParams): Promise<EstimateRequestDetail> {
-    const updated = await runTransaction(async (tx) => {
+    return runTransaction(async (tx) => {
       // 견적 제출(sendEstimate)과 동일한 요청 행을 잠가 두 작업을 직렬화한다.
       const locked = await lockEstimateRequestForUpdate(tx, estimateRequestId);
 
@@ -675,7 +692,5 @@ export const estimateRequestService = {
 
       return findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
     });
-
-    return mapEstimateRequestProfileImageUrls(updated);
   },
 };
