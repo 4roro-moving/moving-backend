@@ -4,6 +4,7 @@ import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { prisma } from "../../lib/prisma";
 import { lockEstimateRequestForUpdate } from "../../utils/estimate-request-lock.util";
+import { getProfileImageUrl } from "../../utils/image-url";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
 import { notificationService } from "../notification/notification.service";
@@ -41,6 +42,25 @@ const EDITABLE_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
 // 2026.08.03 정슬기 - [추가] 취소 허용 상태를 명시적으로 분리
 // 2026.08.03 정슬기 - [수정] repository 상수와 단일화
 export const CANCELABLE_STATUSES = CANCELABLE_ESTIMATE_REQUEST_STATUSES;
+
+/** 견적 요청 응답의 지정 기사 이미지 key를 외부에서 사용할 CloudFront URL로 변환한다. */
+function mapEstimateRequestProfileImageUrls(request: EstimateRequestDetail): EstimateRequestDetail {
+  return {
+    ...request,
+    designatedMovers: request.designatedMovers.map((designatedMover) => ({
+      ...designatedMover,
+      mover: {
+        ...designatedMover.mover,
+        moverProfile: designatedMover.mover.moverProfile
+          ? {
+              ...designatedMover.mover.moverProfile,
+              imageUrl: getProfileImageUrl(designatedMover.mover.moverProfile.imageUrl),
+            }
+          : null,
+      },
+    })),
+  };
+}
 
 /**
  * 취소 가능 여부를 검증한다.
@@ -314,21 +334,25 @@ export const estimateRequestService = {
       notificationService.sendNotification(userId, notification);
     }
 
-    return result.created;
+    return mapEstimateRequestProfileImageUrls(result.created);
   },
 
   /**
    * 진행 중인 견적 요청을 조회하고 없으면 null 을 반환
    */
-  getActiveEstimateRequest(customerId: string): Promise<EstimateRequestDetail | null> {
-    return estimateRequestRepository.findActiveByCustomerId(customerId);
+  async getActiveEstimateRequest(customerId: string): Promise<EstimateRequestDetail | null> {
+    const request = await estimateRequestRepository.findActiveByCustomerId(customerId);
+
+    return request ? mapEstimateRequestProfileImageUrls(request) : null;
   },
 
   async getEstimateRequestById(
     estimateRequestId: number,
     customerId: string,
   ): Promise<EstimateRequestDetail> {
-    return findOwnedRequestOrThrow(estimateRequestId, customerId, prisma);
+    const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, prisma);
+
+    return mapEstimateRequestProfileImageUrls(request);
   },
 
   async getMyEstimateRequestList(customerId: string, query: ListEstimateRequestQuery) {
@@ -342,7 +366,7 @@ export const estimateRequestService = {
     });
 
     return {
-      estimateRequests: items,
+      estimateRequests: items.map(mapEstimateRequestProfileImageUrls),
       pagination: buildPagination(totalCount, page, limit),
     };
   },
@@ -355,7 +379,7 @@ export const estimateRequestService = {
     customerId,
     input,
   }: UpdateParams): Promise<EstimateRequestDetail> {
-    return prisma.$transaction(async (tx) => {
+    const updated = await prisma.$transaction(async (tx) => {
       const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
       assertEditable(request);
@@ -406,6 +430,8 @@ export const estimateRequestService = {
 
       return updated;
     });
+
+    return mapEstimateRequestProfileImageUrls(updated);
   },
 
   /**
@@ -519,7 +545,7 @@ export const estimateRequestService = {
       }),
     );
 
-    return result.canceled;
+    return mapEstimateRequestProfileImageUrls(result.canceled);
   },
 
   /**
@@ -587,7 +613,7 @@ export const estimateRequestService = {
 
     notificationService.sendNotification(result.moverId, result.notification);
 
-    return result.detail;
+    return mapEstimateRequestProfileImageUrls(result.detail);
   },
 
   /**
@@ -601,7 +627,7 @@ export const estimateRequestService = {
     customerId,
     moverId,
   }: CancelDesignatedMoverParams): Promise<EstimateRequestDetail> {
-    return runTransaction(async (tx) => {
+    const updated = await runTransaction(async (tx) => {
       // 견적 제출(sendEstimate)과 동일한 요청 행을 잠가 두 작업을 직렬화한다.
       const locked = await lockEstimateRequestForUpdate(tx, estimateRequestId);
 
@@ -646,5 +672,7 @@ export const estimateRequestService = {
 
       return findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
     });
+
+    return mapEstimateRequestProfileImageUrls(updated);
   },
 };
