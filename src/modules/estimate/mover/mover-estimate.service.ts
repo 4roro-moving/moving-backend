@@ -272,7 +272,8 @@ export const moverEstimateRequestService = {
           type: "ESTIMATE_RECEIVED",
           title: "견적 도착",
           content: `${profile.nickname} 기사님의 ${MOVE_TYPE_LABEL[estimateRequest.moveType]} 견적`,
-          linkUrl: null,
+          //기사가 보낸 견적확인 가능한 대기중인 견적 페이지 연결
+          linkUrl: `/estimates/pending`,
           expiresAt: estimateRequest.expiresAt,
         },
         tx,
@@ -379,7 +380,8 @@ export const moverEstimateRequestService = {
           type: "ESTIMATE_REQUEST_REJECTED",
           title: "견적 요청 반려",
           content: profile.nickname,
-          linkUrl: null,
+          //기사가 견적 요청을 반려했을 때 알림 클릭하면 대기중인 견적(다른 기사가 보낸 견적)연결
+          linkUrl: `/estimates/pending`,
           expiresAt: getRejectionNotificationExpiresAt(notificationCreatedAt),
         },
         tx,

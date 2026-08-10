@@ -461,8 +461,9 @@ export const receivedEstimateService = {
         title: "견적 확정",
         // FE 템플릿: content + "이 확정되었어요" → "OO님의 견적이 확정되었어요"
         // 2026.08.03 정슬기 - [수정] 미완성 "님의" → 완결된 강조 문구
-        content: `${estimate.estimateRequest.customer.name}님의 견적`,
-        linkUrl: "/estimate/received-requests",
+        content: `${estimate.estimateRequest.customer.name}님의`,
+        // 견적 확정 시 알림 클릭하면 보낸 견적 페이지 연결(확정견적 확인가능)
+        linkUrl: "/estimate/sent",
         expiresAt: getKstEndOfDay(estimate.estimateRequest.moveDate),
       };
 
