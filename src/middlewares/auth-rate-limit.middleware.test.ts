@@ -5,6 +5,8 @@ import { after, before, describe, it } from "node:test";
 
 import express, { type RequestHandler } from "express";
 
+import { AppError } from "../lib/app-error";
+
 import errorHandler from "./error-handler";
 import {
   adminLoginAccountRateLimiter,
@@ -29,8 +31,20 @@ type LoginAttemptResult = {
 const SUCCESS_PASSWORD = "correct-password";
 const FAILURE_PASSWORD = "wrong-password";
 
+let ipCounter = 1;
+
+/**
+ * 테스트마다 고유한 IPv4 주소를 순차적으로 생성한다.
+ *
+ * Rate Limiter의 MemoryStore가 테스트 간 유지되므로
+ * 랜덤 IP 충돌로 이전 테스트의 카운터를 상속하지 않도록 한다.
+ */
 function createUniqueIpv4(): string {
-  return `203.0.113.${Math.floor(Math.random() * 250) + 1}`;
+  const ip = `203.0.113.${ipCounter}`;
+
+  ipCounter += 1;
+
+  return ip;
 }
 
 function createMockLoginHandler(): RequestHandler {
@@ -66,13 +80,16 @@ async function startServer(
 ): Promise<{ baseUrl: string; close: () => Promise<void> }> {
   const server = await new Promise<Server>((resolve, reject) => {
     const instance = app.listen(0, "127.0.0.1", () => resolve(instance));
+
     instance.on("error", reject);
   });
 
   const address = server.address();
 
   if (!address || typeof address === "string") {
-    throw new Error("Failed to resolve test server address.");
+    throw new AppError("INTERNAL_SERVER_ERROR", {
+      message: "테스트 서버 주소를 확인할 수 없습니다.",
+    });
   }
 
   return {
@@ -168,13 +185,19 @@ describe("auth rate limit middleware", () => {
       const email = `admin-${randomUUID()}@example.com`;
 
       for (let attempt = 1; attempt <= 5; attempt += 1) {
-        const result = await attemptLogin(baseUrl, { ip, email });
+        const result = await attemptLogin(baseUrl, {
+          ip,
+          email,
+        });
 
         assert.equal(result.status, 401, `attempt ${attempt} should remain an auth failure`);
         assert.equal(result.body.error?.code, "UNAUTHORIZED");
       }
 
-      const blocked = await attemptLogin(baseUrl, { ip, email });
+      const blocked = await attemptLogin(baseUrl, {
+        ip,
+        email,
+      });
 
       assert.equal(blocked.status, 429);
       assert.equal(blocked.body.error?.code, "TOO_MANY_REQUESTS");
@@ -191,7 +214,10 @@ describe("auth rate limit middleware", () => {
       ];
 
       for (const email of emailVariants) {
-        const result = await attemptLogin(baseUrl, { ip, email });
+        const result = await attemptLogin(baseUrl, {
+          ip,
+          email,
+        });
 
         assert.equal(result.status, 401);
         assert.equal(result.body.error?.code, "UNAUTHORIZED");
@@ -255,13 +281,19 @@ describe("auth rate limit middleware", () => {
       }
 
       for (let attempt = 1; attempt <= 5; attempt += 1) {
-        const failure = await attemptLogin(baseUrl, { ip, email });
+        const failure = await attemptLogin(baseUrl, {
+          ip,
+          email,
+        });
 
         assert.equal(failure.status, 401, `failed attempt ${attempt} should still be allowed`);
         assert.equal(failure.body.error?.code, "UNAUTHORIZED");
       }
 
-      const blocked = await attemptLogin(baseUrl, { ip, email });
+      const blocked = await attemptLogin(baseUrl, {
+        ip,
+        email,
+      });
 
       assert.equal(blocked.status, 429);
       assert.equal(blocked.body.error?.code, "TOO_MANY_REQUESTS");
@@ -318,7 +350,10 @@ describe("auth rate limit middleware", () => {
           true,
         );
 
-        const blocked = await attemptLogin(server.baseUrl, { ip, email });
+        const blocked = await attemptLogin(server.baseUrl, {
+          ip,
+          email,
+        });
 
         assert.equal(blocked.status, 429);
         assert.equal(blocked.body.error?.code, "TOO_MANY_REQUESTS");
@@ -335,7 +370,11 @@ describe("auth rate limit middleware", () => {
       try {
         for (let index = 0; index < 10; index += 1) {
           const email = index % 2 === 0 ? "  User@Example.COM  " : "user@example.com";
-          const result = await attemptLogin(server.baseUrl, { ip, email });
+
+          const result = await attemptLogin(server.baseUrl, {
+            ip,
+            email,
+          });
 
           assert.equal(result.status, 401);
         }
@@ -413,7 +452,10 @@ describe("auth rate limit middleware", () => {
           true,
         );
 
-        const blocked = await attemptLogin(server.baseUrl, { ip, email });
+        const blocked = await attemptLogin(server.baseUrl, {
+          ip,
+          email,
+        });
 
         assert.equal(blocked.status, 429);
         assert.equal(blocked.body.error?.code, "TOO_MANY_REQUESTS");
