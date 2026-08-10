@@ -427,6 +427,20 @@ export const receivedEstimateRepository = {
     });
   },
 
+  // 기사 확정 견적 수 증가
+  incrementMoverConfirmedCount(moverId: string, db: DbClient = prisma) {
+    return db.moverProfile.update({
+      where: {
+        userId: moverId,
+      },
+      data: {
+        confirmedCount: {
+          increment: 1,
+        },
+      },
+    });
+  },
+
   // 미선택 견적 만료 처리
   expireOtherSentEstimates(
     estimateRequestId: number,

@@ -405,6 +405,9 @@ export const receivedEstimateService = {
         tx,
       );
 
+      //기사 확정 견적 수 증가
+      await receivedEstimateRepository.incrementMoverConfirmedCount(confirmedEstimate.mover.id, tx);
+
       //미선택 견적 만료 처리
       const expiredEstimates = await receivedEstimateRepository.expireOtherSentEstimates(
         estimateRequestId,
