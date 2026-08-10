@@ -2,6 +2,7 @@ import type { EstimateRequestStatus, EstimateStatus, Prisma } from "@prisma/clie
 
 import logger from "../../../config/logger";
 import { AppError } from "../../../lib/app-error";
+import { getProfileImageUrl } from "../../../utils/image-url";
 import { buildPagination } from "../../../utils/pagination.util";
 import { runTransaction } from "../../../utils/transaction";
 import { notificationService } from "../../notification/notification.service";
@@ -104,7 +105,7 @@ function mapListEstimate(estimate: {
       id: estimate.mover.id,
       name: estimate.mover.name,
       nickname: estimate.mover.moverProfile?.nickname ?? null,
-      imageUrl: estimate.mover.moverProfile?.imageUrl ?? null,
+      imageUrl: getProfileImageUrl(estimate.mover.moverProfile?.imageUrl ?? null),
       career: estimate.mover.moverProfile?.career ?? 0,
       shortIntro: estimate.mover.moverProfile?.shortIntro ?? null,
       averageRating: Number(estimate.mover.moverProfile?.averageRating ?? 0),
@@ -161,7 +162,7 @@ function mapDetailEstimate(
       id: estimate.mover.id,
       name: estimate.mover.name,
       nickname: moverProfile?.nickname ?? null,
-      imageUrl: moverProfile?.imageUrl ?? null,
+      imageUrl: getProfileImageUrl(moverProfile?.imageUrl ?? null),
       career: moverProfile?.career ?? 0,
       shortIntro: moverProfile?.shortIntro ?? null,
       description: moverProfile?.description ?? null,
@@ -480,7 +481,7 @@ export const receivedEstimateService = {
             id: confirmedEstimate.mover.id,
             name: confirmedEstimate.mover.name,
             nickname: confirmedEstimate.mover.moverProfile?.nickname ?? null,
-            imageUrl: confirmedEstimate.mover.moverProfile?.imageUrl ?? null,
+            imageUrl: getProfileImageUrl(confirmedEstimate.mover.moverProfile?.imageUrl ?? null),
           },
         },
         expiredEstimateCount: expiredEstimates.count,

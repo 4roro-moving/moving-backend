@@ -1,5 +1,7 @@
 import type { Prisma } from "@prisma/client";
 
+import { getProfileImageUrl } from "../../utils/image-url";
+
 // 기사 목록·찜 목록 조회 시 공통으로 가져올 MoverProfile 필드
 export const MOVER_LIST_SELECT = {
   id: true,
@@ -48,7 +50,7 @@ export function mapMoverBase(mover: MoverListItem) {
     id: mover.userId,
     moverProfileId: mover.id,
     nickname: mover.nickname,
-    profileImageUrl: mover.imageUrl,
+    profileImageUrl: getProfileImageUrl(mover.imageUrl),
     shortIntro: mover.shortIntro,
     description: mover.description,
     career: mover.career,
