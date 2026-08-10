@@ -4,6 +4,7 @@ import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
+import { getProfileImageUrl } from "../../utils/image-url";
 import { notificationService } from "../notification/notification.service";
 import { reviewRepository } from "./review.repository";
 
@@ -92,7 +93,7 @@ export const reviewService = {
           customer: {
             id: review.customer.id,
             displayName: maskEmailLocalPart(review.customer.email),
-            imageUrl: review.customer.customerProfile?.imageUrl ?? null,
+            imageUrl: getProfileImageUrl(review.customer.customerProfile?.imageUrl ?? null),
           },
           estimateRequest: {
             id: estimateRequest.id,
@@ -136,7 +137,7 @@ export const reviewService = {
             id: review.mover.id,
             name: review.mover.name,
             nickname: moverProfile?.nickname ?? null,
-            imageUrl: moverProfile?.imageUrl ?? null,
+            imageUrl: getProfileImageUrl(moverProfile?.imageUrl ?? null),
             shortIntro: moverProfile?.shortIntro ?? null,
           },
         };
@@ -169,7 +170,7 @@ export const reviewService = {
 
             // 프로필이 없는 경우 실제 0 값과 구분할 수 있도록 null을 반환
             nickname: moverProfile?.nickname ?? null,
-            imageUrl: moverProfile?.imageUrl ?? null,
+            imageUrl: getProfileImageUrl(moverProfile?.imageUrl ?? null),
             career: moverProfile?.career ?? null,
 
             // Prisma Decimal은 API 응답에서 다루기 쉽도록 number로 변환
