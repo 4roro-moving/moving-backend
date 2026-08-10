@@ -43,9 +43,13 @@ const EDITABLE_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
 // 2026.08.03 정슬기 - [수정] repository 상수와 단일화
 export const CANCELABLE_STATUSES = CANCELABLE_ESTIMATE_REQUEST_STATUSES;
 
-type EstimateRequestResponse = Omit<EstimateRequestDetail, "designatedMovers" | "rejections"> & {
+type EstimateRequestResponse = Omit<
+  EstimateRequestDetail,
+  "designatedMovers" | "rejections" | "estimates"
+> & {
   designatedMovers: Array<
     EstimateRequestDetail["designatedMovers"][number] & {
+      hasEstimate: boolean;
       rejection: {
         reason: string;
         rejectedAt: Date;
@@ -64,7 +68,7 @@ type EstimateRequestResponse = Omit<EstimateRequestDetail, "designatedMovers" | 
 function mapEstimateRequestProfileImageUrls(
   request: EstimateRequestDetail,
 ): EstimateRequestResponse {
-  const { rejections, designatedMovers, ...rest } = request;
+  const { rejections, designatedMovers, estimates, ...rest } = request;
 
   const rejectionByMoverId = new Map(
     rejections.map((rejection) => [
@@ -75,6 +79,8 @@ function mapEstimateRequestProfileImageUrls(
       },
     ]),
   );
+
+  const estimatedMoverIds = new Set(estimates.map((estimate) => estimate.moverId));
 
   return {
     ...rest,
@@ -90,6 +96,7 @@ function mapEstimateRequestProfileImageUrls(
           : null,
       },
       rejection: rejectionByMoverId.get(designatedMover.moverId) ?? null,
+      hasEstimate: estimatedMoverIds.has(designatedMover.moverId),
     })),
   };
 }

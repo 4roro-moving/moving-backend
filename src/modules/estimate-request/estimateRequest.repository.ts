@@ -61,6 +61,14 @@ const estimateRequestDetailSelect = {
     },
   },
 
+  // 2026.08.11 정슬기 - [추가]
+  // 지정 기사별 견적 응답 여부를 조합하기 위한 내부 조회
+  estimates: {
+    select: {
+      moverId: true,
+    },
+  },
+
   _count: {
     select: { estimates: true },
   },
