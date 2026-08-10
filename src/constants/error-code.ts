@@ -109,6 +109,12 @@ export const ERROR_CODES = {
     message: "존재하지 않는 기사님입니다.",
   },
 
+  MOVER_PROFILE_REQUIRED: {
+    status: 409,
+    code: "MOVER_PROFILE_REQUIRED",
+    message: "프로필 정보가 없는 기사의 견적은 확정할 수 없습니다.",
+  },
+
   ALREADY_DESIGNATED: {
     status: 409,
     code: "ALREADY_DESIGNATED",

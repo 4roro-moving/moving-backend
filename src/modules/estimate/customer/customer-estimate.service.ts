@@ -405,6 +405,16 @@ export const receivedEstimateService = {
         tx,
       );
 
+      //기사 프로필 존재 확인
+      const moverProfile = await receivedEstimateRepository.findMoverProfileByUserId(
+        confirmedEstimate.mover.id,
+        tx,
+      );
+
+      if (!moverProfile) {
+        throw new AppError("MOVER_PROFILE_REQUIRED");
+      }
+
       //기사 확정 견적 수 증가
       await receivedEstimateRepository.incrementMoverConfirmedCount(confirmedEstimate.mover.id, tx);
 

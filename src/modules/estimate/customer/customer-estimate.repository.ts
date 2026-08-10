@@ -427,6 +427,18 @@ export const receivedEstimateRepository = {
     });
   },
 
+  // 기사 프로필 존재 확인
+  findMoverProfileByUserId(moverId: string, db: DbClient = prisma) {
+    return db.moverProfile.findUnique({
+      where: {
+        userId: moverId,
+      },
+      select: {
+        id: true,
+      },
+    });
+  },
+
   // 기사 확정 견적 수 증가
   incrementMoverConfirmedCount(moverId: string, db: DbClient = prisma) {
     return db.moverProfile.update({
