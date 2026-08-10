@@ -289,7 +289,7 @@ export const estimateRequestService = {
               type: "ESTIMATE_REQUEST_RECEIVED",
               title: "새로운 견적 요청이 도착했어요",
               content: MOVE_TYPE_LABEL[created.moveType],
-              linkUrl: `/mover/estimate-requests/${String(created.id)}`,
+              linkUrl: `/estimate/received-requests`,
               expiresAt: null,
             },
             tx,
