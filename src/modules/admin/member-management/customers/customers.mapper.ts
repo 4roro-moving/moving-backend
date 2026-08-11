@@ -1,4 +1,4 @@
-import { MEMBER_STATUS, type MemberStatus } from "../member-status.constants";
+import { resolveMemberStatus } from "../member-status";
 import type {
   CustomerDetailRow,
   CustomerListRow,
@@ -10,21 +10,13 @@ import type {
 } from "./customers.repository";
 import type { CustomerDetail, CustomerListItem } from "./customers.type";
 
-function resolveCustomerStatus(user: { isActive: boolean; deletedAt: Date | null }): MemberStatus {
-  if (user.deletedAt !== null) {
-    return MEMBER_STATUS.WITHDRAWN;
-  }
-
-  return user.isActive ? MEMBER_STATUS.ACTIVE : MEMBER_STATUS.SUSPENDED;
-}
-
 export function toCustomerListItem(customer: CustomerListRow): CustomerListItem {
   return {
     id: customer.id,
     email: customer.email,
     name: customer.name,
     phone: customer.phone,
-    status: resolveCustomerStatus(customer),
+    status: resolveMemberStatus(customer),
     isProfileCompleted: customer.isProfileCompleted,
     createdAt: customer.createdAt,
   };
@@ -93,7 +85,7 @@ export function toCustomerDetail(
       name: customer.name,
       phone: customer.phone,
       authProvider: customer.authProvider,
-      status: resolveCustomerStatus(customer),
+      status: resolveMemberStatus(customer),
       isProfileCompleted: customer.isProfileCompleted,
       createdAt: customer.createdAt,
       updatedAt: customer.updatedAt,

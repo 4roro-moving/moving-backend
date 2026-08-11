@@ -17,7 +17,8 @@ import { buildPagination } from "../../../../utils/pagination.util";
 import { runTransaction } from "../../../../utils/transaction";
 
 import { customersRepository } from "./customers.repository";
-import { MEMBER_STATUS, type MemberStatus } from "../member-status.constants";
+import { buildMemberStatusWhere } from "../member-status";
+import { MEMBER_STATUS } from "../member-status.constants";
 import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
 import type {
   CustomerDetail,
@@ -43,27 +44,10 @@ export function toKstEndOfDay(date: string): Date {
   return new Date(Date.UTC(year, month - 1, day, 14, 59, 59, 999));
 }
 
-function buildStatusWhere(status: MemberStatus | undefined): Prisma.UserWhereInput {
-  if (status === MEMBER_STATUS.ACTIVE) {
-    return { deletedAt: null, isActive: true };
-  }
-
-  if (status === MEMBER_STATUS.SUSPENDED) {
-    return { deletedAt: null, isActive: false };
-  }
-
-  if (status === MEMBER_STATUS.WITHDRAWN) {
-    return { deletedAt: { not: null } };
-  }
-
-  // 미지정 시 탈퇴 회원(WITHDRAWN) 제외
-  return { deletedAt: null };
-}
-
 function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput {
   const where: Prisma.UserWhereInput = {
     role: UserRole.CUSTOMER,
-    ...buildStatusWhere(query.status),
+    ...buildMemberStatusWhere(query.status),
   };
 
   if (query.keyword !== undefined) {
@@ -132,6 +116,10 @@ export const customersService = {
     });
   },
 
+  /**
+   * 관리자 고객의 정지·해제를 처리합니다.
+   * 정지 시 취소 가능한 견적 요청과 미확정 견적을 정리하고, 관련 이력·알림을 함께 저장합니다.
+   */
   async updateCustomerStatus({
     customerId,
     adminId,
