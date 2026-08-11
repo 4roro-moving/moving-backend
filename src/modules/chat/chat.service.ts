@@ -55,17 +55,20 @@ function mapRoom(room: ChatRoomRow): ChatRoomSummary {
 }
 
 function mapMessage(message: ChatMessageRow): ChatMessageResponse {
+  const isSystemMessage = message.type === "SYSTEM";
+
   return {
     id: message.id,
     roomId: message.roomId,
-    senderId: message.senderId,
+    // 이전 데이터에 관리자 senderId가 남아 있더라도 SYSTEM 응답은 발신자 없이 통일합니다.
+    senderId: isSystemMessage ? null : message.senderId,
     type: message.type,
     content: message.content,
     imageUrl: message.imageUrl,
     isRead: message.isRead,
     readAt: message.readAt,
     createdAt: message.createdAt,
-    sender: toParticipant(message.sender),
+    sender: isSystemMessage || !message.sender ? null : toParticipant(message.sender),
   };
 }
 

@@ -47,6 +47,7 @@ registerRouterDocs(chatRouter, {
         "- cursor가 없으면 최신 메시지를 조회합니다.",
         "- cursor가 있으면 해당 메시지 ID보다 이전 메시지를 조회합니다.",
         "- 응답 메시지는 화면 렌더링이 쉽도록 오래된 순서에서 최신 순서로 반환됩니다.",
+        "- SYSTEM 메시지는 자동 안내이므로 `senderId`, `sender`가 null입니다.",
       ].join("\n"),
       responses: {
         200: "채팅 메시지 목록 조회 성공",
