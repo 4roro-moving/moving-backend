@@ -17,6 +17,7 @@ import { buildPagination } from "../../../../utils/pagination.util";
 import { runTransaction } from "../../../../utils/transaction";
 
 import { customersRepository } from "./customers.repository";
+import { customersStatusRepository } from "./customers-status.repository";
 import { buildMemberStatusWhere } from "../member-status.policy";
 import { MEMBER_STATUS } from "../member-status.constants";
 import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
@@ -134,7 +135,7 @@ export const customersService = {
     }
 
     const result = await runTransaction<UpdateCustomerStatusResponse>(async (tx) => {
-      const customer = await customersRepository.findCustomerForStatusChange(customerId, tx);
+      const customer = await customersStatusRepository.findCustomerForStatusChange(customerId, tx);
 
       if (!customer) {
         throw new AppError(ERROR_CODES.USER_NOT_FOUND.code);
@@ -143,7 +144,7 @@ export const customersService = {
       const shouldBeActive = input.action === SuspensionAction.RELEASE;
 
       // 현재 상태를 where 조건에 포함해, 동시 정지/해제 요청 중 하나만 상태를 변경합니다.
-      const { count } = await customersRepository.updateCustomerIsActiveIfCurrent(
+      const { count } = await customersStatusRepository.updateCustomerIsActiveIfCurrent(
         { customerId, isActive: shouldBeActive },
         tx,
       );
@@ -156,22 +157,19 @@ export const customersService = {
 
       if (input.action === SuspensionAction.SUSPEND) {
         // 요청 행을 먼저 잠가 견적 전송·고객 직접 취소와 상태 변경을 직렬화합니다.
-        const lockedRequestIds = await customersRepository.lockCancelableRequestsForSuspension(
-          customerId,
-          tx,
-        );
-        const cancelableRequests = await customersRepository.findCancelableRequestsForSuspension(
-          lockedRequestIds,
-          tx,
-        );
+        const lockedRequestIds =
+          await customersStatusRepository.lockCancelableRequestsForSuspension(customerId, tx);
+        const cancelableRequests =
+          await customersStatusRepository.findCancelableRequestsForSuspension(lockedRequestIds, tx);
         const requestIds = cancelableRequests.map((request) => request.id);
 
         if (requestIds.length > 0) {
-          const canceledRequestIds = await customersRepository.cancelPendingOrOpenEstimateRequests(
-            requestIds,
-            now,
-            tx,
-          );
+          const canceledRequestIds =
+            await customersStatusRepository.cancelPendingOrOpenEstimateRequests(
+              requestIds,
+              now,
+              tx,
+            );
           // 실제로 취소 선점에 성공한 요청만 후속 알림·이력 처리 대상으로 삼습니다.
           const canceledRequestIdSet = new Set(canceledRequestIds.map((request) => request.id));
           const canceledRequests = cancelableRequests.filter((request) =>
@@ -218,24 +216,24 @@ export const customersService = {
           );
 
           await Promise.all([
-            customersRepository.cancelSentEstimates(
+            customersStatusRepository.cancelSentEstimates(
               canceledRequestIds.map((request) => request.id),
               now,
               tx,
             ),
-            customersRepository.cancelPendingEstimateRevisions(
+            customersStatusRepository.cancelPendingEstimateRevisions(
               canceledRequestIds.map((request) => request.id),
               tx,
             ),
-            customersRepository.createEstimateRequestHistories(histories, tx),
-            customersRepository.createSystemMessages(systemMessages, tx),
-            customersRepository.createNotifications(notifications, tx),
+            customersStatusRepository.createEstimateRequestHistories(histories, tx),
+            customersStatusRepository.createSystemMessages(systemMessages, tx),
+            customersStatusRepository.createNotifications(notifications, tx),
           ]);
         }
       }
 
       const [suspension] = await Promise.all([
-        customersRepository.createCustomerSuspension(
+        customersStatusRepository.createCustomerSuspension(
           {
             customerId,
             adminId,
@@ -245,7 +243,7 @@ export const customersService = {
           },
           tx,
         ),
-        customersRepository.createCustomerStatusActivityLog(
+        customersStatusRepository.createCustomerStatusActivityLog(
           { customerId, adminId, action: input.action, reason: input.reason, createdAt: now },
           tx,
         ),
