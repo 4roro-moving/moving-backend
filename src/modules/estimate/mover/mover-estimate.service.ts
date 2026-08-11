@@ -380,8 +380,8 @@ export const moverEstimateRequestService = {
           type: "ESTIMATE_REQUEST_REJECTED",
           title: "견적 요청 반려",
           content: profile.nickname,
-          //기사가 견적 요청을 반려했을 때 알림 클릭하면 대기중인 견적(다른 기사가 보낸 견적)연결
-          linkUrl: `/estimates/pending`,
+          // 기사가 견적 요청을 반려했을 때 알림 클릭하면 해당 견적 요청 상세페에지로 이동 (반려 기사와 사유 확인)
+          linkUrl: `/estimates/requests/${estimateRequestId}`,
           expiresAt: getRejectionNotificationExpiresAt(notificationCreatedAt),
         },
         tx,
