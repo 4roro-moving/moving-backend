@@ -16,7 +16,6 @@ import type {
   updateCustomerStatusBodySchema,
 } from "./customers.validator";
 
-export type CustomerStatus = MemberStatus;
 export type ListCustomerQuery = z.infer<typeof listCustomerQuerySchema>;
 export type CustomerIdParam = z.infer<typeof customerIdParamSchema>;
 export type UpdateCustomerStatusBody = z.infer<typeof updateCustomerStatusBodySchema>;
@@ -38,7 +37,7 @@ export type CustomerListItem = {
   email: string;
   name: string;
   phone: string | null;
-  status: CustomerStatus;
+  status: MemberStatus;
   isProfileCompleted: boolean;
   createdAt: Date;
 };
@@ -54,7 +53,7 @@ export type CustomerDetailAccount = {
   name: string;
   phone: string | null;
   authProvider: AuthProvider;
-  status: CustomerStatus;
+  status: MemberStatus;
   isProfileCompleted: boolean;
   createdAt: Date;
   updatedAt: Date;

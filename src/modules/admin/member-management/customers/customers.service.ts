@@ -25,11 +25,10 @@ import {
   type ReviewHistoryRow,
   type SuspensionHistoryRow,
 } from "./customers.repository";
-import { MEMBER_STATUS } from "../member-status.constants";
+import { MEMBER_STATUS, type MemberStatus } from "../member-status.constants";
 import type {
   CustomerDetail,
   CustomerListItem,
-  CustomerStatus,
   ListCustomerQuery,
   UpdateCustomerStatusBody,
   UpdateCustomerStatusResponse,
@@ -61,7 +60,7 @@ export function toKstEndOfDay(date: string): Date {
 export function resolveCustomerStatus(user: {
   isActive: boolean;
   deletedAt: Date | null;
-}): CustomerStatus {
+}): MemberStatus {
   if (user.deletedAt !== null) {
     return MEMBER_STATUS.WITHDRAWN;
   }
@@ -69,7 +68,7 @@ export function resolveCustomerStatus(user: {
   return user.isActive ? MEMBER_STATUS.ACTIVE : MEMBER_STATUS.SUSPENDED;
 }
 
-function buildStatusWhere(status: CustomerStatus | undefined): Prisma.UserWhereInput {
+function buildStatusWhere(status: MemberStatus | undefined): Prisma.UserWhereInput {
   if (status === MEMBER_STATUS.ACTIVE) {
     return { deletedAt: null, isActive: true };
   }
