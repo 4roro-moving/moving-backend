@@ -131,6 +131,7 @@ enum NotificationType {
   CONTENT_RESTORED // (작성자) 숨김 콘텐츠가 관리자에 의해 복구됨
   ESTIMATE_REQUEST_CANCELED_BY_ACCOUNT_SUSPENSION // (기사) 고객 계정이 정지되어 견적 요청 취소됨
   ESTIMATE_CANCELED_BY_ACCOUNT_SUSPENSION // (고객) 기사 계정이 정지되어 견적 취소됨
+  ESTIMATE_CANCELED_BY_ADMIN // (고객/기사) 관리자가 확정 견적을 취소함
 }
 
 /// 채팅 메시지 유형
@@ -1071,8 +1072,8 @@ model ChatMessage {
   id        Int               @id @default(autoincrement())
   /// 소속 채팅방.
   roomId    Int               @map("room_id")
-  /// 보낸 사람.
-  senderId  String            @map("sender_id") @db.Uuid
+  /// 보낸 사람. SYSTEM 메시지는 null입니다.
+  senderId  String?           @map("sender_id") @db.Uuid
   /// 메시지 유형. 기본 TEXT.
   type      ChatMessageType   @default(TEXT)
   /// 텍스트 내용. IMAGE 등에서는 null 일 수 있음.
@@ -1085,8 +1086,8 @@ model ChatMessage {
   readAt    DateTime?         @map("read_at")
   /// 채팅방 관계. 방 삭제 시 함께 삭제(Cascade).
   room      ChatRoom          @relation(fields: [roomId], references: [id], onDelete: Cascade)
-  /// 보낸 사람 관계. 계정 삭제 시 함께 삭제(Cascade).
-  sender    User              @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  /// 보낸 사람 관계. SYSTEM 메시지는 없으며, 사용자 메시지는 계정 삭제 시 함께 삭제됩니다.
+  sender    User?             @relation(fields: [senderId], references: [id], onDelete: Cascade)
   /// 이 메시지에 연결된 견적 수정 요청(1:1, ESTIMATE_REVISION 타입일 때).
   revision  EstimateRevision?
   /// 생성 시각.

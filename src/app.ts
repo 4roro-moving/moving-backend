@@ -14,6 +14,7 @@ import errorHandler from "./middlewares/error-handler";
 import notFoundHandler from "./middlewares/not-found-handler";
 
 import { adminReviewRouter } from "./modules/admin/contents/contents.route";
+import adminEstimateRouter from "./modules/admin/estimates/estimates.route";
 import adminCustomerRouter from "./modules/admin/member-management/customers/customers.route";
 import noticeRouter from "./modules/admin/notice/notice.route";
 import { authRouter } from "./modules/auth/auth.route";
@@ -178,6 +179,7 @@ app.use("/api/terms", publicTermsRouter);
 app.use("/api/admin/auth", adminAuthRouter);
 app.use("/api/admin/notices", noticeRouter);
 app.use("/api/admin/reviews", adminReviewRouter);
+app.use("/api/admin/estimates", adminEstimateRouter);
 app.use("/api/admin/users", adminCustomerRouter); // 관리자 고객(회원) 라우터
 app.use("/api/admin/faqs", adminFaqRouter); //  관리자 FAQ 라우터
 app.use("/api/faqs", publicFaqRouter); // 일반 사용자 FAQ 라우터

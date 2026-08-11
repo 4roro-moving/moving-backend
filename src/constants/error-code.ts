@@ -268,6 +268,11 @@ export const ERROR_CODES = {
     code: "CUSTOMER_STATUS_ALREADY_PROCESSED",
     message: "이미 요청한 상태로 처리된 회원입니다.",
   },
+  ADMIN_ESTIMATE_CANCEL_NOT_ALLOWED: {
+    status: 409,
+    code: "ADMIN_ESTIMATE_CANCEL_NOT_ALLOWED",
+    message: "확정된 진행 거래만 관리자가 취소할 수 있습니다.",
+  },
 } as const;
 
 // ErrorCode의 key 타입
