@@ -16,19 +16,11 @@ import { disconnectUserSockets } from "../../../../socket";
 import { buildPagination } from "../../../../utils/pagination.util";
 import { runTransaction } from "../../../../utils/transaction";
 
-import {
-  customersRepository,
-  type CustomerDetailRow,
-  type CustomerListRow,
-  type EstimateHistoryRow,
-  type ReportHistoryRow,
-  type ReviewHistoryRow,
-  type SuspensionHistoryRow,
-} from "./customers.repository";
+import { customersRepository } from "./customers.repository";
 import { MEMBER_STATUS, type MemberStatus } from "../member-status.constants";
+import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
 import type {
   CustomerDetail,
-  CustomerListItem,
   ListCustomerQuery,
   UpdateCustomerStatusBody,
   UpdateCustomerStatusResponse,
@@ -49,23 +41,6 @@ export function toKstEndOfDay(date: string): Date {
   const [year = NaN, month = NaN, day = NaN] = date.split("-").map(Number);
 
   return new Date(Date.UTC(year, month - 1, day, 14, 59, 59, 999));
-}
-
-/**
- * isActive + deletedAt 조합으로 회원 상태를 계산합니다.
- * - ACTIVE: deletedAt = null AND isActive = true
- * - SUSPENDED: deletedAt = null AND isActive = false
- * - WITHDRAWN: deletedAt != null
- */
-export function resolveCustomerStatus(user: {
-  isActive: boolean;
-  deletedAt: Date | null;
-}): MemberStatus {
-  if (user.deletedAt !== null) {
-    return MEMBER_STATUS.WITHDRAWN;
-  }
-
-  return user.isActive ? MEMBER_STATUS.ACTIVE : MEMBER_STATUS.SUSPENDED;
 }
 
 function buildStatusWhere(status: MemberStatus | undefined): Prisma.UserWhereInput {
@@ -106,114 +81,6 @@ function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput
   }
 
   return where;
-}
-
-function toCustomerListItem(customer: CustomerListRow): CustomerListItem {
-  return {
-    id: customer.id,
-    email: customer.email,
-    name: customer.name,
-    phone: customer.phone,
-    status: resolveCustomerStatus(customer),
-    isProfileCompleted: customer.isProfileCompleted,
-    createdAt: customer.createdAt,
-  };
-}
-
-function toEstimateHistoryItem(item: EstimateHistoryRow) {
-  return {
-    id: item.id,
-    moveType: item.moveType,
-    status: item.status,
-    moveDate: item.moveDate,
-    createdAt: item.createdAt,
-  };
-}
-
-function toReviewHistoryItem(item: ReviewHistoryRow) {
-  return {
-    id: item.id,
-    moverId: item.moverId,
-    moverNickname: item.mover.moverProfile?.nickname ?? item.mover.name,
-    rating: item.rating,
-    content: item.content,
-    isHidden: item.isHidden,
-    createdAt: item.createdAt,
-  };
-}
-
-function toReportHistoryItem(item: ReportHistoryRow) {
-  return {
-    id: item.id,
-    targetType: item.targetType,
-    targetId: item.targetId,
-    reason: item.reason,
-    status: item.status,
-    createdAt: item.createdAt,
-  };
-}
-
-function toSuspensionHistoryItem(item: SuspensionHistoryRow) {
-  return {
-    id: item.id,
-    action: item.action,
-    reason: item.reason,
-    createdAt: item.createdAt,
-  };
-}
-
-function toCustomerDetail(
-  customer: CustomerDetailRow,
-  histories: {
-    estimateHistory: Awaited<ReturnType<typeof customersRepository.findEstimateHistory>>;
-    reviewHistory: Awaited<ReturnType<typeof customersRepository.findReviewHistory>>;
-    filedReports: Awaited<ReturnType<typeof customersRepository.findFiledReportHistory>>;
-    receivedReports: Awaited<ReturnType<typeof customersRepository.findReceivedReportHistory>>;
-    suspensionHistory: Awaited<ReturnType<typeof customersRepository.findSuspensionHistory>>;
-  },
-): CustomerDetail {
-  const profile = customer.customerProfile;
-
-  return {
-    account: {
-      id: customer.id,
-      email: customer.email,
-      name: customer.name,
-      phone: customer.phone,
-      authProvider: customer.authProvider,
-      status: resolveCustomerStatus(customer),
-      isProfileCompleted: customer.isProfileCompleted,
-      createdAt: customer.createdAt,
-      updatedAt: customer.updatedAt,
-    },
-    profile: {
-      imageUrl: profile?.imageUrl ?? null,
-      serviceAreas: profile?.serviceAreas.map((area) => area.region.name) ?? [],
-      serviceTypes: profile?.serviceTypes.map((type) => type.moveType) ?? [],
-    },
-    estimateHistory: {
-      totalCount: histories.estimateHistory.totalCount,
-      items: histories.estimateHistory.items.map(toEstimateHistoryItem),
-    },
-    reviewHistory: {
-      totalCount: histories.reviewHistory.totalCount,
-      items: histories.reviewHistory.items.map(toReviewHistoryItem),
-    },
-    reportHistory: {
-      filed: {
-        totalCount: histories.filedReports.totalCount,
-        items: histories.filedReports.items.map(toReportHistoryItem),
-      },
-      received: {
-        totalCount: histories.receivedReports.totalCount,
-        items: histories.receivedReports.items.map(toReportHistoryItem),
-      },
-    },
-    suspensionHistory: {
-      totalCount: histories.suspensionHistory.totalCount,
-      items: histories.suspensionHistory.items.map(toSuspensionHistoryItem),
-    },
-  };
 }
 
 export const customersService = {
@@ -287,6 +154,7 @@ export const customersService = {
 
       const shouldBeActive = input.action === SuspensionAction.RELEASE;
 
+      // 현재 상태를 where 조건에 포함해, 동시 정지/해제 요청 중 하나만 상태를 변경합니다.
       const { count } = await customersRepository.updateCustomerIsActiveIfCurrent(
         { customerId, isActive: shouldBeActive },
         tx,
@@ -299,6 +167,7 @@ export const customersService = {
       const now = new Date();
 
       if (input.action === SuspensionAction.SUSPEND) {
+        // 요청 행을 먼저 잠가 견적 전송·고객 직접 취소와 상태 변경을 직렬화합니다.
         const lockedRequestIds = await customersRepository.lockCancelableRequestsForSuspension(
           customerId,
           tx,
@@ -315,6 +184,7 @@ export const customersService = {
             now,
             tx,
           );
+          // 실제로 취소 선점에 성공한 요청만 후속 알림·이력 처리 대상으로 삼습니다.
           const canceledRequestIdSet = new Set(canceledRequestIds.map((request) => request.id));
           const canceledRequests = cancelableRequests.filter((request) =>
             canceledRequestIdSet.has(request.id),
@@ -408,6 +278,7 @@ export const customersService = {
       };
     });
 
+    // DB 트랜잭션이 커밋된 뒤에만 기존 실시간 연결을 종료합니다.
     if (input.action === SuspensionAction.SUSPEND) {
       disconnectUserSockets(customerId);
     }
