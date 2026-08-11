@@ -19,6 +19,30 @@ interface UpdateCustomerProfileData {
   imageUrl?: string | null;
 }
 
+const profileInclude = {
+  user: {
+    select: {
+      name: true,
+      email: true,
+      phone: true,
+      password: true,
+    },
+  },
+  serviceAreas: {
+    include: {
+      region: true,
+    },
+    orderBy: {
+      regionId: "asc",
+    },
+  },
+  serviceTypes: {
+    orderBy: {
+      id: "asc",
+    },
+  },
+} as const;
+
 const findUserById = async (userId: string, db: DbClient = prisma) => {
   return db.user.findUnique({
     where: {
@@ -79,29 +103,7 @@ const findProfileByUserId = async (userId: string, db: DbClient = prisma) => {
     where: {
       userId,
     },
-    include: {
-      user: {
-        select: {
-          name: true,
-          email: true,
-          phone: true,
-          password: true,
-        },
-      },
-      serviceAreas: {
-        include: {
-          region: true,
-        },
-        orderBy: {
-          regionId: "asc",
-        },
-      },
-      serviceTypes: {
-        orderBy: {
-          id: "asc",
-        },
-      },
-    },
+    include: profileInclude,
   });
 };
 
@@ -140,29 +142,7 @@ const createProfile = async (
         })),
       },
     },
-    include: {
-      user: {
-        select: {
-          name: true,
-          email: true,
-          phone: true,
-          password: true,
-        },
-      },
-      serviceAreas: {
-        include: {
-          region: true,
-        },
-        orderBy: {
-          regionId: "asc",
-        },
-      },
-      serviceTypes: {
-        orderBy: {
-          id: "asc",
-        },
-      },
-    },
+    include: profileInclude,
   });
 };
 

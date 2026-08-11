@@ -1,10 +1,12 @@
 import bcrypt from "bcrypt";
-import { Prisma, UserRole } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
 import { runTransaction } from "../../../utils/transaction";
 
 import { profileImageService } from "../profile-image.service";
+import { hasUniqueConstraintField, PASSWORD_SALT_ROUNDS } from "../profile.shared";
+import { mapProfileResponse } from "./profile.mapper";
+import { assertActiveCustomer } from "./profile.policy";
 import { profileRepository } from "./profile.repository";
 import type {
   CreateProfileInput,
@@ -12,51 +14,6 @@ import type {
   UpdateBasicInfoInput,
   UpdateProfileInput,
 } from "./profile.type";
-
-import { getProfileImageUrl } from "../../../utils/image-url";
-
-type CustomerProfileWithRelations = NonNullable<
-  Awaited<ReturnType<typeof profileRepository.findProfileByUserId>>
->;
-
-const PASSWORD_SALT_ROUNDS = 10;
-
-const isUniqueConstraintError = (error: unknown): error is Prisma.PrismaClientKnownRequestError => {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-};
-
-/*
- * 고객 계정이 존재하며 활성 상태인지 확인한다.
- */
-const validateActiveCustomer = <
-  T extends {
-    isActive: boolean;
-    deletedAt: Date | null;
-    role: UserRole;
-  },
->(
-  user: T | null,
-): T => {
-  if (!user) {
-    throw new AppError("NOT_FOUND", {
-      message: "사용자를 찾을 수 없습니다.",
-    });
-  }
-
-  if (!user.isActive || user.deletedAt !== null) {
-    throw new AppError("FORBIDDEN", {
-      message: "비활성화된 사용자입니다.",
-    });
-  }
-
-  if (user.role !== UserRole.CUSTOMER) {
-    throw new AppError("FORBIDDEN", {
-      message: "일반 사용자만 이용할 수 있습니다.",
-    });
-  }
-
-  return user;
-};
 
 /*
  * 요청에 포함된 지역 ID가 모두 존재하는지 확인한다.
@@ -72,36 +29,6 @@ const validateRegions = async (regionIds: number[]): Promise<void> => {
 };
 
 /*
- * Repository 조회 결과를 고객 프로필 응답 형식으로 변환한다.
- *
- * 비밀번호 해시 자체는 응답에 포함하지 않고,
- * 비밀번호 보유 여부만 hasPassword 값으로 반환한다.
- */
-const mapProfileResponse = (profile: CustomerProfileWithRelations): ProfileResponse => {
-  return {
-    id: profile.id,
-    userId: profile.userId,
-
-    name: profile.user.name,
-    email: profile.user.email,
-    phone: profile.user.phone,
-    hasPassword: profile.user.password !== null,
-
-    imageUrl: getProfileImageUrl(profile.imageUrl),
-
-    regions: profile.serviceAreas.map(({ region }) => ({
-      id: region.id,
-      name: region.name,
-    })),
-
-    serviceTypes: profile.serviceTypes.map(({ moveType }) => moveType),
-
-    createdAt: profile.createdAt,
-    updatedAt: profile.updatedAt,
-  };
-};
-
-/*
  * 고객 프로필을 생성한다.
  *
  * 기존 User.phone이 없는 경우 프로필 생성 요청의
@@ -111,7 +38,7 @@ const createProfile = async (
   userId: string,
   input: CreateProfileInput,
 ): Promise<ProfileResponse> => {
-  const user = validateActiveCustomer(await profileRepository.findUserById(userId));
+  const user = assertActiveCustomer(await profileRepository.findUserById(userId));
 
   /*
    * 이미지가 전달된 경우 현재 로그인한 사용자의 Key인지 확인하고,
@@ -195,16 +122,13 @@ const createProfile = async (
 
     return mapProfileResponse(profile);
   } catch (error) {
-    if (isUniqueConstraintError(error)) {
-      const target = error.meta?.target;
-      const fields = Array.isArray(target) ? target.map(String) : [String(target)];
+    if (hasUniqueConstraintField(error, "phone")) {
+      throw new AppError("CONFLICT", {
+        message: "이미 사용 중인 전화번호입니다.",
+      });
+    }
 
-      if (fields.some((field) => field.includes("phone"))) {
-        throw new AppError("CONFLICT", {
-          message: "이미 사용 중인 전화번호입니다.",
-        });
-      }
-
+    if (hasUniqueConstraintField(error, "userId")) {
       throw new AppError("CONFLICT", {
         message: "이미 등록된 프로필 정보입니다.",
       });
@@ -218,7 +142,7 @@ const createProfile = async (
  * 현재 로그인한 고객의 프로필을 조회한다.
  */
 const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
-  const user = validateActiveCustomer(await profileRepository.findUserById(userId));
+  const user = assertActiveCustomer(await profileRepository.findUserById(userId));
 
   const profile = await profileRepository.findProfileByUserId(user.id);
 
@@ -241,7 +165,7 @@ const getProfileStatus = async (
   isProfileCompleted: boolean;
   hasPhone: boolean;
 }> => {
-  const user = validateActiveCustomer(await profileRepository.findUserById(userId));
+  const user = assertActiveCustomer(await profileRepository.findUserById(userId));
 
   const profile = await profileRepository.findProfileByUserId(user.id);
 
@@ -263,7 +187,7 @@ const updateBasicInfo = async (
   userId: string,
   input: UpdateBasicInfoInput,
 ): Promise<ProfileResponse> => {
-  const user = validateActiveCustomer(await profileRepository.findUserById(userId));
+  const user = assertActiveCustomer(await profileRepository.findUserById(userId));
 
   const existingProfile = await profileRepository.findProfileByUserId(user.id);
 
@@ -311,7 +235,7 @@ const updateBasicInfo = async (
       });
     }
 
-    const userWithPassword = validateActiveCustomer(
+    const userWithPassword = assertActiveCustomer(
       await profileRepository.findUserWithPasswordById(user.id),
     );
 
@@ -386,18 +310,9 @@ const updateBasicInfo = async (
 
     return mapProfileResponse(updatedProfile);
   } catch (error) {
-    if (isUniqueConstraintError(error)) {
-      const target = error.meta?.target;
-      const fields = Array.isArray(target) ? target.map(String) : [String(target)];
-
-      if (fields.some((field) => field.includes("phone"))) {
-        throw new AppError("CONFLICT", {
-          message: "이미 사용 중인 전화번호입니다.",
-        });
-      }
-
+    if (hasUniqueConstraintField(error, "phone")) {
       throw new AppError("CONFLICT", {
-        message: "이미 사용 중인 정보입니다.",
+        message: "이미 사용 중인 전화번호입니다.",
       });
     }
 
@@ -419,7 +334,7 @@ const updateProfile = async (
   userId: string,
   input: UpdateProfileInput,
 ): Promise<ProfileResponse> => {
-  const user = validateActiveCustomer(await profileRepository.findUserById(userId));
+  const user = assertActiveCustomer(await profileRepository.findUserById(userId));
 
   /*
    * 새 이미지 Key가 전달된 경우 현재 로그인한 사용자의 Key인지 확인하고,
