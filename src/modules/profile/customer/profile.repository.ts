@@ -25,7 +25,6 @@ const profileInclude = {
       name: true,
       email: true,
       phone: true,
-      password: true,
     },
   },
   serviceAreas: {
@@ -78,6 +77,19 @@ const findUserWithPasswordById = async (userId: string, db: DbClient = prisma) =
       deletedAt: true,
     },
   });
+};
+
+const hasPasswordByUserId = async (userId: string, db: DbClient = prisma): Promise<boolean> => {
+  const user = await db.user.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      password: true,
+    },
+  });
+
+  return user?.password !== null;
 };
 
 const findUserByPhoneExcludingUser = async (
@@ -236,6 +248,7 @@ const markProfileCompleted = async (userId: string, db: DbClient = prisma) => {
 export const profileRepository = {
   findUserById,
   findUserWithPasswordById,
+  hasPasswordByUserId,
   findUserByPhoneExcludingUser,
   findProfileByUserId,
   countRegionsByIds,

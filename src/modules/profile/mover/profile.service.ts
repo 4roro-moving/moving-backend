@@ -147,7 +147,7 @@ const createProfile = async (
       return createdProfile;
     });
 
-    return mapProfileResponse(profile);
+    return mapProfileResponse(profile, await profileRepository.hasPasswordByUserId(user.id));
   } catch (error) {
     /*
      * 동일한 전화번호 등록 요청이 동시에 들어온 경우
@@ -197,7 +197,7 @@ const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
     });
   }
 
-  return mapProfileResponse(profile);
+  return mapProfileResponse(profile, await profileRepository.hasPasswordByUserId(user.id));
 };
 
 /*
@@ -367,7 +367,10 @@ const updateBasicInfo = async (
       return profile;
     });
 
-    return mapProfileResponse(updatedProfile);
+    const hasPassword =
+      hashedPassword !== undefined ? true : await profileRepository.hasPasswordByUserId(user.id);
+
+    return mapProfileResponse(updatedProfile, hasPassword);
   } catch (error) {
     /*
      * 전화번호 수정 요청이 동시에 들어온 경우
@@ -508,7 +511,7 @@ const updateProfile = async (
       return profile;
     });
 
-    return mapProfileResponse(updatedProfile);
+    return mapProfileResponse(updatedProfile, await profileRepository.hasPasswordByUserId(user.id));
   } catch (error) {
     /*
      * 닉네임 수정 요청이 동시에 들어온 경우

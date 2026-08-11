@@ -7,14 +7,17 @@ type MoverProfileWithRelations = NonNullable<
   Awaited<ReturnType<typeof profileRepository.findProfileByUserId>>
 >;
 
-export const mapProfileResponse = (profile: MoverProfileWithRelations): ProfileResponse => {
+export const mapProfileResponse = (
+  profile: MoverProfileWithRelations,
+  hasPassword: boolean,
+): ProfileResponse => {
   return {
     id: profile.id,
     userId: profile.userId,
     name: profile.user.name,
     email: profile.user.email,
     phone: profile.user.phone,
-    hasPassword: profile.user.password !== null,
+    hasPassword,
     nickname: profile.nickname,
     imageUrl: getProfileImageUrl(profile.imageUrl),
     career: profile.career,

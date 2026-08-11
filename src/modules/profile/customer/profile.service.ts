@@ -120,7 +120,7 @@ const createProfile = async (
       return createdProfile;
     });
 
-    return mapProfileResponse(profile);
+    return mapProfileResponse(profile, await profileRepository.hasPasswordByUserId(user.id));
   } catch (error) {
     if (hasUniqueConstraintField(error, "phone")) {
       throw new AppError("CONFLICT", {
@@ -152,7 +152,7 @@ const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
     });
   }
 
-  return mapProfileResponse(profile);
+  return mapProfileResponse(profile, await profileRepository.hasPasswordByUserId(user.id));
 };
 
 /*
@@ -308,7 +308,10 @@ const updateBasicInfo = async (
       return profile;
     });
 
-    return mapProfileResponse(updatedProfile);
+    const hasPassword =
+      hashedPassword !== undefined ? true : await profileRepository.hasPasswordByUserId(user.id);
+
+    return mapProfileResponse(updatedProfile, hasPassword);
   } catch (error) {
     if (hasUniqueConstraintField(error, "phone")) {
       throw new AppError("CONFLICT", {
@@ -397,7 +400,7 @@ const updateProfile = async (
       });
     }
 
-    return mapProfileResponse(updatedProfile);
+    return mapProfileResponse(updatedProfile, await profileRepository.hasPasswordByUserId(user.id));
   });
 };
 
