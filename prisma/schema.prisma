@@ -1191,7 +1191,8 @@ model EstimateRevision {
 /// 주요 정책
 /// - 작성·수정·삭제는 작성자 본인만 가능합니다.
 /// - 평점은 정수 1~5이며, 요청 검증(Zod)에서 범위를 확인합니다.
-/// - 생성·수정·삭제·숨김 변경 시 RegionReviewStatistic 을 같은 Transaction 으로 갱신합니다.
+/// 집계 대상은 isHidden = false 인 후기만 포함합니다.
+/// 후기 생성·수정·삭제·숨김 변경과 동일한 Transaction 에서 갱신합니다.
 model ResidenceReview {
 	// PK
 	id        Int    @id @default(autoincrement())
@@ -1287,6 +1288,7 @@ enum GiveawayRequestStatus {
 /// - 수정·삭제·수령자 선정·완료 처리는 작성자 본인만 가능합니다.
 /// - 신청자와 작성자는 달라야 합니다.
 /// - 수령자 선정은 GiveawayRequest 상태 변경과 함께 Transaction 으로 처리합니다.
+/// - isHidden 은 관리자 숨김용이며, 신고 이력은 Report 테이블에 보존합니다.
 model Giveaway {
 	// PK.
 	id          Int            @id @default(autoincrement())
