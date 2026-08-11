@@ -272,7 +272,11 @@ export const estimateRequestRepository = {
     });
   },
 
-  findRejection(estimateRequestId: number, moverId: string, db: Db = prisma) {
+  findRejection(
+    estimateRequestId: number,
+    moverId: string,
+    db: Db = prisma,
+  ): Promise<{ id: number } | null> {
     return db.estimateRequestRejection.findUnique({
       where: {
         estimateRequestId_moverId: {

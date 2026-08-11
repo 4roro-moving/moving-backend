@@ -617,16 +617,6 @@ export const estimateRequestService = {
         throw new AppError("MOVER_NOT_FOUND");
       }
 
-      const existing = await estimateRequestRepository.findDesignation(
-        estimateRequestId,
-        moverId,
-        tx,
-      );
-
-      if (existing) {
-        throw new AppError("ALREADY_DESIGNATED");
-      }
-
       const rejection = await estimateRequestRepository.findRejection(
         estimateRequestId,
         moverId,
@@ -635,6 +625,16 @@ export const estimateRequestService = {
 
       if (rejection) {
         throw new AppError("DESIGNATION_ALREADY_REJECTED");
+      }
+
+      const existing = await estimateRequestRepository.findDesignation(
+        estimateRequestId,
+        moverId,
+        tx,
+      );
+
+      if (existing) {
+        throw new AppError("ALREADY_DESIGNATED");
       }
 
       const designationCount = await estimateRequestRepository.countDesignations(
