@@ -50,6 +50,25 @@ const estimateRequestDetailSelect = {
       },
     },
   },
+
+  // 2026.08.10 정슬기 - [추가]
+  // 고객이 지정한 기사님의 반려 여부·사유를 상세 응답에서 조합하기 위한 내부 조회
+  rejections: {
+    select: {
+      moverId: true,
+      reason: true,
+      createdAt: true,
+    },
+  },
+
+  // 2026.08.11 정슬기 - [추가]
+  // 지정 기사별 견적 응답 여부를 조합하기 위한 내부 조회
+  estimates: {
+    select: {
+      moverId: true,
+    },
+  },
+
   _count: {
     select: { estimates: true },
   },

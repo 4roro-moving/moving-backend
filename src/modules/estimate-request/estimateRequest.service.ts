@@ -43,11 +43,48 @@ const EDITABLE_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
 // 2026.08.03 정슬기 - [수정] repository 상수와 단일화
 export const CANCELABLE_STATUSES = CANCELABLE_ESTIMATE_REQUEST_STATUSES;
 
-/** 견적 요청 응답의 지정 기사 이미지 key를 외부에서 사용할 CloudFront URL로 변환한다. */
-function mapEstimateRequestProfileImageUrls(request: EstimateRequestDetail): EstimateRequestDetail {
+type EstimateRequestResponse = Omit<
+  EstimateRequestDetail,
+  "designatedMovers" | "rejections" | "estimates"
+> & {
+  designatedMovers: Array<
+    EstimateRequestDetail["designatedMovers"][number] & {
+      hasEstimate: boolean;
+      rejection: {
+        reason: string;
+        rejectedAt: Date;
+      } | null;
+    }
+  >;
+};
+
+/**
+ * 견적 요청 응답 변환
+ * - 지정 기사 이미지 key를 외부 URL로 변환
+ * - 지정 기사 반려 정보만 designatedMovers에 병합
+ * - 일반 반려 내역은 고객에게 노출하지 않음
+ * // 2026.08.10 정슬기 - [수정] 지정 요청 반려 정보 추가
+ */
+function mapEstimateRequestProfileImageUrls(
+  request: EstimateRequestDetail,
+): EstimateRequestResponse {
+  const { rejections, designatedMovers, estimates, ...rest } = request;
+
+  const rejectionByMoverId = new Map(
+    rejections.map((rejection) => [
+      rejection.moverId,
+      {
+        reason: rejection.reason,
+        rejectedAt: rejection.createdAt,
+      },
+    ]),
+  );
+
+  const estimatedMoverIds = new Set(estimates.map((estimate) => estimate.moverId));
+
   return {
-    ...request,
-    designatedMovers: request.designatedMovers.map((designatedMover) => ({
+    ...rest,
+    designatedMovers: designatedMovers.map((designatedMover) => ({
       ...designatedMover,
       mover: {
         ...designatedMover.mover,
@@ -58,6 +95,8 @@ function mapEstimateRequestProfileImageUrls(request: EstimateRequestDetail): Est
             }
           : null,
       },
+      rejection: rejectionByMoverId.get(designatedMover.moverId) ?? null,
+      hasEstimate: estimatedMoverIds.has(designatedMover.moverId),
     })),
   };
 }
@@ -249,7 +288,10 @@ export const estimateRequestService = {
   /**
    * 견적 요청을 생성하고 매칭된 기사님들에게 알림을 보낸다. 진행 중인 견적 요청이 이미 존재하면 에러를 던진다.
    */
-  async createEstimateRequest({ customerId, input }: CreateParams): Promise<EstimateRequestDetail> {
+  async createEstimateRequest({
+    customerId,
+    input,
+  }: CreateParams): Promise<EstimateRequestResponse> {
     const moveDate = resolveMoveDate(input.moveDate);
     const expiresAt = resolveExpiresAt(moveDate);
 
@@ -340,7 +382,7 @@ export const estimateRequestService = {
   /**
    * 진행 중인 견적 요청을 조회하고 없으면 null 을 반환
    */
-  async getActiveEstimateRequest(customerId: string): Promise<EstimateRequestDetail | null> {
+  async getActiveEstimateRequest(customerId: string): Promise<EstimateRequestResponse | null> {
     const request = await estimateRequestRepository.findActiveByCustomerId(customerId);
 
     return request ? mapEstimateRequestProfileImageUrls(request) : null;
@@ -349,7 +391,7 @@ export const estimateRequestService = {
   async getEstimateRequestById(
     estimateRequestId: number,
     customerId: string,
-  ): Promise<EstimateRequestDetail> {
+  ): Promise<EstimateRequestResponse> {
     const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, prisma);
 
     return mapEstimateRequestProfileImageUrls(request);
@@ -378,7 +420,7 @@ export const estimateRequestService = {
     estimateRequestId,
     customerId,
     input,
-  }: UpdateParams): Promise<EstimateRequestDetail> {
+  }: UpdateParams): Promise<EstimateRequestResponse> {
     const updated = await prisma.$transaction(async (tx) => {
       const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
@@ -449,7 +491,7 @@ export const estimateRequestService = {
   async cancelEstimateRequest(
     estimateRequestId: number,
     customerId: string,
-  ): Promise<EstimateRequestDetail> {
+  ): Promise<EstimateRequestResponse> {
     const result = await prisma.$transaction(async (tx) => {
       const locked = await lockEstimateRequestForUpdate(tx, estimateRequestId);
 
@@ -557,7 +599,7 @@ export const estimateRequestService = {
     estimateRequestId,
     customerId,
     moverId,
-  }: DesignateParams): Promise<EstimateRequestDetail> {
+  }: DesignateParams): Promise<EstimateRequestResponse> {
     const result = await prisma.$transaction(async (tx) => {
       const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
@@ -629,7 +671,7 @@ export const estimateRequestService = {
     estimateRequestId,
     customerId,
     moverId,
-  }: CancelDesignatedMoverParams): Promise<EstimateRequestDetail> {
+  }: CancelDesignatedMoverParams): Promise<EstimateRequestResponse> {
     const updated = await runTransaction(async (tx) => {
       // 견적 제출(sendEstimate)과 동일한 요청 행을 잠가 두 작업을 직렬화한다.
       const locked = await lockEstimateRequestForUpdate(tx, estimateRequestId);
