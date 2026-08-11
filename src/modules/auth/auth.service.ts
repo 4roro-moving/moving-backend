@@ -25,6 +25,8 @@ import { runTransaction } from "../../utils/transaction";
 
 const PASSWORD_SALT_ROUNDS = 10;
 
+const DUMMY_PASSWORD_HASH = "$2b$10$CxtIUUg2JDRWy.TYdu0y0e9bahGlNcJg2F78GaW9lRboxNL/OZpE6";
+
 const getAuthProviderName = (provider: AuthProvider): string => {
   const providerNames: Record<AuthProvider, string> = {
     [AuthProvider.LOCAL]: "이메일",
@@ -233,6 +235,8 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
    * 동일한 메시지를 사용하여 계정 존재 여부 노출을 줄인다.
    */
   if (!user) {
+    await bcrypt.compare(input.password, DUMMY_PASSWORD_HASH);
+
     throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
     });
@@ -257,6 +261,8 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
    * 사용할 수 없도록 막는다.
    */
   if (user.authProvider !== AuthProvider.LOCAL || !user.password) {
+    await bcrypt.compare(input.password, DUMMY_PASSWORD_HASH);
+
     throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
     });
