@@ -41,7 +41,17 @@ export function assertRequestNotExpired(expiresAt: Date): void {
 }
 
 export function resolveMoveDate(moveDate: string): Date {
+  const [year, month, day] = moveDate.split("-").map(Number);
   const parsed = new Date(`${moveDate}T00:00:00.000Z`);
+
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.getUTCFullYear() !== year ||
+    parsed.getUTCMonth() + 1 !== month ||
+    parsed.getUTCDate() !== day
+  ) {
+    throw new AppError("INVALID_MOVE_DATE");
+  }
 
   const now = new Date();
   const kstNow = new Date(now.getTime() + 9 * MS_PER_HOUR);
