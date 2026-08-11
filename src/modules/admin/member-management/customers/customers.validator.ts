@@ -3,7 +3,8 @@ import { z } from "zod";
 
 import { MEMBER_STATUSES } from "../member-status.constants";
 
-const MAX_PAGE = 10000;
+// 깊은 offset 페이지 조회로 인한 DB 부하를 줄이기 위해 최대 1,000페이지로 제한
+const MAX_PAGE = 1_000;
 const MAX_LIMIT = 100;
 const MAX_KEYWORD_LENGTH = 100;
 const MAX_STATUS_REASON_LENGTH = 500;
