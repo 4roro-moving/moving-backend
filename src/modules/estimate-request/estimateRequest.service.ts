@@ -617,6 +617,16 @@ export const estimateRequestService = {
         throw new AppError("MOVER_NOT_FOUND");
       }
 
+      const rejection = await estimateRequestRepository.findRejection(
+        estimateRequestId,
+        moverId,
+        tx,
+      );
+
+      if (rejection) {
+        throw new AppError("DESIGNATION_ALREADY_REJECTED");
+      }
+
       const existing = await estimateRequestRepository.findDesignation(
         estimateRequestId,
         moverId,
@@ -699,6 +709,18 @@ export const estimateRequestService = {
 
       if (!designation) {
         throw new AppError("DESIGNATION_NOT_FOUND");
+      }
+
+      const rejection = await estimateRequestRepository.findRejection(
+        estimateRequestId,
+        moverId,
+        tx,
+      );
+
+      if (rejection) {
+        throw new AppError("DESIGNATION_CANCEL_NOT_ALLOWED", {
+          message: "이미 반려된 지정 견적 요청은 취소할 수 없습니다.",
+        });
       }
 
       // 요청 행 잠금 이후 견적 존재 여부를 확인해
