@@ -272,6 +272,20 @@ export const estimateRequestRepository = {
     });
   },
 
+  findRejection(estimateRequestId: number, moverId: string, db: Db = prisma) {
+    return db.estimateRequestRejection.findUnique({
+      where: {
+        estimateRequestId_moverId: {
+          estimateRequestId,
+          moverId,
+        },
+      },
+      select: {
+        id: true,
+      },
+    });
+  },
+
   createDesignation(estimateRequestId: number, moverId: string, db: Db = prisma) {
     return db.designatedMover.create({
       data: { estimateRequestId, moverId },
