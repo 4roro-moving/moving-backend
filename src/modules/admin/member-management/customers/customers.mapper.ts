@@ -1,4 +1,4 @@
-import { resolveMemberStatus } from "../member-status";
+import { resolveMemberStatus } from "../member-status.policy";
 import type {
   CustomerDetailRow,
   CustomerListRow,

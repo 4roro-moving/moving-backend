@@ -17,7 +17,7 @@ import { buildPagination } from "../../../../utils/pagination.util";
 import { runTransaction } from "../../../../utils/transaction";
 
 import { customersRepository } from "./customers.repository";
-import { buildMemberStatusWhere } from "../member-status";
+import { buildMemberStatusWhere } from "../member-status.policy";
 import { MEMBER_STATUS } from "../member-status.constants";
 import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
 import type {
