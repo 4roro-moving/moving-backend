@@ -1,4 +1,4 @@
-import type { NextFunction, Request, Response } from "express";
+import type { Request, Response } from "express";
 
 import { ERROR_CODES } from "../../../../constants/error-code";
 import { AppError } from "../../../../lib/app-error";
@@ -29,24 +29,21 @@ export const customersController = {
     return sendResponse(res, 200, detail);
   },
 
-  updateCustomerStatus: async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { id } = res.locals.params as CustomerIdParam;
-      const input = req.body as UpdateCustomerStatusBody;
+  // PATCH /api/admin/users/:id/status
+  updateCustomerStatus: async (req: Request, res: Response) => {
+    const { id } = res.locals.params as CustomerIdParam;
+    const input = req.body as UpdateCustomerStatusBody;
 
-      if (!req.admin) {
-        return next(new AppError(ERROR_CODES.UNAUTHORIZED.code));
-      }
-
-      const result = await customersService.updateCustomerStatus({
-        customerId: id,
-        adminId: req.admin.id,
-        input,
-      });
-
-      return sendResponse(res, 200, result);
-    } catch (error) {
-      return next(error);
+    if (!req.admin) {
+      throw new AppError(ERROR_CODES.UNAUTHORIZED.code);
     }
+
+    const result = await customersService.updateCustomerStatus({
+      customerId: id,
+      adminId: req.admin.id,
+      input,
+    });
+
+    return sendResponse(res, 200, result);
   },
 };
