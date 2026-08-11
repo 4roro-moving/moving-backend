@@ -9,24 +9,24 @@ import type {
 } from "@prisma/client";
 import type { z } from "zod";
 
+import type { MEMBER_STATUS, MemberStatus } from "../member-status.constants";
 import type {
   customerIdParamSchema,
-  customerStatusSchema,
   listCustomerQuerySchema,
   updateCustomerStatusBodySchema,
 } from "./customers.validator";
 
-export type CustomerStatus = z.infer<typeof customerStatusSchema>;
+export type CustomerStatus = MemberStatus;
 export type ListCustomerQuery = z.infer<typeof listCustomerQuerySchema>;
 export type CustomerIdParam = z.infer<typeof customerIdParamSchema>;
 export type UpdateCustomerStatusBody = z.infer<typeof updateCustomerStatusBodySchema>;
 
 export type UpdateCustomerStatusResponse = {
   id: string;
-  status: "ACTIVE" | "SUSPENDED";
+  status: Exclude<MemberStatus, typeof MEMBER_STATUS.WITHDRAWN>;
   suspension: {
     id: number;
-    action: "SUSPEND" | "RELEASE";
+    action: SuspensionAction;
     reason: string;
     adminId: string;
     createdAt: Date;

@@ -1,5 +1,6 @@
 import type { NextFunction, Request, Response } from "express";
 
+import { ERROR_CODES } from "../../../../constants/error-code";
 import { AppError } from "../../../../lib/app-error";
 import { sendResponse } from "../../../../utils/response.util";
 import { customersService } from "./customers.service";
@@ -34,7 +35,7 @@ export const customersController = {
       const input = req.body as UpdateCustomerStatusBody;
 
       if (!req.admin) {
-        return next(new AppError("UNAUTHORIZED"));
+        return next(new AppError(ERROR_CODES.UNAUTHORIZED.code));
       }
 
       const result = await customersService.updateCustomerStatus({

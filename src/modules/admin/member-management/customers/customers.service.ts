@@ -1,5 +1,15 @@
-import { NotificationType, RefreshTokenSessionType, type Prisma } from "@prisma/client";
+import {
+  ChatMessageType,
+  EstimateRequestHistoryType,
+  EstimateRequestStatus,
+  NotificationType,
+  RefreshTokenSessionType,
+  SuspensionAction,
+  UserRole,
+  type Prisma,
+} from "@prisma/client";
 
+import { ERROR_CODES } from "../../../../constants/error-code";
 import { AppError } from "../../../../lib/app-error";
 import { authRepository } from "../../../auth/auth.repository";
 import { disconnectUserSockets } from "../../../../socket";
@@ -15,6 +25,7 @@ import {
   type ReviewHistoryRow,
   type SuspensionHistoryRow,
 } from "./customers.repository";
+import { MEMBER_STATUS } from "../member-status.constants";
 import type {
   CustomerDetail,
   CustomerListItem,
@@ -52,22 +63,22 @@ export function resolveCustomerStatus(user: {
   deletedAt: Date | null;
 }): CustomerStatus {
   if (user.deletedAt !== null) {
-    return "WITHDRAWN";
+    return MEMBER_STATUS.WITHDRAWN;
   }
 
-  return user.isActive ? "ACTIVE" : "SUSPENDED";
+  return user.isActive ? MEMBER_STATUS.ACTIVE : MEMBER_STATUS.SUSPENDED;
 }
 
 function buildStatusWhere(status: CustomerStatus | undefined): Prisma.UserWhereInput {
-  if (status === "ACTIVE") {
+  if (status === MEMBER_STATUS.ACTIVE) {
     return { deletedAt: null, isActive: true };
   }
 
-  if (status === "SUSPENDED") {
+  if (status === MEMBER_STATUS.SUSPENDED) {
     return { deletedAt: null, isActive: false };
   }
 
-  if (status === "WITHDRAWN") {
+  if (status === MEMBER_STATUS.WITHDRAWN) {
     return { deletedAt: { not: null } };
   }
 
@@ -77,7 +88,7 @@ function buildStatusWhere(status: CustomerStatus | undefined): Prisma.UserWhereI
 
 function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput {
   const where: Prisma.UserWhereInput = {
-    role: "CUSTOMER",
+    role: UserRole.CUSTOMER,
     ...buildStatusWhere(query.status),
   };
 
@@ -234,7 +245,7 @@ export const customersService = {
     const customer = await customersRepository.findCustomerById(customerId);
 
     if (!customer) {
-      throw new AppError("USER_NOT_FOUND");
+      throw new AppError(ERROR_CODES.USER_NOT_FOUND.code);
     }
 
     const [estimateHistory, reviewHistory, filedReports, receivedReports, suspensionHistory] =
@@ -265,17 +276,17 @@ export const customersService = {
     input: UpdateCustomerStatusBody;
   }): Promise<UpdateCustomerStatusResponse> {
     if (customerId === adminId) {
-      throw new AppError("SELF_ACTION_NOT_ALLOWED");
+      throw new AppError(ERROR_CODES.SELF_ACTION_NOT_ALLOWED.code);
     }
 
     const result = await runTransaction<UpdateCustomerStatusResponse>(async (tx) => {
       const customer = await customersRepository.findCustomerForStatusChange(customerId, tx);
 
       if (!customer) {
-        throw new AppError("USER_NOT_FOUND");
+        throw new AppError(ERROR_CODES.USER_NOT_FOUND.code);
       }
 
-      const shouldBeActive = input.action === "RELEASE";
+      const shouldBeActive = input.action === SuspensionAction.RELEASE;
 
       const { count } = await customersRepository.updateCustomerIsActiveIfCurrent(
         { customerId, isActive: shouldBeActive },
@@ -283,12 +294,12 @@ export const customersService = {
       );
 
       if (count === 0) {
-        throw new AppError("CUSTOMER_STATUS_ALREADY_PROCESSED");
+        throw new AppError(ERROR_CODES.CUSTOMER_STATUS_ALREADY_PROCESSED.code);
       }
 
       const now = new Date();
 
-      if (input.action === "SUSPEND") {
+      if (input.action === SuspensionAction.SUSPEND) {
         const lockedRequestIds = await customersRepository.lockCancelableRequestsForSuspension(
           customerId,
           tx,
@@ -314,7 +325,7 @@ export const customersService = {
             request.chatRooms.map((room) => ({
               roomId: room.id,
               senderId: null,
-              type: "SYSTEM" as const,
+              type: ChatMessageType.SYSTEM,
               content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
             })),
           );
@@ -339,13 +350,12 @@ export const customersService = {
             (request) => ({
               estimateRequestId: request.id,
               changedBy: adminId,
-              type: "CANCELED",
+              type: EstimateRequestHistoryType.CANCELED,
               previousData: { status: request.status, isActive: request.isActive },
               changedData: {
-                status: "CANCELED",
+                status: EstimateRequestStatus.CANCELED,
                 isActive: false,
                 canceledAt: now.toISOString(),
-                cancelReason: "ACCOUNT_SUSPENSION",
               },
             }),
           );
@@ -384,7 +394,7 @@ export const customersService = {
         ),
       ]);
 
-      if (input.action === "SUSPEND") {
+      if (input.action === SuspensionAction.SUSPEND) {
         await authRepository.revokeAllRefreshTokensByUserId(
           customerId,
           RefreshTokenSessionType.USER,
@@ -394,12 +404,12 @@ export const customersService = {
 
       return {
         id: customerId,
-        status: shouldBeActive ? "ACTIVE" : "SUSPENDED",
+        status: shouldBeActive ? MEMBER_STATUS.ACTIVE : MEMBER_STATUS.SUSPENDED,
         suspension,
       };
     });
 
-    if (input.action === "SUSPEND") {
+    if (input.action === SuspensionAction.SUSPEND) {
       disconnectUserSockets(customerId);
     }
 

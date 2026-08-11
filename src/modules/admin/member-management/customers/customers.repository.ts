@@ -1,9 +1,25 @@
-import { Prisma } from "@prisma/client";
+import {
+  EstimateRequestStatus,
+  EstimateRevisionStatus,
+  EstimateStatus,
+  LogAction,
+  LogTargetType,
+  Prisma,
+  ReportTargetType,
+  UserRole,
+} from "@prisma/client";
+import type { SuspensionAction } from "@prisma/client";
 
 import { prisma } from "../../../../lib/prisma";
 import type { DbClient } from "../../../../utils/transaction";
 
 export const CUSTOMER_HISTORY_LIMIT = 5;
+
+/** 고객 정지 시 함께 취소하는 견적 요청 상태입니다. ORM과 raw SQL에서 함께 사용합니다. */
+export const CANCELABLE_ESTIMATE_REQUEST_STATUSES: EstimateRequestStatus[] = [
+  EstimateRequestStatus.PENDING,
+  EstimateRequestStatus.OPEN,
+];
 
 /** 고객 목록 조회에 공통으로 사용하는 select */
 const customerListSelect = {
@@ -130,7 +146,7 @@ export const customersRepository = {
     return db.user.findFirst({
       where: {
         id: customerId,
-        role: "CUSTOMER",
+        role: UserRole.CUSTOMER,
       },
       select: customerDetailSelect,
     });
@@ -211,7 +227,7 @@ export const customersRepository = {
     }
 
     const where: Prisma.ReportWhereInput = {
-      targetType: "REVIEW",
+      targetType: ReportTargetType.REVIEW,
       targetId: { in: reviewIds.map((review) => String(review.id)) },
     };
 
@@ -249,7 +265,7 @@ export const customersRepository = {
 
   findCustomerForStatusChange(customerId: string, db: DbClient = prisma) {
     return db.user.findFirst({
-      where: { id: customerId, role: "CUSTOMER", deletedAt: null },
+      where: { id: customerId, role: UserRole.CUSTOMER, deletedAt: null },
       select: { id: true, isActive: true },
     });
   },
@@ -261,7 +277,7 @@ export const customersRepository = {
     return db.user.updateMany({
       where: {
         id: customerId,
-        role: "CUSTOMER",
+        role: UserRole.CUSTOMER,
         deletedAt: null,
         isActive: !isActive,
       },
@@ -280,7 +296,7 @@ export const customersRepository = {
         FROM estimate_requests
         WHERE customer_id = ${customerId}::uuid
           AND is_active = true
-          AND status IN ('PENDING', 'OPEN')
+          AND status IN (${Prisma.join(CANCELABLE_ESTIMATE_REQUEST_STATUSES)})
         FOR UPDATE
       `,
     );
@@ -290,12 +306,16 @@ export const customersRepository = {
 
   findCancelableRequestsForSuspension(requestIds: number[], db: DbClient = prisma) {
     return db.estimateRequest.findMany({
-      where: { id: { in: requestIds }, status: { in: ["PENDING", "OPEN"] }, isActive: true },
+      where: {
+        id: { in: requestIds },
+        status: { in: CANCELABLE_ESTIMATE_REQUEST_STATUSES },
+        isActive: true,
+      },
       select: {
         id: true,
         status: true,
         isActive: true,
-        estimates: { where: { status: "SENT" }, select: { moverId: true } },
+        estimates: { where: { status: EstimateStatus.SENT }, select: { moverId: true } },
         designatedMovers: { select: { moverId: true } },
         chatRooms: { select: { id: true } },
       },
@@ -304,15 +324,18 @@ export const customersRepository = {
 
   cancelSentEstimates(requestIds: number[], canceledAt: Date, db: DbClient = prisma) {
     return db.estimate.updateMany({
-      where: { estimateRequestId: { in: requestIds }, status: "SENT" },
-      data: { status: "CANCELED", canceledAt },
+      where: { estimateRequestId: { in: requestIds }, status: EstimateStatus.SENT },
+      data: { status: EstimateStatus.CANCELED, canceledAt },
     });
   },
 
   cancelPendingEstimateRevisions(requestIds: number[], db: DbClient = prisma) {
     return db.estimateRevision.updateMany({
-      where: { status: "PENDING", estimate: { estimateRequestId: { in: requestIds } } },
-      data: { status: "CANCELED" },
+      where: {
+        status: EstimateRevisionStatus.PENDING,
+        estimate: { estimateRequestId: { in: requestIds } },
+      },
+      data: { status: EstimateRevisionStatus.CANCELED },
     });
   },
 
@@ -324,9 +347,9 @@ export const customersRepository = {
     return db.$queryRaw<Array<{ id: number }>>(
       Prisma.sql`
         UPDATE estimate_requests
-        SET status = 'CANCELED', is_active = false, canceled_at = ${canceledAt}
+        SET status = ${EstimateRequestStatus.CANCELED}, is_active = false, canceled_at = ${canceledAt}
         WHERE id IN (${Prisma.join(requestIds)})
-          AND status IN ('PENDING', 'OPEN')
+          AND status IN (${Prisma.join(CANCELABLE_ESTIMATE_REQUEST_STATUSES)})
           AND is_active = true
         RETURNING id
       `,
@@ -358,7 +381,7 @@ export const customersRepository = {
     }: {
       customerId: string;
       adminId: string;
-      action: "SUSPEND" | "RELEASE";
+      action: SuspensionAction;
       reason: string;
       internalNote?: string;
     },
@@ -386,7 +409,7 @@ export const customersRepository = {
     }: {
       customerId: string;
       adminId: string;
-      action: "SUSPEND" | "RELEASE";
+      action: SuspensionAction;
       reason: string;
       createdAt: Date;
     },
@@ -395,9 +418,9 @@ export const customersRepository = {
     return db.activityLog.create({
       data: {
         actorId: adminId,
-        actorRole: "ADMIN",
-        action: "UPDATE",
-        targetType: "USER",
+        actorRole: UserRole.ADMIN,
+        action: LogAction.UPDATE,
+        targetType: LogTargetType.USER,
         targetId: customerId,
         memo: `${action}: ${reason}`,
         createdAt,
