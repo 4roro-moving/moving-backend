@@ -17,6 +17,7 @@ import { runTransaction } from "../../../../utils/transaction";
 
 import { customersRepository } from "./customers.repository";
 import { customersStatusRepository } from "./customers-status.repository";
+import { toKstEndOfDay, toKstStartOfDay } from "../member-list-date.util";
 import {
   assertAdminCanChangeMemberStatus,
   buildMemberStatusWhere,
@@ -30,23 +31,6 @@ import type {
   UpdateCustomerStatusBody,
   UpdateCustomerStatusResponse,
 } from "./customers.type";
-
-/**
- * KST(Asia/Seoul) 달력 날짜의 시작 시각을 UTC로 변환합니다.
- * DB의 createdAt은 UTC timestamp로 저장되므로, 관리자 화면의 날짜 기준에 맞춰 조회 범위만 UTC로 변환합니다.
- */
-export function toKstStartOfDay(date: string): Date {
-  const [year = NaN, month = NaN, day = NaN] = date.split("-").map(Number);
-
-  return new Date(Date.UTC(year, month - 1, day, -9));
-}
-
-/** KST 달력 날짜의 마지막 시각을 UTC로 변환합니다. */
-export function toKstEndOfDay(date: string): Date {
-  const [year = NaN, month = NaN, day = NaN] = date.split("-").map(Number);
-
-  return new Date(Date.UTC(year, month - 1, day, 14, 59, 59, 999));
-}
 
 /**
  * 관리자 고객 목록 query를 Prisma User 조회 조건으로 변환합니다.
