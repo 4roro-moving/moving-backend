@@ -1,13 +1,16 @@
 import { EstimateStatus } from "@prisma/client";
 
-import { toMemberDetailAccount, toMemberListBase } from "../member.mapper";
+import {
+  toMemberDetailAccount,
+  toMemberListBase,
+  toMemberSuspensionHistoryItem,
+} from "../member.mapper";
 import type {
   InProgressEstimateRow,
   MoverDetailRow,
   MoverListRow,
   MoverReportHistoryRow,
   MoverReviewHistoryRow,
-  MoverSuspensionHistoryRow,
   RecentEstimateRow,
   moversRepository,
 } from "./movers.repository";
@@ -70,15 +73,6 @@ function toReceivedReportHistoryItem(item: MoverReportHistoryRow) {
   };
 }
 
-function toSuspensionHistoryItem(item: MoverSuspensionHistoryRow) {
-  return {
-    id: item.id,
-    action: item.action,
-    reason: item.reason,
-    createdAt: item.createdAt,
-  };
-}
-
 type MoverDetailHistories = {
   inProgressEstimateHistory: Awaited<
     ReturnType<typeof moversRepository.findInProgressEstimateHistory>
@@ -128,7 +122,7 @@ export function toMoverDetail(mover: MoverDetailRow, histories: MoverDetailHisto
     },
     suspensionHistory: {
       totalCount: histories.suspensionHistory.totalCount,
-      items: histories.suspensionHistory.items.map(toSuspensionHistoryItem),
+      items: histories.suspensionHistory.items.map(toMemberSuspensionHistoryItem),
     },
   };
 }

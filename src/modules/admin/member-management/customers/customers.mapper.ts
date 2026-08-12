@@ -1,10 +1,9 @@
-import { toMemberDetailAccount } from "../member.mapper";
+import { toMemberDetailAccount, toMemberSuspensionHistoryItem } from "../member.mapper";
 import type {
   CustomerDetailRow,
   EstimateHistoryRow,
   ReportHistoryRow,
   ReviewHistoryRow,
-  SuspensionHistoryRow,
   customersRepository,
 } from "./customers.repository";
 import type { CustomerDetail } from "./customers.type";
@@ -38,15 +37,6 @@ function toReportHistoryItem(item: ReportHistoryRow) {
     targetId: item.targetId,
     reason: item.reason,
     status: item.status,
-    createdAt: item.createdAt,
-  };
-}
-
-function toSuspensionHistoryItem(item: SuspensionHistoryRow) {
-  return {
-    id: item.id,
-    action: item.action,
-    reason: item.reason,
     createdAt: item.createdAt,
   };
 }
@@ -94,7 +84,7 @@ export function toCustomerDetail(
     },
     suspensionHistory: {
       totalCount: histories.suspensionHistory.totalCount,
-      items: histories.suspensionHistory.items.map(toSuspensionHistoryItem),
+      items: histories.suspensionHistory.items.map(toMemberSuspensionHistoryItem),
     },
   };
 }

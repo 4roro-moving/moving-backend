@@ -1,5 +1,9 @@
 import { resolveMemberStatus } from "./member.policy";
-import type { MemberDetailAccount, MemberListBase } from "./member.type";
+import type {
+  MemberDetailAccount,
+  MemberListBase,
+  MemberSuspensionHistoryItem,
+} from "./member.type";
 
 /** 고객·기사 목록 응답에서 공통으로 사용하는 계정 필드를 변환합니다. */
 export function toMemberListBase(member: {
@@ -46,5 +50,20 @@ export function toMemberDetailAccount(member: {
     isProfileCompleted: member.isProfileCompleted,
     createdAt: member.createdAt,
     updatedAt: member.updatedAt,
+  };
+}
+
+/** 관리자에 의한 회원 정지·해제 이력 항목을 공통 응답 형태로 변환합니다. */
+export function toMemberSuspensionHistoryItem(item: {
+  id: number;
+  action: MemberSuspensionHistoryItem["action"];
+  reason: string;
+  createdAt: Date;
+}): MemberSuspensionHistoryItem {
+  return {
+    id: item.id,
+    action: item.action,
+    reason: item.reason,
+    createdAt: item.createdAt,
   };
 }
