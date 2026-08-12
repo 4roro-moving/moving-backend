@@ -1,21 +1,13 @@
-import { toMemberDetailAccount, toMemberListBase } from "../member.mapper";
+import { toMemberDetailAccount } from "../member.mapper";
 import type {
   CustomerDetailRow,
-  CustomerListRow,
   EstimateHistoryRow,
   ReportHistoryRow,
   ReviewHistoryRow,
   SuspensionHistoryRow,
   customersRepository,
 } from "./customers.repository";
-import type { CustomerDetail, CustomerListItem } from "./customers.type";
-
-export function toCustomerListItem(customer: CustomerListRow): CustomerListItem {
-  return {
-    ...toMemberListBase(customer),
-    phone: customer.phone,
-  };
-}
+import type { CustomerDetail } from "./customers.type";
 
 function toEstimateHistoryItem(item: EstimateHistoryRow) {
   return {

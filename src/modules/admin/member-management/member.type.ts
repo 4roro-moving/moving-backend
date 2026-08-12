@@ -13,6 +13,7 @@ export type MemberListBase = {
   id: string;
   email: string;
   name: string;
+  phone: string | null;
   status: MemberStatus;
   isProfileCompleted: boolean;
   createdAt: Date;

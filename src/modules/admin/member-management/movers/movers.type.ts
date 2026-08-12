@@ -1,10 +1,10 @@
 import type { EstimateStatus, MoveType, ReportReason, ReportStatus } from "@prisma/client";
 import type { z } from "zod";
 
-import type { MemberStatus } from "../member-status.constants";
 import type {
   HistorySummary,
   MemberDetailAccount,
+  MemberListBase,
   MemberSuspensionHistoryItem,
 } from "../member.type";
 import type { listMoverQuerySchema, moverIdParamSchema } from "./movers.validator";
@@ -12,21 +12,14 @@ import type { listMoverQuerySchema, moverIdParamSchema } from "./movers.validato
 export type ListMoverQuery = z.infer<typeof listMoverQuerySchema>;
 export type MoverIdParam = z.infer<typeof moverIdParamSchema>;
 
-export type MoverListItem = {
-  id: string;
-  email: string;
-  name: string;
-  phone: string | null;
+export type MoverListItem = MemberListBase & {
   nickname: string | null;
   career: number;
-  status: MemberStatus;
-  isProfileCompleted: boolean;
   averageRating: number;
   reviewCount: number;
   confirmedCount: number;
   serviceAreas: string[];
   serviceTypes: MoveType[];
-  createdAt: Date;
 };
 
 export type MoverDetailProfile = {

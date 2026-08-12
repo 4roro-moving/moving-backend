@@ -6,6 +6,7 @@ export function toMemberListBase(member: {
   id: string;
   email: string;
   name: string;
+  phone: string | null;
   isActive: boolean;
   isProfileCompleted: boolean;
   deletedAt: Date | null;
@@ -15,6 +16,7 @@ export function toMemberListBase(member: {
     id: member.id,
     email: member.email,
     name: member.name,
+    phone: member.phone,
     status: resolveMemberStatus(member),
     isProfileCompleted: member.isProfileCompleted,
     createdAt: member.createdAt,

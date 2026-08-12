@@ -12,6 +12,7 @@ import type { MEMBER_STATUS, MemberStatus } from "../member-status.constants";
 import type {
   HistorySummary,
   MemberDetailAccount,
+  MemberListBase,
   MemberSuspensionHistoryItem,
 } from "../member.type";
 import type {
@@ -36,15 +37,7 @@ export type UpdateCustomerStatusResponse = {
   };
 };
 
-export type CustomerListItem = {
-  id: string;
-  email: string;
-  name: string;
-  phone: string | null;
-  status: MemberStatus;
-  isProfileCompleted: boolean;
-  createdAt: Date;
-};
+export type CustomerListItem = MemberListBase;
 
 export type CustomerDetailProfile = {
   imageUrl: string | null;

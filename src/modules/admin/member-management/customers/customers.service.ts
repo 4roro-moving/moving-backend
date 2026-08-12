@@ -25,7 +25,8 @@ import {
   resolveIsActiveForSuspensionAction,
 } from "../member.policy";
 import { MEMBER_STATUS } from "../member-status.constants";
-import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
+import { toMemberListBase } from "../member.mapper";
+import { toCustomerDetail } from "./customers.mapper";
 import type {
   CustomerDetail,
   ListCustomerQuery,
@@ -63,10 +64,7 @@ function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput
 }
 
 export const customersService = {
-  /**
-   * 관리자용 일반 고객(CUSTOMER) 목록을 조회합니다.
-   * status 미지정 시 탈퇴 회원은 제외되며, createdAt DESC 로 정렬됩니다.
-   */
+  /** 관리자용 일반 고객(CUSTOMER) 목록을 조회합니다. */
   async getCustomerList(query: ListCustomerQuery) {
     const { page, limit } = query;
 
@@ -77,15 +75,12 @@ export const customersService = {
     });
 
     return {
-      items: customers.map(toCustomerListItem),
+      items: customers.map(toMemberListBase),
       pagination: buildPagination(totalCount, page, limit),
     };
   },
 
-  /**
-   * 관리자용 일반 고객(CUSTOMER) 상세를 조회합니다.
-   * Mover/존재하지 않는 id 는 USER_NOT_FOUND, 탈퇴 회원은 조회 가능합니다.
-   */
+  /** 관리자용 일반 고객(CUSTOMER) 상세를 조회합니다. */
   async getCustomerDetail(customerId: string): Promise<CustomerDetail> {
     const customer = await customersRepository.findCustomerById(customerId);
 
@@ -93,7 +88,6 @@ export const customersService = {
       throw new AppError("USER_NOT_FOUND");
     }
 
-    // 서로 의존하지 않는 이력 조회이므로 병렬 실행
     const [estimateHistory, reviewHistory, filedReports, receivedReports, suspensionHistory] =
       await Promise.all([
         customersRepository.findEstimateHistory({ customerId }),

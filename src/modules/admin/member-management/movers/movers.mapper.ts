@@ -18,7 +18,6 @@ export function toMoverListItem(mover: MoverListRow): MoverListItem {
 
   return {
     ...toMemberListBase(mover),
-    phone: mover.phone,
     nickname: profile?.nickname ?? null,
     career: profile?.career ?? 0,
     averageRating: Number(profile?.averageRating ?? 0),
