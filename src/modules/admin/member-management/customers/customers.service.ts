@@ -18,6 +18,7 @@ import { runTransaction } from "../../../../utils/transaction";
 import { customersRepository } from "./customers.repository";
 import { customersStatusRepository } from "./customers-status.repository";
 import { toKstEndOfDay, toKstStartOfDay } from "../member-list-date.util";
+import { memberRepository } from "../member.repository";
 import {
   assertAdminCanChangeMemberStatus,
   buildProfileCompletedWhere,
@@ -94,7 +95,7 @@ export const customersService = {
         customersRepository.findReviewHistory({ customerId }),
         customersRepository.findFiledReportHistory({ customerId }),
         customersRepository.findReceivedReportHistory({ customerId }),
-        customersRepository.findSuspensionHistory({ customerId }),
+        memberRepository.findSuspensionHistory({ memberId: customerId }),
       ]);
 
     return toCustomerDetail(customer, {

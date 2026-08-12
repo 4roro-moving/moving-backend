@@ -5,6 +5,7 @@ import {
   toMemberListBase,
   toMemberSuspensionHistoryItem,
 } from "../member.mapper";
+import type { memberRepository } from "../member.repository";
 import type {
   InProgressEstimateRow,
   MoverDetailRow,
@@ -80,7 +81,7 @@ type MoverDetailHistories = {
   recentEstimateHistory: Awaited<ReturnType<typeof moversRepository.findRecentEstimateHistory>>;
   reviewHistory: Awaited<ReturnType<typeof moversRepository.findReviewHistory>>;
   receivedReports: Awaited<ReturnType<typeof moversRepository.findReceivedReportHistory>>;
-  suspensionHistory: Awaited<ReturnType<typeof moversRepository.findSuspensionHistory>>;
+  suspensionHistory: Awaited<ReturnType<typeof memberRepository.findSuspensionHistory>>;
 };
 
 export function toMoverDetail(mover: MoverDetailRow, histories: MoverDetailHistories): MoverDetail {

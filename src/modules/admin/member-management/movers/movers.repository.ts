@@ -98,13 +98,6 @@ const reportHistorySelect = {
   createdAt: true,
 } satisfies Prisma.ReportSelect;
 
-const suspensionHistorySelect = {
-  id: true,
-  action: true,
-  reason: true,
-  createdAt: true,
-} satisfies Prisma.UserSuspensionSelect;
-
 export type MoverListRow = Prisma.UserGetPayload<{ select: typeof moverListSelect }>;
 export type MoverDetailRow = Prisma.UserGetPayload<{ select: typeof moverDetailSelect }>;
 export type InProgressEstimateRow = Prisma.EstimateGetPayload<{
@@ -113,9 +106,6 @@ export type InProgressEstimateRow = Prisma.EstimateGetPayload<{
 export type RecentEstimateRow = Prisma.EstimateGetPayload<{ select: typeof recentEstimateSelect }>;
 export type MoverReviewHistoryRow = Prisma.ReviewGetPayload<{ select: typeof reviewHistorySelect }>;
 export type MoverReportHistoryRow = Prisma.ReportGetPayload<{ select: typeof reportHistorySelect }>;
-export type MoverSuspensionHistoryRow = Prisma.UserSuspensionGetPayload<{
-  select: typeof suspensionHistorySelect;
-}>;
 
 type ListParams = {
   skip: number;
@@ -242,26 +232,6 @@ export const moversRepository = {
         take,
       }),
       db.report.count({ where }),
-    ]);
-
-    return { items, totalCount };
-  },
-
-  /** 기사 계정의 정지·해제 이력 최신 일부와 전체 건수를 조회합니다. */
-  async findSuspensionHistory(
-    { moverId, take = MOVER_HISTORY_LIMIT }: HistoryParams,
-    db: DbClient = prisma,
-  ) {
-    const where: Prisma.UserSuspensionWhereInput = { userId: moverId };
-
-    const [items, totalCount] = await Promise.all([
-      db.userSuspension.findMany({
-        where,
-        select: suspensionHistorySelect,
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-        take,
-      }),
-      db.userSuspension.count({ where }),
     ]);
 
     return { items, totalCount };

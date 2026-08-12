@@ -2,6 +2,7 @@ import { UserRole, type Prisma } from "@prisma/client";
 
 import { buildPagination } from "../../../../utils/pagination.util";
 import { toKstEndOfDay, toKstStartOfDay } from "../member-list-date.util";
+import { memberRepository } from "../member.repository";
 import { buildMemberStatusWhere, buildProfileCompletedWhere } from "../member.policy";
 import { AppError } from "../../../../lib/app-error";
 import { toMoverDetail, toMoverListItem } from "./movers.mapper";
@@ -86,7 +87,7 @@ export const moversService = {
       moversRepository.findRecentEstimateHistory({ moverId }),
       moversRepository.findReviewHistory({ moverId }),
       moversRepository.findReceivedReportHistory({ moverId }),
-      moversRepository.findSuspensionHistory({ moverId }),
+      memberRepository.findSuspensionHistory({ memberId: moverId }),
     ]);
 
     return toMoverDetail(mover, {

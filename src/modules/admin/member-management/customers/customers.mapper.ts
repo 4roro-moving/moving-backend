@@ -1,4 +1,5 @@
 import { toMemberDetailAccount, toMemberSuspensionHistoryItem } from "../member.mapper";
+import type { memberRepository } from "../member.repository";
 import type {
   CustomerDetailRow,
   EstimateHistoryRow,
@@ -46,7 +47,7 @@ type CustomerDetailHistories = {
   reviewHistory: Awaited<ReturnType<typeof customersRepository.findReviewHistory>>;
   filedReports: Awaited<ReturnType<typeof customersRepository.findFiledReportHistory>>;
   receivedReports: Awaited<ReturnType<typeof customersRepository.findReceivedReportHistory>>;
-  suspensionHistory: Awaited<ReturnType<typeof customersRepository.findSuspensionHistory>>;
+  suspensionHistory: Awaited<ReturnType<typeof memberRepository.findSuspensionHistory>>;
 };
 
 export function toCustomerDetail(
