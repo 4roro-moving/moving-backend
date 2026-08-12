@@ -140,7 +140,9 @@ export const customersStatusRepository = {
     return db.$queryRaw<Array<{ id: number }>>(
       Prisma.sql`
         UPDATE estimate_requests
-        SET status = ${EstimateRequestStatus.CANCELED}, "isActive" = false, "canceledAt" = ${canceledAt}
+        SET status = ${EstimateRequestStatus.CANCELED}::"EstimateRequestStatus",
+            "isActive" = false,
+            "canceledAt" = ${canceledAt}
         WHERE id IN (${Prisma.join(requestIds)})
           AND status IN (${cancelableEstimateRequestStatusSql})
           AND "isActive" = true
