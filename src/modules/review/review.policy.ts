@@ -1,4 +1,4 @@
-import { EstimateRequestStatus, EstimateStatus, Prisma } from "@prisma/client";
+import { EstimateRequestStatus, EstimateStatus } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 
@@ -48,21 +48,4 @@ export function assertReviewCreatable({
       message: "기사님 프로필이 없어 리뷰를 작성할 수 없습니다.",
     });
   }
-}
-
-export function isReviewEstimateUniqueConstraintError(
-  error: unknown,
-): error is Prisma.PrismaClientKnownRequestError {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
-    return false;
-  }
-
-  const target = error.meta?.target;
-  const reviewEstimateFields = ["estimateid", "estimate_id"];
-
-  if (Array.isArray(target)) {
-    return target.some((field) => reviewEstimateFields.includes(String(field).toLowerCase()));
-  }
-
-  return reviewEstimateFields.some((field) => String(target).toLowerCase().includes(field));
 }

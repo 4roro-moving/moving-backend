@@ -6,7 +6,7 @@ import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
 import { notificationService } from "../notification/notification.service";
 import { mapMoverReview, mapMyReview, mapReviewableEstimate } from "./review.mapper";
-import { assertReviewCreatable, isReviewEstimateUniqueConstraintError } from "./review.policy";
+import { assertReviewCreatable } from "./review.policy";
 import { reviewRepository } from "./review.repository";
 
 type GetMyReviewListParams = {
@@ -32,6 +32,23 @@ type CreateReviewParams = {
   rating: number;
   content: string;
 };
+
+function isReviewEstimateUniqueConstraintError(
+  error: unknown,
+): error is Prisma.PrismaClientKnownRequestError {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
+    return false;
+  }
+
+  const target = error.meta?.target;
+  const reviewEstimateFields = ["estimateid", "estimate_id"];
+
+  if (Array.isArray(target)) {
+    return target.some((field) => reviewEstimateFields.includes(String(field).toLowerCase()));
+  }
+
+  return reviewEstimateFields.some((field) => String(target).toLowerCase().includes(field));
+}
 
 export const reviewService = {
   async getMoverReviewList({ moverId, page, limit }: GetMoverReviewListParams) {
