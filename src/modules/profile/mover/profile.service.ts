@@ -1,10 +1,12 @@
 import bcrypt from "bcrypt";
-import { Prisma, UserRole } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
 import { runTransaction } from "../../../utils/transaction";
 
 import { profileImageService } from "../profile-image.service";
+import { hasUniqueConstraintField, PASSWORD_SALT_ROUNDS } from "../profile.shared";
+import { mapProfileResponse } from "./profile.mapper";
+import { assertActiveMover } from "./profile.policy";
 import { profileRepository } from "./profile.repository";
 import type {
   CreateProfileInput,
@@ -12,73 +14,6 @@ import type {
   UpdateBasicInfoInput,
   UpdateProfileInput,
 } from "./profile.type";
-
-import { getProfileImageUrl } from "../../../utils/image-url";
-
-const PASSWORD_SALT_ROUNDS = 10;
-
-/*
- * Prisma P2002 UNIQUE 제약조건 에러인지 확인하고,
- * 어떤 필드에서 발생했는지 판별한다.
- *
- * 프로필 생성 전 닉네임 중복 조회와
- * 전화번호 및 닉네임 수정 전 중복 조회는 빠른 응답을 위한 처리이며,
- * 동시 요청은 DB UNIQUE 제약조건으로 막는다.
- */
-const isUniqueConstraintError = (
-  error: unknown,
-  fieldName: string,
-): error is Prisma.PrismaClientKnownRequestError => {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
-    return false;
-  }
-
-  const target = error.meta?.target;
-  const normalizedFieldName = fieldName.toLowerCase();
-
-  if (Array.isArray(target)) {
-    return target.some((field) => String(field).toLowerCase() === normalizedFieldName);
-  }
-
-  return String(target).toLowerCase().includes(normalizedFieldName);
-};
-
-/*
- * 프로필 기능을 이용할 수 있는 활성 무버인지 확인한다.
- *
- * 전달받은 사용자 객체의 타입을 그대로 반환하도록 제네릭을 사용한다.
- * 따라서 일반 사용자 조회 결과와 비밀번호 포함 조회 결과에
- * 동일한 검증 함수를 사용할 수 있다.
- */
-const validateActiveMover = <
-  T extends {
-    isActive: boolean;
-    deletedAt: Date | null;
-    role: UserRole;
-  },
->(
-  user: T | null,
-): T => {
-  if (!user) {
-    throw new AppError("NOT_FOUND", {
-      message: "사용자를 찾을 수 없습니다.",
-    });
-  }
-
-  if (!user.isActive || user.deletedAt !== null) {
-    throw new AppError("FORBIDDEN", {
-      message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
-    });
-  }
-
-  if (user.role !== UserRole.MOVER) {
-    throw new AppError("FORBIDDEN", {
-      message: "기사님만 이용할 수 있습니다.",
-    });
-  }
-
-  return user;
-};
 
 /*
  * 전달받은 지역 ID가 모두 실제 존재하는 지역인지 확인한다.
@@ -97,46 +32,6 @@ const validateRegions = async (regionIds: number[]): Promise<void> => {
 };
 
 /*
- * Prisma 조회 결과를 무버 프로필 응답 형식으로 변환한다.
- *
- * 비밀번호 해시는 응답에 포함하지 않고,
- * 비밀번호 보유 여부만 hasPassword로 반환한다.
- */
-const mapProfileResponse = (
-  profile: NonNullable<Awaited<ReturnType<typeof profileRepository.findProfileByUserId>>>,
-): ProfileResponse => {
-  return {
-    id: profile.id,
-    userId: profile.userId,
-
-    name: profile.user.name,
-    email: profile.user.email,
-    phone: profile.user.phone,
-    hasPassword: profile.user.password !== null,
-
-    nickname: profile.nickname,
-    imageUrl: getProfileImageUrl(profile.imageUrl),
-    career: profile.career,
-    shortIntro: profile.shortIntro,
-    description: profile.description,
-
-    confirmedCount: profile.confirmedCount,
-    averageRating: profile.averageRating.toNumber(),
-    reviewCount: profile.reviewCount,
-
-    regions: profile.serviceAreas.map(({ region }) => ({
-      id: region.id,
-      name: region.name,
-    })),
-
-    serviceTypes: profile.serviceTypes.map(({ moveType }) => moveType),
-
-    createdAt: profile.createdAt,
-    updatedAt: profile.updatedAt,
-  };
-};
-
-/*
  * 무버 프로필을 등록한다.
  *
  * 기존 User.phone이 없는 경우 프로필 생성 요청에서
@@ -150,7 +45,7 @@ const createProfile = async (
   userId: string,
   input: CreateProfileInput,
 ): Promise<ProfileResponse> => {
-  const user = validateActiveMover(await profileRepository.findUserById(userId));
+  const user = assertActiveMover(await profileRepository.findUserById(userId));
 
   /*
    * 이미지가 전달된 경우 현재 로그인한 사용자의 Key인지 확인하고,
@@ -252,13 +147,13 @@ const createProfile = async (
       return createdProfile;
     });
 
-    return mapProfileResponse(profile);
+    return mapProfileResponse(profile, await profileRepository.hasPasswordByUserId(user.id));
   } catch (error) {
     /*
      * 동일한 전화번호 등록 요청이 동시에 들어온 경우
      * User.phone UNIQUE 제약조건으로 중복 저장을 막는다.
      */
-    if (isUniqueConstraintError(error, "phone")) {
+    if (hasUniqueConstraintField(error, "phone")) {
       throw new AppError("CONFLICT", {
         message: "이미 사용 중인 전화번호입니다.",
       });
@@ -268,7 +163,7 @@ const createProfile = async (
      * 동일 사용자의 프로필 생성 요청이 동시에 들어온 경우
      * MoverProfile.userId UNIQUE 제약조건으로 하나만 성공한다.
      */
-    if (isUniqueConstraintError(error, "userId")) {
+    if (hasUniqueConstraintField(error, "userId")) {
       throw new AppError("CONFLICT", {
         message: "이미 등록된 프로필이 있습니다.",
       });
@@ -278,7 +173,7 @@ const createProfile = async (
      * 동일한 닉네임 생성 요청이 동시에 들어온 경우
      * MoverProfile.nickname UNIQUE 제약조건으로 중복 저장을 막는다.
      */
-    if (isUniqueConstraintError(error, "nickname")) {
+    if (hasUniqueConstraintField(error, "nickname")) {
       throw new AppError("CONFLICT", {
         message: "이미 사용 중인 닉네임입니다.",
       });
@@ -292,7 +187,7 @@ const createProfile = async (
  * 내 무버 프로필을 조회한다.
  */
 const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
-  const user = validateActiveMover(await profileRepository.findUserById(userId));
+  const user = assertActiveMover(await profileRepository.findUserById(userId));
 
   const profile = await profileRepository.findProfileByUserId(user.id);
 
@@ -302,7 +197,7 @@ const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
     });
   }
 
-  return mapProfileResponse(profile);
+  return mapProfileResponse(profile, await profileRepository.hasPasswordByUserId(user.id));
 };
 
 /*
@@ -317,13 +212,13 @@ const getProfileStatus = async (
   isProfileCompleted: boolean;
   hasPhone: boolean;
 }> => {
-  const user = validateActiveMover(await profileRepository.findUserById(userId));
+  const validatedUser = assertActiveMover(await profileRepository.findUserById(userId));
 
-  const profile = await profileRepository.findProfileByUserId(user.id);
+  const profile = await profileRepository.findProfileByUserId(validatedUser.id);
 
   return {
-    isProfileCompleted: user.isProfileCompleted && profile !== null,
-    hasPhone: user.phone !== null,
+    isProfileCompleted: validatedUser.isProfileCompleted && profile !== null,
+    hasPhone: validatedUser.phone !== null,
   };
 };
 
@@ -339,7 +234,7 @@ const updateBasicInfo = async (
   userId: string,
   input: UpdateBasicInfoInput,
 ): Promise<ProfileResponse> => {
-  const user = validateActiveMover(await profileRepository.findUserById(userId));
+  const user = assertActiveMover(await profileRepository.findUserById(userId));
 
   const existingProfile = await profileRepository.findProfileByUserId(user.id);
 
@@ -392,7 +287,7 @@ const updateBasicInfo = async (
      * 비밀번호 변경이 요청된 경우에만
      * 비밀번호 해시를 포함한 사용자 정보를 조회한다.
      */
-    const userWithPassword = validateActiveMover(
+    const userWithPassword = assertActiveMover(
       await profileRepository.findUserWithPasswordById(user.id),
     );
 
@@ -472,13 +367,16 @@ const updateBasicInfo = async (
       return profile;
     });
 
-    return mapProfileResponse(updatedProfile);
+    const hasPassword =
+      hashedPassword !== undefined ? true : await profileRepository.hasPasswordByUserId(user.id);
+
+    return mapProfileResponse(updatedProfile, hasPassword);
   } catch (error) {
     /*
      * 전화번호 수정 요청이 동시에 들어온 경우
      * User.phone UNIQUE 제약조건으로 중복 저장을 막는다.
      */
-    if (isUniqueConstraintError(error, "phone")) {
+    if (hasUniqueConstraintField(error, "phone")) {
       throw new AppError("CONFLICT", {
         message: "이미 사용 중인 전화번호입니다.",
       });
@@ -509,7 +407,7 @@ const updateProfile = async (
   userId: string,
   input: UpdateProfileInput,
 ): Promise<ProfileResponse> => {
-  const user = validateActiveMover(await profileRepository.findUserById(userId));
+  const user = assertActiveMover(await profileRepository.findUserById(userId));
 
   /*
    * 새 이미지 Key가 전달된 경우 현재 로그인한 사용자의 Key인지 확인하고,
@@ -613,13 +511,13 @@ const updateProfile = async (
       return profile;
     });
 
-    return mapProfileResponse(updatedProfile);
+    return mapProfileResponse(updatedProfile, await profileRepository.hasPasswordByUserId(user.id));
   } catch (error) {
     /*
      * 닉네임 수정 요청이 동시에 들어온 경우
      * MoverProfile.nickname UNIQUE 제약조건으로 중복 저장을 막는다.
      */
-    if (isUniqueConstraintError(error, "nickname")) {
+    if (hasUniqueConstraintField(error, "nickname")) {
       throw new AppError("CONFLICT", {
         message: "이미 사용 중인 닉네임입니다.",
       });
