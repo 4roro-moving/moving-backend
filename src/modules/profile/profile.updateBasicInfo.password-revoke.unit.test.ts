@@ -2,14 +2,14 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
 import bcrypt from "bcrypt";
-import { UserRole } from "@prisma/client";
+import { AuthProvider, Prisma, UserRole } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import { authRepository } from "../auth/auth.repository";
-import { profileService as customerProfileService } from "./customer/profile.service";
 import { profileRepository as customerProfileRepository } from "./customer/profile.repository";
-import { profileService as moverProfileService } from "./mover/profile.service";
+import { profileService as customerProfileService } from "./customer/profile.service";
 import { profileRepository as moverProfileRepository } from "./mover/profile.repository";
+import { profileService as moverProfileService } from "./mover/profile.service";
 
 const CURRENT_PASSWORD = "CurrentPass1!";
 const STORED_PASSWORD_HASH = "$2b$10$stored-current-password-hash-for-profile-test";
@@ -17,38 +17,53 @@ const NEW_PASSWORD = "NewSecurePass2!";
 
 type Role = "customer" | "mover";
 
-type TestUser = {
-  id: string;
-  email: string;
-  name: string;
-  phone: string;
-  role: UserRole;
-  isActive: boolean;
-  isProfileCompleted: boolean;
-  deletedAt: null;
-};
+type CustomerUser = NonNullable<Awaited<ReturnType<typeof customerProfileRepository.findUserById>>>;
+type CustomerUserWithPassword = NonNullable<
+  Awaited<ReturnType<typeof customerProfileRepository.findUserWithPasswordById>>
+>;
+type CustomerUpdatedUser = Awaited<ReturnType<typeof customerProfileRepository.updateUser>>;
+type CustomerProfileRecord = NonNullable<
+  Awaited<ReturnType<typeof customerProfileRepository.findProfileByUserId>>
+>;
 
-type RoleHarness = {
-  role: Role;
+type MoverUser = NonNullable<Awaited<ReturnType<typeof moverProfileRepository.findUserById>>>;
+type MoverUserWithPassword = NonNullable<
+  Awaited<ReturnType<typeof moverProfileRepository.findUserWithPasswordById>>
+>;
+type MoverUpdatedUser = Awaited<ReturnType<typeof moverProfileRepository.updateUser>>;
+type MoverProfileRecord = NonNullable<
+  Awaited<ReturnType<typeof moverProfileRepository.findProfileByUserId>>
+>;
+
+type CustomerHarness = {
+  role: "customer";
   userId: string;
   profileService: typeof customerProfileService;
   profileRepository: typeof customerProfileRepository;
-  user: TestUser;
-  profile: {
-    id: number;
-    userId: string;
-    imageUrl: null;
-    createdAt: Date;
-    updatedAt: Date;
-    user: { name: string; email: string; phone: string };
-    serviceAreas: [];
-    serviceTypes: [];
-  };
+  user: CustomerUser;
+  userWithPassword: CustomerUserWithPassword;
+  updatedUser: CustomerUpdatedUser;
+  profile: CustomerProfileRecord;
 };
 
+type MoverHarness = {
+  role: "mover";
+  userId: string;
+  profileService: typeof moverProfileService;
+  profileRepository: typeof moverProfileRepository;
+  user: MoverUser;
+  userWithPassword: MoverUserWithPassword;
+  updatedUser: MoverUpdatedUser;
+  profile: MoverProfileRecord;
+};
+
+type RoleHarness = CustomerHarness | MoverHarness;
+
+function createHarness(role: "customer"): CustomerHarness;
+function createHarness(role: "mover"): MoverHarness;
 function createHarness(role: Role): RoleHarness {
   const userId = `${role}-user-1`;
-  const user: TestUser = {
+  const baseUser = {
     id: userId,
     email: `${role}@example.com`,
     name: role === "customer" ? "고객" : "기사",
@@ -59,13 +74,20 @@ function createHarness(role: Role): RoleHarness {
     deletedAt: null,
   };
 
-  return {
-    role,
-    userId,
-    profileService: role === "customer" ? customerProfileService : moverProfileService,
-    profileRepository: role === "customer" ? customerProfileRepository : moverProfileRepository,
-    user,
-    profile: {
+  if (role === "customer") {
+    const user: CustomerUser = baseUser;
+    const userWithPassword: CustomerUserWithPassword = {
+      ...user,
+      password: STORED_PASSWORD_HASH,
+    };
+    const updatedUser: CustomerUpdatedUser = {
+      ...userWithPassword,
+      authProvider: AuthProvider.LOCAL,
+      providerUserId: null,
+      createdAt: new Date("2026-08-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+    };
+    const profile: CustomerProfileRecord = {
       id: 1,
       userId,
       imageUrl: null,
@@ -78,7 +100,63 @@ function createHarness(role: Role): RoleHarness {
       },
       serviceAreas: [],
       serviceTypes: [],
+    };
+
+    return {
+      role,
+      userId,
+      profileService: customerProfileService,
+      profileRepository: customerProfileRepository,
+      user,
+      userWithPassword,
+      updatedUser,
+      profile,
+    };
+  }
+
+  const user: MoverUser = baseUser;
+  const userWithPassword: MoverUserWithPassword = {
+    ...user,
+    password: STORED_PASSWORD_HASH,
+  };
+  const updatedUser: MoverUpdatedUser = {
+    ...userWithPassword,
+    authProvider: AuthProvider.LOCAL,
+    providerUserId: null,
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+  };
+  const profile: MoverProfileRecord = {
+    id: 1,
+    userId,
+    nickname: "mover-profile",
+    imageUrl: null,
+    career: 3,
+    shortIntro: "test intro",
+    description: "test description",
+    confirmedCount: 0,
+    averageRating: new Prisma.Decimal(0),
+    reviewCount: 0,
+    createdAt: new Date("2026-08-01T00:00:00.000Z"),
+    updatedAt: new Date("2026-08-01T00:00:00.000Z"),
+    user: {
+      name: user.name,
+      email: user.email,
+      phone: user.phone,
     },
+    serviceAreas: [],
+    serviceTypes: [],
+  };
+
+  return {
+    role,
+    userId,
+    profileService: moverProfileService,
+    profileRepository: moverProfileRepository,
+    user,
+    userWithPassword,
+    updatedUser,
+    profile,
   };
 }
 
@@ -94,20 +172,47 @@ function installStubs(harness: RoleHarness, options: { password?: string | null 
   };
   const password = options.password === undefined ? STORED_PASSWORD_HASH : options.password;
 
-  harness.profileRepository.findUserById = async () => harness.user;
-  harness.profileRepository.findProfileByUserId = async () => harness.profile;
-  harness.profileRepository.findUserWithPasswordById = async () => ({
-    ...harness.user,
-    password,
-  });
-  harness.profileRepository.hasPasswordByUserId = async () => password !== null;
-  harness.profileRepository.updateUser = async (_userId, data) => {
-    if (data.password !== undefined) {
-      state.passwordUpdates.push(data.password);
-    }
+  if (harness.role === "customer") {
+    customerProfileRepository.findUserById = async () => harness.user;
+    customerProfileRepository.findProfileByUserId = async () => harness.profile;
+    customerProfileRepository.findUserWithPasswordById = async () => ({
+      ...harness.userWithPassword,
+      password,
+    });
+    customerProfileRepository.hasPasswordByUserId = async () => password !== null;
+    customerProfileRepository.updateUser = async (_userId, data, _db) => {
+      if (data.password !== undefined) {
+        state.passwordUpdates.push(data.password);
+      }
 
-    return harness.user;
-  };
+      return {
+        ...harness.updatedUser,
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.phone !== undefined && { phone: data.phone }),
+        ...(data.password !== undefined && { password: data.password }),
+      };
+    };
+  } else {
+    moverProfileRepository.findUserById = async () => harness.user;
+    moverProfileRepository.findProfileByUserId = async () => harness.profile;
+    moverProfileRepository.findUserWithPasswordById = async () => ({
+      ...harness.userWithPassword,
+      password,
+    });
+    moverProfileRepository.hasPasswordByUserId = async () => password !== null;
+    moverProfileRepository.updateUser = async (_userId, data, _db) => {
+      if (data.password !== undefined) {
+        state.passwordUpdates.push(data.password);
+      }
+
+      return {
+        ...harness.updatedUser,
+        ...(data.name !== undefined && { name: data.name }),
+        ...(data.phone !== undefined && { phone: data.phone }),
+        ...(data.password !== undefined && { password: data.password }),
+      };
+    };
+  }
 
   authRepository.revokeAllRefreshTokensByUserId = async (userId, sessionType) => {
     state.revokeCalls.push({ userId, sessionType });
@@ -145,9 +250,11 @@ afterEach(() => {
   bcrypt.compare = originalCompare;
 });
 
-for (const role of ["customer", "mover"] as const) {
+function definePasswordValidationSuite(role: "customer"): void;
+function definePasswordValidationSuite(role: "mover"): void;
+function definePasswordValidationSuite(role: Role): void {
   describe(`${role} updateBasicInfo password validation (unit)`, () => {
-    const harness = createHarness(role);
+    const harness = role === "customer" ? createHarness("customer") : createHarness("mover");
 
     it("returns UNAUTHORIZED and does not update password or revoke tokens when current password is wrong", async () => {
       const state = installStubs(harness);
@@ -233,3 +340,6 @@ for (const role of ["customer", "mover"] as const) {
     });
   });
 }
+
+definePasswordValidationSuite("customer");
+definePasswordValidationSuite("mover");
