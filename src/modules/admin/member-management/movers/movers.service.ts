@@ -3,7 +3,11 @@ import { UserRole, type Prisma } from "@prisma/client";
 import { buildPagination } from "../../../../utils/pagination.util";
 import { toKstEndOfDay, toKstStartOfDay } from "../member-list-date.util";
 import { memberRepository } from "../member.repository";
-import { buildMemberStatusWhere, buildProfileCompletedWhere } from "../member.policy";
+import {
+  buildMemberStatusWhere,
+  buildProfileCompletedWhere,
+  buildMemberListOrderBy,
+} from "../member.policy";
 import { AppError } from "../../../../lib/app-error";
 import { toMoverDetail, toMoverListItem } from "./movers.mapper";
 import { moversRepository } from "./movers.repository";
@@ -54,12 +58,13 @@ function buildMoverListWhere(query: ListMoverQuery): Prisma.UserWhereInput {
 export const moversService = {
   /** 관리자용 기사(MOVER) 목록을 조회합니다. */
   async getMoverList(query: ListMoverQuery) {
-    const { page, limit } = query;
+    const { page, limit, sort } = query;
 
     const { movers, totalCount } = await moversRepository.findManyWithCount({
       skip: (page - 1) * limit,
       take: limit,
       where: buildMoverListWhere(query),
+      orderBy: buildMemberListOrderBy(sort),
     });
 
     return {

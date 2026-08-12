@@ -9,6 +9,7 @@ import {
   memberProfileCompletedSchema,
   memberStatusSchema,
   validateMemberListDateRange,
+  memberListSortOrderSchema,
 } from "../member-list.validator";
 
 export const moverIdParamSchema = z.object({
@@ -30,5 +31,6 @@ export const listMoverQuerySchema = z
     moveType: z.enum(MoveType, { error: "올바른 이사 유형이 아닙니다." }).optional(),
     fromDate: memberListDateQuerySchema,
     toDate: memberListDateQuerySchema,
+    sort: memberListSortOrderSchema,
   })
   .superRefine(validateMemberListDateRange);

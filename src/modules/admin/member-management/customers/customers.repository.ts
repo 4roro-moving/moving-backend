@@ -99,6 +99,7 @@ type ListParams = {
   skip: number;
   take: number;
   where: Prisma.UserWhereInput;
+  orderBy: Prisma.UserOrderByWithRelationInput[];
 };
 
 type HistoryParams = {
@@ -110,12 +111,12 @@ export const customersRepository = {
   /**
    * 목록과 전체 건수를 동일한 필터 조건으로 병렬 조회합니다.
    */
-  async findManyWithCount({ skip, take, where }: ListParams, db: DbClient = prisma) {
+  async findManyWithCount({ skip, take, where, orderBy }: ListParams, db: DbClient = prisma) {
     const [customers, totalCount] = await Promise.all([
       db.user.findMany({
         where,
         select: customerListSelect,
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+        orderBy,
         skip,
         take,
       }),

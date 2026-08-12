@@ -1,8 +1,10 @@
 import { SuspensionAction } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
+import type { z } from "zod";
 
 import { AppError } from "../../../lib/app-error";
 import { MEMBER_STATUS, type MemberStatus } from "./member-status.constants";
+import type { memberListSortOrderSchema } from "./member-list.validator";
 
 /**
  * User.isActive와 deletedAt 조합으로 관리자 회원의 표시 상태를 계산합니다.
@@ -54,4 +56,13 @@ export function assertAdminCanChangeMemberStatus(memberId: string, adminId: stri
 /** 정지·해제 동작을 User.isActive에 저장할 값으로 변환합니다. */
 export function resolveIsActiveForSuspensionAction(action: SuspensionAction): boolean {
   return action === SuspensionAction.RELEASE;
+}
+
+type MemberListSortOrder = z.infer<typeof memberListSortOrderSchema>;
+
+/** 회원 목록 조회 시 사용할 정렬 조건을 생성합니다. */
+export function buildMemberListOrderBy(
+  sort: MemberListSortOrder,
+): Prisma.UserOrderByWithRelationInput[] {
+  return [{ createdAt: sort === "OLDEST" ? "asc" : "desc" }, { id: "asc" }];
 }

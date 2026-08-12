@@ -24,6 +24,7 @@ import {
   buildProfileCompletedWhere,
   buildMemberStatusWhere,
   resolveIsActiveForSuspensionAction,
+  buildMemberListOrderBy,
 } from "../member.policy";
 import { MEMBER_STATUS } from "../member-status.constants";
 import { toMemberListBase } from "../member.mapper";
@@ -67,12 +68,13 @@ function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput
 export const customersService = {
   /** 관리자용 일반 고객(CUSTOMER) 목록을 조회합니다. */
   async getCustomerList(query: ListCustomerQuery) {
-    const { page, limit } = query;
+    const { page, limit, sort } = query;
 
     const { customers, totalCount } = await customersRepository.findManyWithCount({
       skip: (page - 1) * limit,
       take: limit,
       where: buildCustomerListWhere(query),
+      orderBy: buildMemberListOrderBy(sort),
     });
 
     return {

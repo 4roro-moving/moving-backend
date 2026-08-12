@@ -9,6 +9,7 @@ import {
   memberProfileCompletedSchema,
   memberStatusSchema,
   validateMemberListDateRange,
+  memberListSortOrderSchema,
 } from "../member-list.validator";
 
 const MAX_STATUS_REASON_LENGTH = 500;
@@ -49,5 +50,6 @@ export const listCustomerQuerySchema = z
     isProfileCompleted: memberProfileCompletedSchema,
     fromDate: memberListDateQuerySchema,
     toDate: memberListDateQuerySchema,
+    sort: memberListSortOrderSchema,
   })
   .superRefine(validateMemberListDateRange);

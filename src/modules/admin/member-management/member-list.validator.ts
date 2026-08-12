@@ -44,6 +44,12 @@ export const memberListDateQuerySchema = z.iso
   .date("날짜는 YYYY-MM-DD 형식의 유효한 날짜여야 합니다.")
   .optional();
 
+export const memberListSortOrderSchema = z
+  .enum(["LATEST", "OLDEST"], {
+    error: "정렬 기준은 LATEST 또는 OLDEST여야 합니다.",
+  })
+  .default("LATEST");
+
 export function validateMemberListDateRange(
   data: { fromDate?: string | undefined; toDate?: string | undefined },
   ctx: z.RefinementCtx,

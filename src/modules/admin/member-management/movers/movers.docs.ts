@@ -28,7 +28,7 @@ registerRouterDocs(adminMoverRouter, {
         "- `isProfileCompleted`: 프로필 완료 여부 (`true` | `false`)",
         "- `regionId` / `moveType`: 서비스 가능 지역·제공 이사 유형 필터",
         "- `fromDate` / `toDate`: 가입일 기간 검색 (YYYY-MM-DD, KST 기준)",
-        "- 정렬: createdAt DESC (최신 가입순)",
+        "- `sort`: LATEST(기본값, 최신 가입순) | OLDEST(오래된 가입순)",
       ].join("\n"),
       responses: { 200: "조회 성공" },
     },
