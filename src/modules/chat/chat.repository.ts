@@ -24,6 +24,11 @@ const chatRoomSelect = {
       id: true,
       name: true,
       role: true,
+      moverProfile: {
+        select: {
+          nickname: true,
+        },
+      },
     },
   },
 } satisfies Prisma.ChatRoomSelect;

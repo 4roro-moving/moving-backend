@@ -31,6 +31,25 @@ type SendMessageAck =
 
 const toRoomName = (roomId: number): string => `chat:room:${roomId}`;
 
+function hasReceiverSocketInRoom(io: SocketIOServer, roomId: number, senderId: string): boolean {
+  const socketIds = io.sockets.adapter.rooms.get(toRoomName(roomId));
+
+  if (!socketIds) {
+    return false;
+  }
+
+  for (const socketId of socketIds) {
+    const roomSocket = io.sockets.sockets.get(socketId);
+    const userId = roomSocket?.data.user?.id;
+
+    if (userId && userId !== senderId) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
 function getSocketUserId(socket: Socket): string {
   const userId = socket.data.user?.id;
 
@@ -87,6 +106,7 @@ export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): 
 
       try {
         const input = sendChatMessagePayloadSchema.parse(payload);
+        const senderId = getSocketUserId(socket);
 
         if (socket.data.roomId !== input.roomId) {
           throw new AppError("FORBIDDEN", {
@@ -95,12 +115,19 @@ export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): 
         }
 
         const message = await chatService.createTextMessageForJoinedRoom(
-          getSocketUserId(socket),
+          senderId,
           input.roomId,
           input.content,
         );
 
         io.to(toRoomName(input.roomId)).emit("chat:message:new", message);
+        void chatService.createMessageReceivedNotification({
+          roomId: input.roomId,
+          senderId,
+          messageId: message.id,
+          skip: hasReceiverSocketInRoom(io, input.roomId, senderId),
+        });
+
         callback?.({
           ok: true,
           message,
