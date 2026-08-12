@@ -9,7 +9,6 @@ import {
   type Prisma,
 } from "@prisma/client";
 
-import { ERROR_CODES } from "../../../../constants/error-code";
 import { AppError } from "../../../../lib/app-error";
 import { authRepository } from "../../../auth/auth.repository";
 import { disconnectUserSockets } from "../../../../socket";
@@ -45,7 +44,12 @@ export function toKstEndOfDay(date: string): Date {
   return new Date(Date.UTC(year, month - 1, day, 14, 59, 59, 999));
 }
 
+/**
+ * 관리자 고객 목록 query를 Prisma User 조회 조건으로 변환합니다.
+ * 역할, 회원 상태, 이름·이메일 검색어, 가입일 범위를 조합합니다.
+ */
 function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput {
+  // 상태 계산 규칙을 policy에 위임해 고객/기사 목록이 같은 기준을 사용
   const where: Prisma.UserWhereInput = {
     role: UserRole.CUSTOMER,
     ...buildMemberStatusWhere(query.status),
@@ -96,9 +100,10 @@ export const customersService = {
     const customer = await customersRepository.findCustomerById(customerId);
 
     if (!customer) {
-      throw new AppError(ERROR_CODES.USER_NOT_FOUND.code);
+      throw new AppError("USER_NOT_FOUND");
     }
 
+    // 서로 의존하지 않는 이력 조회이므로 병렬 실행
     const [estimateHistory, reviewHistory, filedReports, receivedReports, suspensionHistory] =
       await Promise.all([
         customersRepository.findEstimateHistory({ customerId }),
@@ -130,52 +135,58 @@ export const customersService = {
     adminId: string;
     input: UpdateCustomerStatusBody;
   }): Promise<UpdateCustomerStatusResponse> {
+    // 관리자는 자기 자신을 정지·해제할 수 없음
     if (customerId === adminId) {
-      throw new AppError(ERROR_CODES.SELF_ACTION_NOT_ALLOWED.code);
+      throw new AppError("SELF_ACTION_NOT_ALLOWED");
     }
 
+    // 상태 변경과 정지 후속 DB 작업(견적 요청/견적 상태, 이력·알림·토큰 폐기)을 하나의 트랜잭션으로 처리
     const result = await runTransaction<UpdateCustomerStatusResponse>(async (tx) => {
       const customer = await customersStatusRepository.findCustomerForStatusChange(customerId, tx);
 
       if (!customer) {
-        throw new AppError(ERROR_CODES.USER_NOT_FOUND.code);
+        throw new AppError("USER_NOT_FOUND");
       }
 
       const shouldBeActive = input.action === SuspensionAction.RELEASE;
 
-      // 현재 상태를 where 조건에 포함해, 동시 정지/해제 요청 중 하나만 상태를 변경합니다.
+      // 이미 요청한 상태라면 다시 변경하지 않도록 현재 상태를 where 조건에 포함
       const { count } = await customersStatusRepository.updateCustomerIsActiveIfCurrent(
         { customerId, isActive: shouldBeActive },
         tx,
       );
 
       if (count === 0) {
-        throw new AppError(ERROR_CODES.CUSTOMER_STATUS_ALREADY_PROCESSED.code);
+        throw new AppError("CUSTOMER_STATUS_ALREADY_PROCESSED");
       }
 
       const now = new Date();
 
       if (input.action === SuspensionAction.SUSPEND) {
-        // 요청 행을 먼저 잠가 견적 전송·고객 직접 취소와 상태 변경을 직렬화합니다.
+        // 해당 고객의 활성 PENDING·OPEN 견적 요청 행을 잠그고 ID를 가져옴
+        // 잠근 뒤 알림·이력 생성에 필요한 상세 정보 조회
         const lockedRequestIds =
           await customersStatusRepository.lockCancelableRequestsForSuspension(customerId, tx);
         const cancelableRequests =
           await customersStatusRepository.findCancelableRequestsForSuspension(lockedRequestIds, tx);
+        // 실제 취소 쿼리에 필요한 숫자 ID 배열만 추출
         const requestIds = cancelableRequests.map((request) => request.id);
 
         if (requestIds.length > 0) {
+          // 상태 조건을 다시 확인해 여전히 PENDING·OPEN이고 활성된 요청만 취소한 후, 실제로 취소된 요청 ID만 반환받음
           const canceledRequestIds =
             await customersStatusRepository.cancelPendingOrOpenEstimateRequests(
               requestIds,
               now,
               tx,
             );
-          // 실제로 취소 선점에 성공한 요청만 후속 알림·이력 처리 대상으로 삼습니다.
+          // 실제 취소된 요청의 상세 정보만 후속 이력·알림 생성에 사용
           const canceledRequestIdSet = new Set(canceledRequestIds.map((request) => request.id));
           const canceledRequests = cancelableRequests.filter((request) =>
             canceledRequestIdSet.has(request.id),
           );
 
+          // 각 요청에 연결된 모든 채팅방에 SYSTEM 메시지 생성
           const systemMessages = canceledRequests.flatMap((request) =>
             request.chatRooms.map((room) => ({
               roomId: room.id,
@@ -184,7 +195,10 @@ export const customersService = {
               content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
             })),
           );
+
+          // 이미 견적을 보낸 기사와 지정 견적 대상으로 선택된 기사에게 알림 전송
           const notifications = canceledRequests.flatMap((request) => {
+            // 한 기사가 견적·지정 대상에 모두 포함될 수 있으므로 Set으로 ID를 중복 제거해 한 번만 알림
             const moverIds = new Set([
               ...request.estimates.map((estimate) => estimate.moverId),
               ...request.designatedMovers.map((designation) => designation.moverId),
@@ -194,13 +208,14 @@ export const customersService = {
               userId: moverId,
               type: NotificationType.ESTIMATE_REQUEST_CANCELED_BY_ACCOUNT_SUSPENSION,
               title: "견적 요청 취소",
-              // 프론트 알림 템플릿의 강조 대상어만 전달합니다.
               content: "견적 요청",
               linkUrl: null,
               expiresAt: null,
               sourceId: `admin-suspend:${customerId}:${String(request.id)}`,
             }));
           });
+
+          // 견적 요청 이력에 취소 전 상태와 변경 후 상태를 남김
           const histories: Prisma.EstimateRequestHistoryCreateManyInput[] = canceledRequests.map(
             (request) => ({
               estimateRequestId: request.id,
@@ -215,6 +230,7 @@ export const customersService = {
             }),
           );
 
+          // 취소된 견적 요청에 연결된 견적·수정 요청을 정리하고, 이력·메시지·알림을 함께 저장
           await Promise.all([
             customersStatusRepository.cancelSentEstimates(
               canceledRequestIds.map((request) => request.id),
@@ -232,6 +248,7 @@ export const customersService = {
         }
       }
 
+      // 정지·해제 모두 감사용 이력과 운영 활동 로그를 남김
       const [suspension] = await Promise.all([
         customersStatusRepository.createCustomerSuspension(
           {
@@ -250,6 +267,7 @@ export const customersService = {
       ]);
 
       if (input.action === SuspensionAction.SUSPEND) {
+        // 새 토큰 재발급을 막아 정지된 고객이 즉시 다시 인증되도록 함
         await authRepository.revokeAllRefreshTokensByUserId(
           customerId,
           RefreshTokenSessionType.USER,
@@ -264,7 +282,7 @@ export const customersService = {
       };
     });
 
-    // DB 트랜잭션이 커밋된 뒤에만 기존 실시간 연결을 종료합니다.
+    // DB 트랜잭션이 커밋된 뒤에 기존 실시간 소켓 연결 종료
     if (input.action === SuspensionAction.SUSPEND) {
       disconnectUserSockets(customerId);
     }

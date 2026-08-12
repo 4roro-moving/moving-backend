@@ -16,6 +16,7 @@ import type {
   updateCustomerStatusBodySchema,
 } from "./customers.validator";
 
+/** validator 입력과 mapper가 만드는 관리자 고객 API 응답 계약입니다. */
 export type ListCustomerQuery = z.infer<typeof listCustomerQuerySchema>;
 export type CustomerIdParam = z.infer<typeof customerIdParamSchema>;
 export type UpdateCustomerStatusBody = z.infer<typeof updateCustomerStatusBodySchema>;

@@ -18,8 +18,15 @@ const CANCELABLE_ESTIMATE_REQUEST_STATUSES: EstimateRequestStatus[] = [
   EstimateRequestStatus.OPEN,
 ];
 
-/** 고객 상태 변경 및 정지 후속 처리에서 사용하는 DB 명령입니다. */
+/**
+ * 고객 정지·해제 시 실행하는 DB 작업입니다.
+ * 목록·상세 조회용 customersRepository와 분리해 상태 변경, 견적 취소, 이력·알림 저장을 담당합니다.
+ */
 export const customersStatusRepository = {
+  /**
+   * 상태 변경 대상인 활성/정지 고객을 조회합니다.
+   * 탈퇴 고객은 정지·해제할 수 없으므로 deletedAt이 null인 경우만 반환합니다.
+   */
   findCustomerForStatusChange(customerId: string, db: DbClient = prisma) {
     return db.user.findFirst({
       where: { id: customerId, role: UserRole.CUSTOMER, deletedAt: null },
@@ -27,6 +34,10 @@ export const customersStatusRepository = {
     });
   },
 
+  /**
+   * 현재 활성 상태가 요청 값과 다를 때만 변경합니다.
+   * 변경 건수 0은 이미 같은 상태이거나 다른 요청이 먼저 변경한 경우입니다.
+   */
   updateCustomerIsActiveIfCurrent(
     { customerId, isActive }: { customerId: string; isActive: boolean },
     db: DbClient = prisma,
@@ -43,8 +54,8 @@ export const customersStatusRepository = {
   },
 
   /**
-   * Prisma는 SELECT ... FOR UPDATE 행 잠금을 지원하지 않아 raw SQL을 사용합니다.
-   * 정지 처리 중 견적 전송·고객 직접 취소와 경합하지 않도록 대상 요청 행을 잠급니다.
+   * Prisma는 FOR UPDATE 행 잠금을 지원하지 않아 raw SQL을 사용합니다.
+   * 정지 처리와 견적 전송·고객 직접 취소가 같은 요청을 동시에 변경하지 않도록 대상 행을 잠급니다.
    */
   async lockCancelableRequestsForSuspension(
     customerId: string,
@@ -64,6 +75,10 @@ export const customersStatusRepository = {
     return rows.map((row) => row.id);
   },
 
+  /**
+   * 잠근 견적 요청의 취소 전 상태와 후속 처리에 필요한 관계 데이터를 조회합니다.
+   * 견적 기사·지정 기사·채팅방 정보는 이후 알림, 시스템 메시지, 이력 생성에 사용됩니다.
+   */
   findCancelableRequestsForSuspension(requestIds: number[], db: DbClient = prisma) {
     return db.estimateRequest.findMany({
       where: {
@@ -82,6 +97,10 @@ export const customersStatusRepository = {
     });
   },
 
+  /**
+   * 취소된 견적 요청에 속한 전송 완료(SENT) 견적을 취소합니다.
+   * 확정된 견적은 이 경로에서 변경하지 않습니다.
+   */
   cancelSentEstimates(requestIds: number[], canceledAt: Date, db: DbClient = prisma) {
     return db.estimate.updateMany({
       where: { estimateRequestId: { in: requestIds }, status: EstimateStatus.SENT },
@@ -89,6 +108,9 @@ export const customersStatusRepository = {
     });
   },
 
+  /**
+   * 취소된 견적 요청에 연결된 대기 중(PENDING) 견적 수정 요청을 취소합니다.
+   */
   cancelPendingEstimateRevisions(requestIds: number[], db: DbClient = prisma) {
     return db.estimateRevision.updateMany({
       where: {
@@ -99,13 +121,15 @@ export const customersStatusRepository = {
     });
   },
 
+  /**
+   * PENDING·OPEN 상태인 활성 견적 요청만 취소하고, 실제 변경된 요청 ID를 반환합니다.
+   * 후속 이력·알림 생성을 위해 raw SQL의 RETURNING을 사용해 실제로 수정한 행의 ID를 받습니다.
+   */
   cancelPendingOrOpenEstimateRequests(
     requestIds: number[],
     canceledAt: Date,
     db: DbClient = prisma,
   ) {
-    // 조건부 UPDATE와 RETURNING으로 실제 취소에 성공한 요청만 식별합니다.
-    // 후속 이력·알림은 이 결과에 대해서만 생성합니다.
     return db.$queryRaw<Array<{ id: number }>>(
       Prisma.sql`
         UPDATE estimate_requests
@@ -118,6 +142,7 @@ export const customersStatusRepository = {
     );
   },
 
+  /** 고객 정지로 취소된 견적 요청의 상태 변경 이력을 일괄 저장합니다. */
   createEstimateRequestHistories(
     data: Prisma.EstimateRequestHistoryCreateManyInput[],
     db: DbClient = prisma,
@@ -125,14 +150,20 @@ export const customersStatusRepository = {
     return db.estimateRequestHistory.createMany({ data });
   },
 
+  /** 취소된 견적 요청과 연결된 채팅방에 시스템 안내 메시지를 일괄 저장합니다. */
   createSystemMessages(data: Prisma.ChatMessageCreateManyInput[], db: DbClient = prisma) {
     return db.chatMessage.createMany({ data });
   },
 
+  /** 견적 기사·지정 기사에게 보낼 취소 알림을 중복 키는 건너뛰며 일괄 저장합니다. */
   createNotifications(data: Prisma.NotificationCreateManyInput[], db: DbClient = prisma) {
     return db.notification.createMany({ data, skipDuplicates: true });
   },
 
+  /**
+   * 정지 또는 해제 처리의 도메인 이력을 UserSuspension에 저장합니다.
+   * RELEASE도 남겨 상태 변경 주체·사유·시점을 추적합니다.
+   */
   createCustomerSuspension(
     {
       customerId,
@@ -161,6 +192,10 @@ export const customersStatusRepository = {
     });
   },
 
+  /**
+   * 관리자 운영 감사 로그를 ActivityLog에 저장합니다.
+   * UserSuspension의 회원 상태 이력과 별도로, 관리자의 행위를 검색·감사하는 용도입니다.
+   */
   createCustomerStatusActivityLog(
     {
       customerId,

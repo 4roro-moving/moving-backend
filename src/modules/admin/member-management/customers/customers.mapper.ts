@@ -76,6 +76,7 @@ export function toCustomerDetail(
   customer: CustomerDetailRow,
   histories: CustomerDetailHistories,
 ): CustomerDetail {
+  // 프로필을 등록하지 않은 고객은 null/빈 배열로 반환
   const profile = customer.customerProfile;
 
   return {
@@ -104,6 +105,7 @@ export function toCustomerDetail(
       items: histories.reviewHistory.items.map(toReviewHistoryItem),
     },
     reportHistory: {
+      // filed: 고객이 신고한 내역, received: 고객이 작성한 리뷰가 신고된 내역
       filed: {
         totalCount: histories.filedReports.totalCount,
         items: histories.filedReports.items.map(toReportHistoryItem),

@@ -1,6 +1,5 @@
 import type { Request, Response } from "express";
 
-import { ERROR_CODES } from "../../../../constants/error-code";
 import { AppError } from "../../../../lib/app-error";
 import { sendResponse } from "../../../../utils/response.util";
 import { customersService } from "./customers.service";
@@ -34,8 +33,10 @@ export const customersController = {
     const { id } = res.locals.params as CustomerIdParam;
     const input = req.body as UpdateCustomerStatusBody;
 
+    // 런타임에서는 requireActiveAdmin이 req.admin을 보장하지만,
+    // TypeScript는 Express 미들웨어 실행 순서를 추론하지 못해 req.admin을 optional로 판단합니다.
     if (!req.admin) {
-      throw new AppError(ERROR_CODES.UNAUTHORIZED.code);
+      throw new AppError("UNAUTHORIZED");
     }
 
     const result = await customersService.updateCustomerStatus({

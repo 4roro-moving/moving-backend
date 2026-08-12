@@ -2,7 +2,10 @@ import type { Prisma } from "@prisma/client";
 
 import { MEMBER_STATUS, type MemberStatus } from "./member-status.constants";
 
-/** User.isActive와 deletedAt 조합으로 관리자 회원의 표시 상태를 계산합니다. */
+/**
+ * User.isActive와 deletedAt 조합으로 관리자 회원의 표시 상태를 계산합니다.
+ * 탈퇴는 이용 정지보다 우선하므로 deletedAt을 먼저 확인합니다.
+ */
 export function resolveMemberStatus(user: {
   isActive: boolean;
   deletedAt: Date | null;
