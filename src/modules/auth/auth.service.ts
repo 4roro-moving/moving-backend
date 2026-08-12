@@ -243,6 +243,24 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
   }
 
   /*
+   * 요청한 로그인 역할과 실제 DB에 저장된 역할이 다르면
+   * 해당 로그인 경로를 사용할 수 없다.
+   *
+   * 클라이언트가 전달한 role은 기대 역할 검증 용도로만 사용하며,
+   * 실제 권한과 토큰의 role은 DB의 user.role을 기준으로 한다.
+   *
+   * 역할 불일치 시에도 Dummy bcrypt 비교를 수행하여
+   * 로그인 실패 경로 간 명확한 연산 차이를 줄인다.
+   */
+  if (user.role !== input.role) {
+    await bcrypt.compare(input.password, DUMMY_PASSWORD_HASH);
+
+    throw new AppError("UNAUTHORIZED", {
+      message: "이메일 또는 비밀번호가 올바르지 않습니다.",
+    });
+  }
+
+  /*
    * 비활성화되었거나 탈퇴 처리된 사용자는
    * 새로운 로그인 세션을 생성할 수 없다.
    */
