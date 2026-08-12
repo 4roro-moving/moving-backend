@@ -1,4 +1,13 @@
-import { NotificationType, RefreshTokenSessionType, type Prisma } from "@prisma/client";
+import {
+  ChatMessageType,
+  EstimateRequestHistoryType,
+  EstimateRequestStatus,
+  NotificationType,
+  RefreshTokenSessionType,
+  SuspensionAction,
+  UserRole,
+  type Prisma,
+} from "@prisma/client";
 
 import { AppError } from "../../../../lib/app-error";
 import { authRepository } from "../../../auth/auth.repository";
@@ -6,19 +15,17 @@ import { disconnectUserSockets } from "../../../../socket";
 import { buildPagination } from "../../../../utils/pagination.util";
 import { runTransaction } from "../../../../utils/transaction";
 
+import { customersRepository } from "./customers.repository";
+import { customersStatusRepository } from "./customers-status.repository";
 import {
-  customersRepository,
-  type CustomerDetailRow,
-  type CustomerListRow,
-  type EstimateHistoryRow,
-  type ReportHistoryRow,
-  type ReviewHistoryRow,
-  type SuspensionHistoryRow,
-} from "./customers.repository";
+  assertAdminCanChangeMemberStatus,
+  buildMemberStatusWhere,
+  resolveIsActiveForSuspensionAction,
+} from "../member-status.policy";
+import { MEMBER_STATUS } from "../member-status.constants";
+import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
 import type {
   CustomerDetail,
-  CustomerListItem,
-  CustomerStatus,
   ListCustomerQuery,
   UpdateCustomerStatusBody,
   UpdateCustomerStatusResponse,
@@ -42,43 +49,14 @@ export function toKstEndOfDay(date: string): Date {
 }
 
 /**
- * isActive + deletedAt 조합으로 회원 상태를 계산합니다.
- * - ACTIVE: deletedAt = null AND isActive = true
- * - SUSPENDED: deletedAt = null AND isActive = false
- * - WITHDRAWN: deletedAt != null
+ * 관리자 고객 목록 query를 Prisma User 조회 조건으로 변환합니다.
+ * 역할, 회원 상태, 이름·이메일 검색어, 가입일 범위를 조합합니다.
  */
-export function resolveCustomerStatus(user: {
-  isActive: boolean;
-  deletedAt: Date | null;
-}): CustomerStatus {
-  if (user.deletedAt !== null) {
-    return "WITHDRAWN";
-  }
-
-  return user.isActive ? "ACTIVE" : "SUSPENDED";
-}
-
-function buildStatusWhere(status: CustomerStatus | undefined): Prisma.UserWhereInput {
-  if (status === "ACTIVE") {
-    return { deletedAt: null, isActive: true };
-  }
-
-  if (status === "SUSPENDED") {
-    return { deletedAt: null, isActive: false };
-  }
-
-  if (status === "WITHDRAWN") {
-    return { deletedAt: { not: null } };
-  }
-
-  // 미지정 시 탈퇴 회원(WITHDRAWN) 제외
-  return { deletedAt: null };
-}
-
 function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput {
+  // 상태 계산 규칙을 policy에 위임해 고객/기사 목록이 같은 기준을 사용
   const where: Prisma.UserWhereInput = {
-    role: "CUSTOMER",
-    ...buildStatusWhere(query.status),
+    role: UserRole.CUSTOMER,
+    ...buildMemberStatusWhere(query.status),
   };
 
   if (query.keyword !== undefined) {
@@ -96,114 +74,6 @@ function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput
   }
 
   return where;
-}
-
-function toCustomerListItem(customer: CustomerListRow): CustomerListItem {
-  return {
-    id: customer.id,
-    email: customer.email,
-    name: customer.name,
-    phone: customer.phone,
-    status: resolveCustomerStatus(customer),
-    isProfileCompleted: customer.isProfileCompleted,
-    createdAt: customer.createdAt,
-  };
-}
-
-function toEstimateHistoryItem(item: EstimateHistoryRow) {
-  return {
-    id: item.id,
-    moveType: item.moveType,
-    status: item.status,
-    moveDate: item.moveDate,
-    createdAt: item.createdAt,
-  };
-}
-
-function toReviewHistoryItem(item: ReviewHistoryRow) {
-  return {
-    id: item.id,
-    moverId: item.moverId,
-    moverNickname: item.mover.moverProfile?.nickname ?? item.mover.name,
-    rating: item.rating,
-    content: item.content,
-    isHidden: item.isHidden,
-    createdAt: item.createdAt,
-  };
-}
-
-function toReportHistoryItem(item: ReportHistoryRow) {
-  return {
-    id: item.id,
-    targetType: item.targetType,
-    targetId: item.targetId,
-    reason: item.reason,
-    status: item.status,
-    createdAt: item.createdAt,
-  };
-}
-
-function toSuspensionHistoryItem(item: SuspensionHistoryRow) {
-  return {
-    id: item.id,
-    action: item.action,
-    reason: item.reason,
-    createdAt: item.createdAt,
-  };
-}
-
-function toCustomerDetail(
-  customer: CustomerDetailRow,
-  histories: {
-    estimateHistory: Awaited<ReturnType<typeof customersRepository.findEstimateHistory>>;
-    reviewHistory: Awaited<ReturnType<typeof customersRepository.findReviewHistory>>;
-    filedReports: Awaited<ReturnType<typeof customersRepository.findFiledReportHistory>>;
-    receivedReports: Awaited<ReturnType<typeof customersRepository.findReceivedReportHistory>>;
-    suspensionHistory: Awaited<ReturnType<typeof customersRepository.findSuspensionHistory>>;
-  },
-): CustomerDetail {
-  const profile = customer.customerProfile;
-
-  return {
-    account: {
-      id: customer.id,
-      email: customer.email,
-      name: customer.name,
-      phone: customer.phone,
-      authProvider: customer.authProvider,
-      status: resolveCustomerStatus(customer),
-      isProfileCompleted: customer.isProfileCompleted,
-      createdAt: customer.createdAt,
-      updatedAt: customer.updatedAt,
-    },
-    profile: {
-      imageUrl: profile?.imageUrl ?? null,
-      serviceAreas: profile?.serviceAreas.map((area) => area.region.name) ?? [],
-      serviceTypes: profile?.serviceTypes.map((type) => type.moveType) ?? [],
-    },
-    estimateHistory: {
-      totalCount: histories.estimateHistory.totalCount,
-      items: histories.estimateHistory.items.map(toEstimateHistoryItem),
-    },
-    reviewHistory: {
-      totalCount: histories.reviewHistory.totalCount,
-      items: histories.reviewHistory.items.map(toReviewHistoryItem),
-    },
-    reportHistory: {
-      filed: {
-        totalCount: histories.filedReports.totalCount,
-        items: histories.filedReports.items.map(toReportHistoryItem),
-      },
-      received: {
-        totalCount: histories.receivedReports.totalCount,
-        items: histories.receivedReports.items.map(toReportHistoryItem),
-      },
-    },
-    suspensionHistory: {
-      totalCount: histories.suspensionHistory.totalCount,
-      items: histories.suspensionHistory.items.map(toSuspensionHistoryItem),
-    },
-  };
 }
 
 export const customersService = {
@@ -237,6 +107,7 @@ export const customersService = {
       throw new AppError("USER_NOT_FOUND");
     }
 
+    // 서로 의존하지 않는 이력 조회이므로 병렬 실행
     const [estimateHistory, reviewHistory, filedReports, receivedReports, suspensionHistory] =
       await Promise.all([
         customersRepository.findEstimateHistory({ customerId }),
@@ -255,6 +126,10 @@ export const customersService = {
     });
   },
 
+  /**
+   * 관리자 고객의 정지·해제를 처리합니다.
+   * 정지 시 취소 가능한 견적 요청과 미확정 견적을 정리하고, 관련 이력·알림을 함께 저장합니다.
+   */
   async updateCustomerStatus({
     customerId,
     adminId,
@@ -264,20 +139,20 @@ export const customersService = {
     adminId: string;
     input: UpdateCustomerStatusBody;
   }): Promise<UpdateCustomerStatusResponse> {
-    if (customerId === adminId) {
-      throw new AppError("SELF_ACTION_NOT_ALLOWED");
-    }
+    assertAdminCanChangeMemberStatus(customerId, adminId);
 
+    // 상태 변경과 정지 후속 DB 작업(견적 요청/견적 상태, 이력·알림·토큰 폐기)을 하나의 트랜잭션으로 처리
     const result = await runTransaction<UpdateCustomerStatusResponse>(async (tx) => {
-      const customer = await customersRepository.findCustomerForStatusChange(customerId, tx);
+      const customer = await customersStatusRepository.findCustomerForStatusChange(customerId, tx);
 
       if (!customer) {
         throw new AppError("USER_NOT_FOUND");
       }
 
-      const shouldBeActive = input.action === "RELEASE";
+      const shouldBeActive = resolveIsActiveForSuspensionAction(input.action);
 
-      const { count } = await customersRepository.updateCustomerIsActiveIfCurrent(
+      // 이미 요청한 상태라면 다시 변경하지 않도록 현재 상태를 where 조건에 포함
+      const { count } = await customersStatusRepository.updateCustomerIsActiveIfCurrent(
         { customerId, isActive: shouldBeActive },
         tx,
       );
@@ -288,37 +163,43 @@ export const customersService = {
 
       const now = new Date();
 
-      if (input.action === "SUSPEND") {
-        const lockedRequestIds = await customersRepository.lockCancelableRequestsForSuspension(
-          customerId,
-          tx,
-        );
-        const cancelableRequests = await customersRepository.findCancelableRequestsForSuspension(
-          lockedRequestIds,
-          tx,
-        );
+      if (input.action === SuspensionAction.SUSPEND) {
+        // 해당 고객의 활성 PENDING·OPEN 견적 요청 행을 잠그고 ID를 가져옴
+        // 잠근 뒤 알림·이력 생성에 필요한 상세 정보 조회
+        const lockedRequestIds =
+          await customersStatusRepository.lockCancelableRequestsForSuspension(customerId, tx);
+        const cancelableRequests =
+          await customersStatusRepository.findCancelableRequestsForSuspension(lockedRequestIds, tx);
+        // 실제 취소 쿼리에 필요한 숫자 ID 배열만 추출
         const requestIds = cancelableRequests.map((request) => request.id);
 
         if (requestIds.length > 0) {
-          const canceledRequestIds = await customersRepository.cancelPendingOrOpenEstimateRequests(
-            requestIds,
-            now,
-            tx,
-          );
+          // 상태 조건을 다시 확인해 여전히 PENDING·OPEN이고 활성된 요청만 취소한 후, 실제로 취소된 요청 ID만 반환받음
+          const canceledRequestIds =
+            await customersStatusRepository.cancelPendingOrOpenEstimateRequests(
+              requestIds,
+              now,
+              tx,
+            );
+          // 실제 취소된 요청의 상세 정보만 후속 이력·알림 생성에 사용
           const canceledRequestIdSet = new Set(canceledRequestIds.map((request) => request.id));
           const canceledRequests = cancelableRequests.filter((request) =>
             canceledRequestIdSet.has(request.id),
           );
 
+          // 각 요청에 연결된 모든 채팅방에 SYSTEM 메시지 생성
           const systemMessages = canceledRequests.flatMap((request) =>
             request.chatRooms.map((room) => ({
               roomId: room.id,
               senderId: null,
-              type: "SYSTEM" as const,
+              type: ChatMessageType.SYSTEM,
               content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
             })),
           );
+
+          // 이미 견적을 보낸 기사와 지정 견적 대상으로 선택된 기사에게 알림 전송
           const notifications = canceledRequests.flatMap((request) => {
+            // 한 기사가 견적·지정 대상에 모두 포함될 수 있으므로 Set으로 ID를 중복 제거해 한 번만 알림
             const moverIds = new Set([
               ...request.estimates.map((estimate) => estimate.moverId),
               ...request.designatedMovers.map((designation) => designation.moverId),
@@ -328,47 +209,49 @@ export const customersService = {
               userId: moverId,
               type: NotificationType.ESTIMATE_REQUEST_CANCELED_BY_ACCOUNT_SUSPENSION,
               title: "견적 요청 취소",
-              // 프론트 알림 템플릿의 강조 대상어만 전달합니다.
               content: "견적 요청",
               linkUrl: null,
               expiresAt: null,
               sourceId: `admin-suspend:${customerId}:${String(request.id)}`,
             }));
           });
+
+          // 견적 요청 이력에 취소 전 상태와 변경 후 상태를 남김
           const histories: Prisma.EstimateRequestHistoryCreateManyInput[] = canceledRequests.map(
             (request) => ({
               estimateRequestId: request.id,
               changedBy: adminId,
-              type: "CANCELED",
+              type: EstimateRequestHistoryType.CANCELED,
               previousData: { status: request.status, isActive: request.isActive },
               changedData: {
-                status: "CANCELED",
+                status: EstimateRequestStatus.CANCELED,
                 isActive: false,
                 canceledAt: now.toISOString(),
-                cancelReason: "ACCOUNT_SUSPENSION",
               },
             }),
           );
 
+          // 취소된 견적 요청에 연결된 견적·수정 요청을 정리하고, 이력·메시지·알림을 함께 저장
           await Promise.all([
-            customersRepository.cancelSentEstimates(
+            customersStatusRepository.cancelSentEstimates(
               canceledRequestIds.map((request) => request.id),
               now,
               tx,
             ),
-            customersRepository.cancelPendingEstimateRevisions(
+            customersStatusRepository.cancelPendingEstimateRevisions(
               canceledRequestIds.map((request) => request.id),
               tx,
             ),
-            customersRepository.createEstimateRequestHistories(histories, tx),
-            customersRepository.createSystemMessages(systemMessages, tx),
-            customersRepository.createNotifications(notifications, tx),
+            customersStatusRepository.createEstimateRequestHistories(histories, tx),
+            customersStatusRepository.createSystemMessages(systemMessages, tx),
+            customersStatusRepository.createNotifications(notifications, tx),
           ]);
         }
       }
 
+      // 정지·해제 모두 감사용 이력과 운영 활동 로그를 남김
       const [suspension] = await Promise.all([
-        customersRepository.createCustomerSuspension(
+        customersStatusRepository.createCustomerSuspension(
           {
             customerId,
             adminId,
@@ -378,13 +261,14 @@ export const customersService = {
           },
           tx,
         ),
-        customersRepository.createCustomerStatusActivityLog(
+        customersStatusRepository.createCustomerStatusActivityLog(
           { customerId, adminId, action: input.action, reason: input.reason, createdAt: now },
           tx,
         ),
       ]);
 
-      if (input.action === "SUSPEND") {
+      if (input.action === SuspensionAction.SUSPEND) {
+        // 새 토큰 재발급을 막아 정지된 고객이 즉시 다시 인증되도록 함
         await authRepository.revokeAllRefreshTokensByUserId(
           customerId,
           RefreshTokenSessionType.USER,
@@ -394,12 +278,13 @@ export const customersService = {
 
       return {
         id: customerId,
-        status: shouldBeActive ? "ACTIVE" : "SUSPENDED",
+        status: shouldBeActive ? MEMBER_STATUS.ACTIVE : MEMBER_STATUS.SUSPENDED,
         suspension,
       };
     });
 
-    if (input.action === "SUSPEND") {
+    // DB 트랜잭션이 커밋된 뒤에 기존 실시간 소켓 연결 종료
+    if (input.action === SuspensionAction.SUSPEND) {
       disconnectUserSockets(customerId);
     }
 

@@ -1,4 +1,4 @@
-import type { NextFunction, Request, Response } from "express";
+import type { Request, Response } from "express";
 
 import { AppError } from "../../../../lib/app-error";
 import { sendResponse } from "../../../../utils/response.util";
@@ -28,24 +28,23 @@ export const customersController = {
     return sendResponse(res, 200, detail);
   },
 
-  updateCustomerStatus: async (req: Request, res: Response, next: NextFunction) => {
-    try {
-      const { id } = res.locals.params as CustomerIdParam;
-      const input = req.body as UpdateCustomerStatusBody;
+  // PATCH /api/admin/users/:id/status
+  updateCustomerStatus: async (req: Request, res: Response) => {
+    const { id } = res.locals.params as CustomerIdParam;
+    const input = req.body as UpdateCustomerStatusBody;
 
-      if (!req.admin) {
-        return next(new AppError("UNAUTHORIZED"));
-      }
-
-      const result = await customersService.updateCustomerStatus({
-        customerId: id,
-        adminId: req.admin.id,
-        input,
-      });
-
-      return sendResponse(res, 200, result);
-    } catch (error) {
-      return next(error);
+    // 런타임에서는 requireActiveAdmin이 req.admin을 보장하지만,
+    // TypeScript는 Express 미들웨어 실행 순서를 추론하지 못해 req.admin을 optional로 판단합니다.
+    if (!req.admin) {
+      throw new AppError("UNAUTHORIZED");
     }
+
+    const result = await customersService.updateCustomerStatus({
+      customerId: id,
+      adminId: req.admin.id,
+      input,
+    });
+
+    return sendResponse(res, 200, result);
   },
 };

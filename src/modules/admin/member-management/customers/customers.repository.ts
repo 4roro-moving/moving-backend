@@ -1,11 +1,13 @@
-import { Prisma } from "@prisma/client";
+import { ReportTargetType, UserRole } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../../../lib/prisma";
 import type { DbClient } from "../../../../utils/transaction";
 
+/** 고객 상세 응답에서 각 이력 항목별로 제공하는 기본 최신 건수입니다. */
 export const CUSTOMER_HISTORY_LIMIT = 5;
 
-/** 고객 목록 조회에 공통으로 사용하는 select */
+/** 고객 목록 행을 API 목록 응답 DTO로 변환하는 데 필요한 최소 필드입니다. */
 const customerListSelect = {
   id: true,
   email: true,
@@ -17,6 +19,7 @@ const customerListSelect = {
   createdAt: true,
 } satisfies Prisma.UserSelect;
 
+/** 고객 계정·프로필과 서비스 지역/유형을 포함한 상세 조회 필드입니다. */
 const customerDetailSelect = {
   id: true,
   email: true,
@@ -47,6 +50,7 @@ const customerDetailSelect = {
   },
 } satisfies Prisma.UserSelect;
 
+/** 고객 상세의 견적 요청 이력 요약에 필요한 필드입니다. */
 const estimateHistorySelect = {
   id: true,
   moveType: true,
@@ -55,6 +59,7 @@ const estimateHistorySelect = {
   createdAt: true,
 } satisfies Prisma.EstimateRequestSelect;
 
+/** 고객이 작성한 리뷰와 작성 당시 기사 표시명에 필요한 필드입니다. */
 const reviewHistorySelect = {
   id: true,
   moverId: true,
@@ -72,6 +77,7 @@ const reviewHistorySelect = {
   },
 } satisfies Prisma.ReviewSelect;
 
+/** 고객이 신고했거나 고객 리뷰가 피신고된 신고 이력 요약 필드입니다. */
 const reportHistorySelect = {
   id: true,
   targetType: true,
@@ -81,6 +87,7 @@ const reportHistorySelect = {
   createdAt: true,
 } satisfies Prisma.ReportSelect;
 
+/** 관리자에 의한 정지·해제 이력 요약 필드입니다. */
 const suspensionHistorySelect = {
   id: true,
   action: true,
@@ -111,6 +118,10 @@ type HistoryParams = {
 };
 
 export const customersRepository = {
+  /**
+   * 목록 페이지와 전체 건수를 동일한 조건으로 병렬 조회합니다.
+   * 목록 데이터와 pagination.totalCount의 필터 기준을 일치시키기 위함입니다.
+   */
   async findManyWithCount({ skip, take, where }: ListParams, db: DbClient = prisma) {
     const [customers, totalCount] = await Promise.all([
       db.user.findMany({
@@ -126,16 +137,24 @@ export const customersRepository = {
     return { customers, totalCount };
   },
 
+  /**
+   * ID와 CUSTOMER 역할이 일치하는 고객 상세를 조회합니다.
+   * 탈퇴 회원도 관리자 상세 조회 대상이므로 deletedAt으로 제한하지 않습니다.
+   */
   findCustomerById(customerId: string, db: DbClient = prisma) {
     return db.user.findFirst({
       where: {
         id: customerId,
-        role: "CUSTOMER",
+        role: UserRole.CUSTOMER,
       },
       select: customerDetailSelect,
     });
   },
 
+  /**
+   * 고객이 생성한 견적 요청 이력의 최신 일부와 전체 건수를 조회합니다.
+   * 상세 화면은 최신 이력만 표시하되, 전체 건수도 함께 보여줍니다.
+   */
   async findEstimateHistory(
     { customerId, take = CUSTOMER_HISTORY_LIMIT }: HistoryParams,
     db: DbClient = prisma,
@@ -155,6 +174,10 @@ export const customersRepository = {
     return { items, totalCount };
   },
 
+  /**
+   * 고객이 작성한 리뷰 이력의 최신 일부와 전체 건수를 조회합니다.
+   * 기사 프로필 닉네임이 없을 때 mapper가 기사 실명으로 대체할 수 있도록 함께 조회합니다.
+   */
   async findReviewHistory(
     { customerId, take = CUSTOMER_HISTORY_LIMIT }: HistoryParams,
     db: DbClient = prisma,
@@ -174,6 +197,9 @@ export const customersRepository = {
     return { items, totalCount };
   },
 
+  /**
+   * 고객이 신고자로 등록된 신고 이력(신고한 내역)의 최신 일부와 전체 건수를 조회합니다.
+   */
   async findFiledReportHistory(
     { customerId, take = CUSTOMER_HISTORY_LIMIT }: HistoryParams,
     db: DbClient = prisma,
@@ -194,13 +220,14 @@ export const customersRepository = {
   },
 
   /**
-   * 고객이 작성한 리뷰가 신고된 내역(피신고)을 조회합니다.
-   * Customer는 ReportTargetType 상 직접 신고 대상이 될 수 없습니다.
+   * 고객이 작성한 리뷰가 신고된 내역(피신고)의 최신 일부와 전체 건수를 조회합니다.
+   * Customer는 ReportTargetType 상 직접 신고 대상이 될 수 없어, 먼저 고객 리뷰 ID를 찾습니다.
    */
   async findReceivedReportHistory(
     { customerId, take = CUSTOMER_HISTORY_LIMIT }: HistoryParams,
     db: DbClient = prisma,
   ) {
+    // Report.targetId는 문자열이므로 리뷰의 숫자 ID를 문자열로 변환해 IN 조건에 사용
     const reviewIds = await db.review.findMany({
       where: { customerId },
       select: { id: true },
@@ -211,7 +238,7 @@ export const customersRepository = {
     }
 
     const where: Prisma.ReportWhereInput = {
-      targetType: "REVIEW",
+      targetType: ReportTargetType.REVIEW,
       targetId: { in: reviewIds.map((review) => String(review.id)) },
     };
 
@@ -228,6 +255,10 @@ export const customersRepository = {
     return { items, totalCount };
   },
 
+  /**
+   * 고객 계정의 정지·해제 처리 이력 최신 일부와 전체 건수를 조회합니다.
+   * 정지와 해제를 모두 UserSuspension에 남기므로 action으로 두 처리 유형을 구분합니다.
+   */
   async findSuspensionHistory(
     { customerId, take = CUSTOMER_HISTORY_LIMIT }: HistoryParams,
     db: DbClient = prisma,
@@ -245,163 +276,5 @@ export const customersRepository = {
     ]);
 
     return { items, totalCount };
-  },
-
-  findCustomerForStatusChange(customerId: string, db: DbClient = prisma) {
-    return db.user.findFirst({
-      where: { id: customerId, role: "CUSTOMER", deletedAt: null },
-      select: { id: true, isActive: true },
-    });
-  },
-
-  updateCustomerIsActiveIfCurrent(
-    { customerId, isActive }: { customerId: string; isActive: boolean },
-    db: DbClient = prisma,
-  ) {
-    return db.user.updateMany({
-      where: {
-        id: customerId,
-        role: "CUSTOMER",
-        deletedAt: null,
-        isActive: !isActive,
-      },
-      data: { isActive },
-    });
-  },
-
-  /** 고객 정지 시 취소 가능한 견적 요청(PENDING/OPEN)을 잠금 처리합니다. */
-  async lockCancelableRequestsForSuspension(
-    customerId: string,
-    db: Prisma.TransactionClient,
-  ): Promise<number[]> {
-    const rows = await db.$queryRaw<Array<{ id: number }>>(
-      Prisma.sql`
-        SELECT id
-        FROM estimate_requests
-        WHERE customer_id = ${customerId}::uuid
-          AND is_active = true
-          AND status IN ('PENDING', 'OPEN')
-        FOR UPDATE
-      `,
-    );
-
-    return rows.map((row) => row.id);
-  },
-
-  findCancelableRequestsForSuspension(requestIds: number[], db: DbClient = prisma) {
-    return db.estimateRequest.findMany({
-      where: { id: { in: requestIds }, status: { in: ["PENDING", "OPEN"] }, isActive: true },
-      select: {
-        id: true,
-        status: true,
-        isActive: true,
-        estimates: { where: { status: "SENT" }, select: { moverId: true } },
-        designatedMovers: { select: { moverId: true } },
-        chatRooms: { select: { id: true } },
-      },
-    });
-  },
-
-  cancelSentEstimates(requestIds: number[], canceledAt: Date, db: DbClient = prisma) {
-    return db.estimate.updateMany({
-      where: { estimateRequestId: { in: requestIds }, status: "SENT" },
-      data: { status: "CANCELED", canceledAt },
-    });
-  },
-
-  cancelPendingEstimateRevisions(requestIds: number[], db: DbClient = prisma) {
-    return db.estimateRevision.updateMany({
-      where: { status: "PENDING", estimate: { estimateRequestId: { in: requestIds } } },
-      data: { status: "CANCELED" },
-    });
-  },
-
-  cancelPendingOrOpenEstimateRequests(
-    requestIds: number[],
-    canceledAt: Date,
-    db: DbClient = prisma,
-  ) {
-    return db.$queryRaw<Array<{ id: number }>>(
-      Prisma.sql`
-        UPDATE estimate_requests
-        SET status = 'CANCELED', is_active = false, canceled_at = ${canceledAt}
-        WHERE id IN (${Prisma.join(requestIds)})
-          AND status IN ('PENDING', 'OPEN')
-          AND is_active = true
-        RETURNING id
-      `,
-    );
-  },
-
-  createEstimateRequestHistories(
-    data: Prisma.EstimateRequestHistoryCreateManyInput[],
-    db: DbClient = prisma,
-  ) {
-    return db.estimateRequestHistory.createMany({ data });
-  },
-
-  createSystemMessages(data: Prisma.ChatMessageCreateManyInput[], db: DbClient = prisma) {
-    return db.chatMessage.createMany({ data });
-  },
-
-  createNotifications(data: Prisma.NotificationCreateManyInput[], db: DbClient = prisma) {
-    return db.notification.createMany({ data, skipDuplicates: true });
-  },
-
-  createCustomerSuspension(
-    {
-      customerId,
-      adminId,
-      action,
-      reason,
-      internalNote,
-    }: {
-      customerId: string;
-      adminId: string;
-      action: "SUSPEND" | "RELEASE";
-      reason: string;
-      internalNote?: string;
-    },
-    db: DbClient = prisma,
-  ) {
-    return db.userSuspension.create({
-      data: {
-        userId: customerId,
-        adminId,
-        action,
-        reason,
-        ...(internalNote !== undefined ? { internalNote } : {}),
-      },
-      select: { id: true, action: true, reason: true, adminId: true, createdAt: true },
-    });
-  },
-
-  createCustomerStatusActivityLog(
-    {
-      customerId,
-      adminId,
-      action,
-      reason,
-      createdAt,
-    }: {
-      customerId: string;
-      adminId: string;
-      action: "SUSPEND" | "RELEASE";
-      reason: string;
-      createdAt: Date;
-    },
-    db: DbClient = prisma,
-  ) {
-    return db.activityLog.create({
-      data: {
-        actorId: adminId,
-        actorRole: "ADMIN",
-        action: "UPDATE",
-        targetType: "USER",
-        targetId: customerId,
-        memo: `${action}: ${reason}`,
-        createdAt,
-      },
-    });
   },
 };

@@ -74,6 +74,10 @@ export interface NotificationItem {
   createdAt: Date;
 }
 
+export interface OwnedNotificationItem extends NotificationItem {
+  userId: string;
+}
+
 /*
  * 알림 목록 조회 시 사용하는 페이지네이션 정보를 정의한다.
  */
