@@ -1,0 +1,30 @@
+import { MoveType } from "@prisma/client";
+import { z } from "zod";
+
+import {
+  memberListDateQuerySchema,
+  memberListKeywordSchema,
+  memberListLimitSchema,
+  memberListPageSchema,
+  memberProfileCompletedSchema,
+  memberStatusSchema,
+  validateMemberListDateRange,
+} from "../member-list.validator";
+
+export const listMoverQuerySchema = z
+  .object({
+    page: memberListPageSchema,
+    limit: memberListLimitSchema,
+    keyword: memberListKeywordSchema,
+    status: memberStatusSchema.optional(),
+    isProfileCompleted: memberProfileCompletedSchema,
+    regionId: z.coerce
+      .number()
+      .int("지역 ID는 정수여야 합니다.")
+      .positive("지역 ID는 1 이상이어야 합니다.")
+      .optional(),
+    moveType: z.enum(MoveType, { error: "올바른 이사 유형이 아닙니다." }).optional(),
+    fromDate: memberListDateQuerySchema,
+    toDate: memberListDateQuerySchema,
+  })
+  .superRefine(validateMemberListDateRange);

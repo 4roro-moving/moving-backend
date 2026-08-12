@@ -1,0 +1,17 @@
+import type { Request, Response } from "express";
+
+import { sendResponse } from "../../../../utils/response.util";
+import { moversService } from "./movers.service";
+import type { ListMoverQuery } from "./movers.type";
+
+export const moversController = {
+  // GET /api/admin/movers
+  getMoverList: async (_req: Request, res: Response) => {
+    const query = res.locals.query as ListMoverQuery;
+    const result = await moversService.getMoverList(query);
+
+    return sendResponse(res, 200, result.items, {
+      pagination: result.pagination,
+    });
+  },
+};
