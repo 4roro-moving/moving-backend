@@ -1,4 +1,4 @@
-import { EstimateStatus } from "@prisma/client";
+import { EstimateRequestStatus, EstimateStatus } from "@prisma/client";
 
 import {
   toMemberDetailAccount,
@@ -39,8 +39,12 @@ function toInProgressEstimateItem(item: InProgressEstimateRow) {
     status: item.status,
     price: item.price,
     moveDate: item.estimateRequest.moveDate,
-    // 관리자 개별 취소 API의 대상은 확정(CONFIRMED) 거래입니다.
-    cancelable: item.status === EstimateStatus.CONFIRMED,
+    // 관리자 취소는 현재 활성화된 확정 거래에만 허용됩니다.
+    cancelable:
+      item.status === EstimateStatus.CONFIRMED &&
+      item.estimateRequest.status === EstimateRequestStatus.CONFIRMED &&
+      item.estimateRequest.isActive &&
+      item.estimateRequest.confirmedEstimateId === item.id,
     createdAt: item.createdAt,
   };
 }
@@ -48,7 +52,10 @@ function toInProgressEstimateItem(item: InProgressEstimateRow) {
 function toRecentEstimateItem(item: RecentEstimateRow) {
   return {
     id: item.id,
-    status: item.status,
+    status:
+      item.estimateRequest.status === EstimateRequestStatus.COMPLETED
+        ? EstimateRequestStatus.COMPLETED
+        : item.status,
     price: item.price,
     confirmedAt: item.confirmedAt,
   };

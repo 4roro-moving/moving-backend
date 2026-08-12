@@ -1,4 +1,4 @@
-import { EstimateStatus, ReportTargetType, UserRole } from "@prisma/client";
+import { EstimateRequestStatus, EstimateStatus, ReportTargetType, UserRole } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import type { DbClient } from "../../../../utils/transaction";
 import { prisma } from "../../../../lib/prisma";
@@ -72,7 +72,14 @@ const inProgressEstimateSelect = {
   status: true,
   price: true,
   createdAt: true,
-  estimateRequest: { select: { moveDate: true } },
+  estimateRequest: {
+    select: {
+      moveDate: true,
+      status: true,
+      isActive: true,
+      confirmedEstimateId: true,
+    },
+  },
 } satisfies Prisma.EstimateSelect;
 
 const recentEstimateSelect = {
@@ -80,6 +87,7 @@ const recentEstimateSelect = {
   status: true,
   price: true,
   confirmedAt: true,
+  estimateRequest: { select: { status: true } },
 } satisfies Prisma.EstimateSelect;
 
 const reviewHistorySelect = {
@@ -148,14 +156,29 @@ export const moversRepository = {
     });
   },
 
-  /** SENT·CONFIRMED 상태인 진행 중 견적의 최신 일부와 전체 건수를 조회합니다. */
+  /** 아직 거래가 종료되지 않은 전송·확정 견적의 최신 일부와 전체 건수를 조회합니다. */
   async findInProgressEstimateHistory(
     { moverId, take = MOVER_HISTORY_LIMIT }: HistoryParams,
     db: DbClient = prisma,
   ) {
     const where: Prisma.EstimateWhereInput = {
       moverId,
-      status: { in: [EstimateStatus.SENT, EstimateStatus.CONFIRMED] },
+      OR: [
+        {
+          status: EstimateStatus.SENT,
+          estimateRequest: {
+            status: EstimateRequestStatus.OPEN,
+            isActive: true,
+          },
+        },
+        {
+          status: EstimateStatus.CONFIRMED,
+          estimateRequest: {
+            status: EstimateRequestStatus.CONFIRMED,
+            isActive: true,
+          },
+        },
+      ],
     };
 
     const [items, totalCount] = await Promise.all([
@@ -171,14 +194,17 @@ export const moversRepository = {
     return { items, totalCount };
   },
 
-  /** 진행 중 상태를 제외한 최근 견적 이력의 최신 일부와 전체 건수를 조회합니다. */
+  /** 만료·취소되었거나 이사가 완료된 최근 견적 이력의 최신 일부와 전체 건수를 조회합니다. */
   async findRecentEstimateHistory(
     { moverId, take = MOVER_HISTORY_LIMIT }: HistoryParams,
     db: DbClient = prisma,
   ) {
     const where: Prisma.EstimateWhereInput = {
       moverId,
-      status: { notIn: [EstimateStatus.SENT, EstimateStatus.CONFIRMED] },
+      OR: [
+        { status: { in: [EstimateStatus.EXPIRED, EstimateStatus.CANCELED] } },
+        { estimateRequest: { status: EstimateRequestStatus.COMPLETED } },
+      ],
     };
 
     const [items, totalCount] = await Promise.all([

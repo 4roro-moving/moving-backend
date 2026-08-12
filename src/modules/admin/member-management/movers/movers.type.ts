@@ -1,4 +1,10 @@
-import type { EstimateStatus, MoveType, ReportReason, ReportStatus } from "@prisma/client";
+import type {
+  EstimateRequestStatus,
+  EstimateStatus,
+  MoveType,
+  ReportReason,
+  ReportStatus,
+} from "@prisma/client";
 import type { z } from "zod";
 
 import type {
@@ -45,9 +51,13 @@ export type MoverInProgressEstimateItem = {
   createdAt: Date;
 };
 
+/** 완료 거래는 Estimate가 아닌 EstimateRequest 상태로 표시합니다. */
+export type MoverEstimateActivityStatus =
+  EstimateStatus | Extract<EstimateRequestStatus, "COMPLETED">;
+
 export type MoverRecentEstimateItem = {
   id: number;
-  status: EstimateStatus;
+  status: MoverEstimateActivityStatus;
   price: number;
   confirmedAt: Date | null;
 };
