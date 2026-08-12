@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 
 import { sendResponse } from "../../../../utils/response.util";
 import { moversService } from "./movers.service";
-import type { ListMoverQuery } from "./movers.type";
+import type { ListMoverQuery, MoverIdParam } from "./movers.type";
 
 export const moversController = {
   // GET /api/admin/movers
@@ -13,5 +13,13 @@ export const moversController = {
     return sendResponse(res, 200, result.items, {
       pagination: result.pagination,
     });
+  },
+
+  // GET /api/admin/movers/:id
+  getMoverDetail: async (_req: Request, res: Response) => {
+    const { id } = res.locals.params as MoverIdParam;
+    const detail = await moversService.getMoverDetail(id);
+
+    return sendResponse(res, 200, detail);
   },
 };

@@ -3,9 +3,10 @@ import { UserRole, type Prisma } from "@prisma/client";
 import { buildPagination } from "../../../../utils/pagination.util";
 import { toKstEndOfDay, toKstStartOfDay } from "../member-list-date.util";
 import { buildMemberStatusWhere, buildProfileCompletedWhere } from "../member.policy";
-import { toMoverListItem } from "./movers.mapper";
+import { AppError } from "../../../../lib/app-error";
+import { toMoverDetail, toMoverListItem } from "./movers.mapper";
 import { moversRepository } from "./movers.repository";
-import type { ListMoverQuery } from "./movers.type";
+import type { ListMoverQuery, MoverDetail } from "./movers.type";
 
 /**
  * 관리자 기사 목록 query를 Prisma User 조회 조건으로 변환합니다.
@@ -64,5 +65,36 @@ export const moversService = {
       items: movers.map(toMoverListItem),
       pagination: buildPagination(totalCount, page, limit),
     };
+  },
+
+  /** 관리자용 기사(MOVER) 상세와 주요 활동 이력을 조회합니다. */
+  async getMoverDetail(moverId: string): Promise<MoverDetail> {
+    const mover = await moversRepository.findMoverById(moverId);
+
+    if (!mover) {
+      throw new AppError("MOVER_NOT_FOUND");
+    }
+
+    const [
+      inProgressEstimateHistory,
+      recentEstimateHistory,
+      reviewHistory,
+      receivedReports,
+      suspensionHistory,
+    ] = await Promise.all([
+      moversRepository.findInProgressEstimateHistory({ moverId }),
+      moversRepository.findRecentEstimateHistory({ moverId }),
+      moversRepository.findReviewHistory({ moverId }),
+      moversRepository.findReceivedReportHistory({ moverId }),
+      moversRepository.findSuspensionHistory({ moverId }),
+    ]);
+
+    return toMoverDetail(mover, {
+      inProgressEstimateHistory,
+      recentEstimateHistory,
+      reviewHistory,
+      receivedReports,
+      suspensionHistory,
+    });
   },
 };

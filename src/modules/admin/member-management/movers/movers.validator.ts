@@ -11,6 +11,10 @@ import {
   validateMemberListDateRange,
 } from "../member-list.validator";
 
+export const moverIdParamSchema = z.object({
+  id: z.uuid("올바른 기사 ID가 아닙니다."),
+});
+
 export const listMoverQuerySchema = z
   .object({
     page: memberListPageSchema,

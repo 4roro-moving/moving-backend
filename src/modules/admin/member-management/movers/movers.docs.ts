@@ -31,5 +31,14 @@ registerRouterDocs(adminMoverRouter, {
       ].join("\n"),
       responses: { 200: "조회 성공" },
     },
+    "GET /{id}": {
+      summary: "기사님 상세 조회",
+      description: [
+        "관리자가 기사님(MOVER)의 계정·프로필과 주요 활동 이력을 조회합니다.",
+        "진행 중 견적은 SENT·CONFIRMED, 최근 견적은 그 외 상태의 최신 5건을 제공합니다.",
+        "Customer ID 또는 존재하지 않는 ID는 MOVER_NOT_FOUND를 반환합니다.",
+      ].join("\n"),
+      responses: { 200: "조회 성공", 404: "기사를 찾을 수 없습니다." },
+    },
   },
 });
