@@ -1,14 +1,12 @@
-import type {
-  AuthProvider,
-  EstimateStatus,
-  MoveType,
-  ReportReason,
-  ReportStatus,
-  SuspensionAction,
-} from "@prisma/client";
+import type { EstimateStatus, MoveType, ReportReason, ReportStatus } from "@prisma/client";
 import type { z } from "zod";
 
 import type { MemberStatus } from "../member-status.constants";
+import type {
+  HistorySummary,
+  MemberDetailAccount,
+  MemberSuspensionHistoryItem,
+} from "../member.type";
 import type { listMoverQuerySchema, moverIdParamSchema } from "./movers.validator";
 
 export type ListMoverQuery = z.infer<typeof listMoverQuerySchema>;
@@ -28,23 +26,6 @@ export type MoverListItem = {
   serviceAreas: string[];
   serviceTypes: MoveType[];
   createdAt: Date;
-};
-
-export type HistorySummary<T> = {
-  totalCount: number;
-  items: T[];
-};
-
-export type MoverDetailAccount = {
-  id: string;
-  email: string;
-  name: string;
-  phone: string | null;
-  authProvider: AuthProvider;
-  status: MemberStatus;
-  isProfileCompleted: boolean;
-  createdAt: Date;
-  updatedAt: Date;
 };
 
 export type MoverDetailProfile = {
@@ -93,15 +74,8 @@ export type MoverReceivedReportHistoryItem = {
   createdAt: Date;
 };
 
-export type MoverSuspensionHistoryItem = {
-  id: number;
-  action: SuspensionAction;
-  reason: string;
-  createdAt: Date;
-};
-
 export type MoverDetail = {
-  account: MoverDetailAccount;
+  account: MemberDetailAccount;
   profile: MoverDetailProfile;
   estimateActivity: {
     inProgress: HistorySummary<MoverInProgressEstimateItem>;
@@ -111,5 +85,5 @@ export type MoverDetail = {
   reportHistory: {
     received: HistorySummary<MoverReceivedReportHistoryItem>;
   };
-  suspensionHistory: HistorySummary<MoverSuspensionHistoryItem>;
+  suspensionHistory: HistorySummary<MemberSuspensionHistoryItem>;
 };
