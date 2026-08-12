@@ -257,14 +257,13 @@ enum LogAction {
 ///
 /// 로그로 남길 가치가 있는 도메인만 열거합니다.
 /// 알림/채팅/토큰처럼 양이 많고 추적 가치가 낮은 테이블은 제외했습니다.
-/// RESIDENCE_REVIEW / SHARING_POST 는 콘텐츠 관리(숨김/복구) 이력을 위해 추가합니다.
-/// (해당 테이블은 추후 생성 예정이지만, 로그 enum 은 먼저 확장합니다.)
+/// RESIDENCE_REVIEW / GIVEAWAY 는 콘텐츠 관리(숨김/복구) 이력을 위해 추가합니다.
 enum LogTargetType {
   USER
   MOVER_PROFILE
   REVIEW
   RESIDENCE_REVIEW
-  SHARING_POST
+  GIVEAWAY
   ESTIMATE_REQUEST
   ESTIMATE
   NOTICE
@@ -1232,7 +1231,7 @@ model ResidenceReview {
 /// 지역별 거주후기 평점 통계
 ///
 /// 지역 상세·목록에서 평균 평점을 빠르게 조회하기 위한 집계 테이블입니다.
-/// 후기 생성·수정·Soft Delete·숨김 변경과 동일한 Transaction 에서 갱신합니다.
+/// 후기 생성·수정·숨김(isHidden) 변경과 동일한 Transaction 에서 갱신합니다.
 model RegionReviewStatistic {
 	// PK.
 	id            Int     @id @default(autoincrement())
