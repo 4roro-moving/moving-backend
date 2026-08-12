@@ -18,6 +18,13 @@ const CANCELABLE_ESTIMATE_REQUEST_STATUSES: EstimateRequestStatus[] = [
   EstimateRequestStatus.OPEN,
 ];
 
+/** raw SQL에서는 enum 파라미터가 text로 전달되므로 PostgreSQL enum 타입 캐스팅이 필요합니다. */
+const cancelableEstimateRequestStatusSql = Prisma.join(
+  CANCELABLE_ESTIMATE_REQUEST_STATUSES.map(
+    (status) => Prisma.sql`${status}::"EstimateRequestStatus"`,
+  ),
+);
+
 /**
  * 고객 정지·해제 시 실행하는 DB 작업입니다.
  * 목록·상세 조회용 customersRepository와 분리해 상태 변경, 견적 취소, 이력·알림 저장을 담당합니다.
@@ -65,9 +72,9 @@ export const customersStatusRepository = {
       Prisma.sql`
         SELECT id
         FROM estimate_requests
-        WHERE customer_id = ${customerId}::uuid
-          AND is_active = true
-          AND status IN (${Prisma.join(CANCELABLE_ESTIMATE_REQUEST_STATUSES)})
+        WHERE "customerId" = ${customerId}::uuid
+          AND "isActive" = true
+          AND status IN (${cancelableEstimateRequestStatusSql})
         FOR UPDATE
       `,
     );
@@ -133,10 +140,10 @@ export const customersStatusRepository = {
     return db.$queryRaw<Array<{ id: number }>>(
       Prisma.sql`
         UPDATE estimate_requests
-        SET status = ${EstimateRequestStatus.CANCELED}, is_active = false, canceled_at = ${canceledAt}
+        SET status = ${EstimateRequestStatus.CANCELED}, "isActive" = false, "canceledAt" = ${canceledAt}
         WHERE id IN (${Prisma.join(requestIds)})
-          AND status IN (${Prisma.join(CANCELABLE_ESTIMATE_REQUEST_STATUSES)})
-          AND is_active = true
+          AND status IN (${cancelableEstimateRequestStatusSql})
+          AND "isActive" = true
         RETURNING id
       `,
     );
