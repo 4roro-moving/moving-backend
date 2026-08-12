@@ -30,6 +30,12 @@ export const memberListKeywordSchema = z
   .max(MAX_KEYWORD_LENGTH, `검색어는 ${String(MAX_KEYWORD_LENGTH)}자 이하여야 합니다.`)
   .optional();
 
+/** 프로필 완료 여부 query를 boolean으로 변환합니다. */
+export const memberProfileCompletedSchema = z
+  .enum(["true", "false"], { error: "프로필 완료 여부는 true 또는 false여야 합니다." })
+  .transform((value) => value === "true")
+  .optional();
+
 export const memberStatusSchema = z.enum(MEMBER_STATUSES, {
   error: `회원 상태는 ${MEMBER_STATUSES.join(", ")} 중 하나여야 합니다.`,
 });

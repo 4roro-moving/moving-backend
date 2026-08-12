@@ -6,6 +6,7 @@ import {
   memberListKeywordSchema,
   memberListLimitSchema,
   memberListPageSchema,
+  memberProfileCompletedSchema,
   memberStatusSchema,
   validateMemberListDateRange,
 } from "../member-list.validator";
@@ -39,16 +40,13 @@ export const updateCustomerStatusBodySchema = z.object({
     .optional(),
 });
 
-/**
- * 관리자 고객 목록 조회 쿼리.
- * status 미지정 시 ACTIVE + SUSPENDED 만 조회 (WITHDRAWN 제외).
- */
 export const listCustomerQuerySchema = z
   .object({
     page: memberListPageSchema,
     limit: memberListLimitSchema,
     keyword: memberListKeywordSchema,
     status: memberStatusSchema.optional(),
+    isProfileCompleted: memberProfileCompletedSchema,
     fromDate: memberListDateQuerySchema,
     toDate: memberListDateQuerySchema,
   })

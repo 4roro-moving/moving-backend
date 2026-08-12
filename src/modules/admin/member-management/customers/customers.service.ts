@@ -20,9 +20,10 @@ import { customersStatusRepository } from "./customers-status.repository";
 import { toKstEndOfDay, toKstStartOfDay } from "../member-list-date.util";
 import {
   assertAdminCanChangeMemberStatus,
+  buildProfileCompletedWhere,
   buildMemberStatusWhere,
   resolveIsActiveForSuspensionAction,
-} from "../member-status.policy";
+} from "../member.policy";
 import { MEMBER_STATUS } from "../member-status.constants";
 import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
 import type {
@@ -41,6 +42,7 @@ function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput
   const where: Prisma.UserWhereInput = {
     role: UserRole.CUSTOMER,
     ...buildMemberStatusWhere(query.status),
+    ...buildProfileCompletedWhere(query.isProfileCompleted),
   };
 
   if (query.keyword !== undefined) {
