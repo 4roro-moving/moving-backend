@@ -97,6 +97,7 @@ describe("authService.login timing mitigation", () => {
         authService.login({
           email: "missing@example.com",
           password: "wrong-password",
+          role: UserRole.CUSTOMER,
         }),
       assertUnauthorized,
     );
@@ -121,6 +122,7 @@ describe("authService.login timing mitigation", () => {
         authService.login({
           email: "oauth-user@example.com",
           password: "wrong-password",
+          role: UserRole.CUSTOMER,
         }),
       assertUnauthorized,
     );
@@ -140,6 +142,7 @@ describe("authService.login timing mitigation", () => {
         authService.login({
           email: "user@example.com",
           password: "wrong-password",
+          role: UserRole.CUSTOMER,
         }),
       assertUnauthorized,
     );
@@ -174,6 +177,7 @@ describe("authService.login timing mitigation", () => {
           authService.login({
             email: user.email,
             password: "any-password",
+            role: UserRole.CUSTOMER,
           }),
         assertError,
       );
