@@ -1,16 +1,14 @@
-import type { EstimateRequestStatus, MoveType, Prisma } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { prisma } from "../../lib/prisma";
 import { lockEstimateRequestForUpdate } from "../../utils/estimate-request-lock.util";
-import { getProfileImageUrl } from "../../utils/image-url";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
 import { notificationService } from "../notification/notification.service";
 
 import {
-  CANCELABLE_ESTIMATE_REQUEST_STATUSES,
   estimateRequestRepository,
   type EstimateRequestDetail,
 } from "./estimateRequest.repository";
@@ -20,167 +18,22 @@ import type {
   ListEstimateRequestQuery,
   UpdateEstimateRequestInput,
 } from "./estimateRequest.type";
+import { MAX_DESIGNATED_MOVERS, MOVE_TYPE_LABEL, SIDO_ALIAS } from "./estimateRequest.constants";
+import {
+  mapEstimateRequestProfileImageUrls,
+  type EstimateRequestResponse,
+} from "./estimateRequest.mapper";
+import {
+  assertCancelable,
+  assertEditable,
+  assertRequestNotExpired,
+  resolveExpiresAt,
+  resolveMoveDate,
+} from "./estimateRequest.policy";
+import { toHistorySnapshot } from "./estimateRequest.utils";
 
 type Tx = Prisma.TransactionClient;
-
-// 지정 견적을 요청할 수 있는 최대 기사님 수
-const MAX_DESIGNATED_MOVERS = 3;
-
-// 생성 시점부터의 기본 만료 기간(일)
-const DEFAULT_EXPIRATION_DAYS = 7;
-
-// 이사일이 임박한 경우 보장되는 최소 만료 기간(시간)
-const MIN_EXPIRATION_HOURS = 24;
-
-const MS_PER_HOUR = 60 * 60 * 1000;
-const MS_PER_DAY = 24 * MS_PER_HOUR;
-
-// 수정이 가능한 상태 (생성 직후 OPEN, 스키마상 PENDING 임시저장도 포함)
-const EDITABLE_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
-
-/** 고객이 soft cancel 가능한 요청 상태 — repository claim 조건과 동일 소스 */
-// 2026.08.03 정슬기 - [추가] 취소 허용 상태를 명시적으로 분리
-// 2026.08.03 정슬기 - [수정] repository 상수와 단일화
-export const CANCELABLE_STATUSES = CANCELABLE_ESTIMATE_REQUEST_STATUSES;
-
-type EstimateRequestResponse = Omit<
-  EstimateRequestDetail,
-  "designatedMovers" | "rejections" | "estimates"
-> & {
-  designatedMovers: Array<
-    EstimateRequestDetail["designatedMovers"][number] & {
-      hasEstimate: boolean;
-      rejection: {
-        reason: string;
-        rejectedAt: Date;
-      } | null;
-    }
-  >;
-};
-
-/**
- * 견적 요청 응답 변환
- * - 지정 기사 이미지 key를 외부 URL로 변환
- * - 지정 기사 반려 정보만 designatedMovers에 병합
- * - 일반 반려 내역은 고객에게 노출하지 않음
- * // 2026.08.10 정슬기 - [수정] 지정 요청 반려 정보 추가
- */
-function mapEstimateRequestProfileImageUrls(
-  request: EstimateRequestDetail,
-): EstimateRequestResponse {
-  const { rejections, designatedMovers, estimates, ...rest } = request;
-
-  const rejectionByMoverId = new Map(
-    rejections.map((rejection) => [
-      rejection.moverId,
-      {
-        reason: rejection.reason,
-        rejectedAt: rejection.createdAt,
-      },
-    ]),
-  );
-
-  const estimatedMoverIds = new Set(estimates.map((estimate) => estimate.moverId));
-
-  return {
-    ...rest,
-    designatedMovers: designatedMovers.map((designatedMover) => ({
-      ...designatedMover,
-      mover: {
-        ...designatedMover.mover,
-        moverProfile: designatedMover.mover.moverProfile
-          ? {
-              ...designatedMover.mover.moverProfile,
-              imageUrl: getProfileImageUrl(designatedMover.mover.moverProfile.imageUrl),
-            }
-          : null,
-      },
-      rejection: rejectionByMoverId.get(designatedMover.moverId) ?? null,
-      hasEstimate: estimatedMoverIds.has(designatedMover.moverId),
-    })),
-  };
-}
-
-/**
- * 취소 가능 여부를 검증한다.
- * // 2026.08.03 정슬기 - [추가] cancel 정책 단일화 (단위 테스트용 export)
- */
-export function assertCancelable(request: {
-  status: EstimateRequestStatus;
-  isActive: boolean;
-}): void {
-  if (request.status === "CANCELED") {
-    throw new AppError("ESTIMATE_REQUEST_ALREADY_CANCELED");
-  }
-
-  if (!request.isActive || !CANCELABLE_STATUSES.includes(request.status)) {
-    throw new AppError("ESTIMATE_REQUEST_CANCEL_NOT_ALLOWED");
-  }
-}
-
-const MOVE_TYPE_LABEL: Record<MoveType, string> = {
-  SMALL: "소형이사",
-  HOME: "가정이사",
-  OFFICE: "사무실이사",
-};
-
-/**
- * 시/도 이름 정규화 표.
- *
- * 카카오(다음) 우편번호 서비스는 축약형("서울")을 반환하지만
- * 정식 명칭이 들어올 수 있어 regions.name 과 매칭되도록 정규화
- */
-const SIDO_ALIAS: Record<string, string> = {
-  서울특별시: "서울",
-  부산광역시: "부산",
-  대구광역시: "대구",
-  인천광역시: "인천",
-  광주광역시: "광주",
-  대전광역시: "대전",
-  울산광역시: "울산",
-  세종특별자치시: "세종",
-  세종시: "세종",
-  경기도: "경기",
-  강원도: "강원",
-  강원특별자치도: "강원",
-  충청북도: "충북",
-  충청남도: "충남",
-  전라북도: "전북",
-  전북특별자치도: "전북",
-  전라남도: "전남",
-  경상북도: "경북",
-  경상남도: "경남",
-  제주도: "제주",
-  제주특별자치도: "제주",
-};
-
-function resolveMoveDate(moveDate: string): Date {
-  const parsed = new Date(`${moveDate}T00:00:00.000Z`);
-
-  const now = new Date();
-  const kstNow = new Date(now.getTime() + 9 * MS_PER_HOUR);
-  const todayInKst = new Date(
-    Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate()),
-  );
-
-  if (parsed.getTime() < todayInKst.getTime()) {
-    throw new AppError("INVALID_MOVE_DATE");
-  }
-
-  return parsed;
-}
-
-function resolveExpiresAt(moveDate: Date): Date {
-  const now = Date.now();
-
-  const dayBeforeMove = moveDate.getTime() - MS_PER_DAY;
-  const defaultExpiration = now + DEFAULT_EXPIRATION_DAYS * MS_PER_DAY;
-  const minimumExpiration = now + MIN_EXPIRATION_HOURS * MS_PER_HOUR;
-
-  const candidate = Math.min(dayBeforeMove, defaultExpiration);
-
-  return new Date(Math.max(candidate, minimumExpiration));
-}
+export { CANCELABLE_STATUSES, assertCancelable } from "./estimateRequest.policy";
 
 // 주소의 시/도를 regions 레코드로 변환
 async function resolveRegionId(address: AddressInput, db: Tx): Promise<number> {
@@ -226,37 +79,6 @@ async function findOwnedRequestOrThrow(
   return request;
 }
 
-/**
- * [D] 수정/지정이 가능한 상태인지 검증한다.
- * PENDING 또는 OPEN 이 아니면 에러를 던진다.
- */
-function assertEditable(request: EstimateRequestDetail, message?: string): void {
-  if (!EDITABLE_STATUSES.includes(request.status)) {
-    throw new AppError("REQUEST_NOT_EDITABLE", message ? { message } : {});
-  }
-}
-
-/**
- * [B] 히스토리에 남길 견적 요청 스냅샷을 만든다.
- * create / update 에서 반복되던 데이터 구성을 통일한다.
- */
-function toHistorySnapshot(request: {
-  moveType: MoveType;
-  moveDate: Date;
-  fromAddress: string;
-  toAddress: string;
-}): Prisma.InputJsonObject {
-  return {
-    moveType: request.moveType,
-    moveDate: request.moveDate.toISOString(),
-    fromAddress: request.fromAddress,
-    toAddress: request.toAddress,
-  };
-}
-
-/**
- * [C] 기사님에게 보낼 알림 payload 를 만든다.
- */
 /* -------------------------------------------------------------------------- */
 /* 서비스                                                                       */
 /* -------------------------------------------------------------------------- */
@@ -604,12 +426,7 @@ export const estimateRequestService = {
       const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
       assertEditable(request, "지금은 지정 견적을 요청할 수 없는 상태입니다.");
-
-      if (request.expiresAt.getTime() <= Date.now()) {
-        throw new AppError("REQUEST_NOT_EDITABLE", {
-          message: "만료된 견적 요청입니다.",
-        });
-      }
+      assertRequestNotExpired(request.expiresAt);
 
       const mover = await estimateRequestRepository.findMoverForDesignation(moverId, tx);
 
@@ -694,12 +511,7 @@ export const estimateRequestService = {
       const request = await findOwnedRequestOrThrow(estimateRequestId, customerId, tx);
 
       assertEditable(request, "지금은 지정 견적 요청을 취소할 수 없는 상태입니다.");
-
-      if (request.expiresAt.getTime() <= Date.now()) {
-        throw new AppError("REQUEST_NOT_EDITABLE", {
-          message: "만료된 견적 요청입니다.",
-        });
-      }
+      assertRequestNotExpired(request.expiresAt);
 
       const designation = await estimateRequestRepository.findDesignation(
         estimateRequestId,
