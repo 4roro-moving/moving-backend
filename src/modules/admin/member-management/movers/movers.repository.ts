@@ -8,6 +8,7 @@ const moverListSelect = {
   id: true,
   email: true,
   name: true,
+  phone: true,
   isActive: true,
   isProfileCompleted: true,
   deletedAt: true,

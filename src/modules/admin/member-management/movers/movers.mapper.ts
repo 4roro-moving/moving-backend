@@ -1,6 +1,6 @@
 import { EstimateStatus } from "@prisma/client";
 
-import { resolveMemberStatus } from "../member.policy";
+import { toMemberDetailAccount, toMemberListBase } from "../member.mapper";
 import type {
   InProgressEstimateRow,
   MoverDetailRow,
@@ -17,19 +17,15 @@ export function toMoverListItem(mover: MoverListRow): MoverListItem {
   const profile = mover.moverProfile;
 
   return {
-    id: mover.id,
-    email: mover.email,
-    name: mover.name,
+    ...toMemberListBase(mover),
+    phone: mover.phone,
     nickname: profile?.nickname ?? null,
     career: profile?.career ?? 0,
-    status: resolveMemberStatus(mover),
-    isProfileCompleted: mover.isProfileCompleted,
     averageRating: Number(profile?.averageRating ?? 0),
     reviewCount: profile?.reviewCount ?? 0,
     confirmedCount: profile?.confirmedCount ?? 0,
     serviceAreas: profile?.serviceAreas.map((area) => area.region.name) ?? [],
     serviceTypes: profile?.serviceTypes.map((type) => type.moveType) ?? [],
-    createdAt: mover.createdAt,
   };
 }
 
@@ -98,17 +94,7 @@ export function toMoverDetail(mover: MoverDetailRow, histories: MoverDetailHisto
   const profile = mover.moverProfile;
 
   return {
-    account: {
-      id: mover.id,
-      email: mover.email,
-      name: mover.name,
-      phone: mover.phone,
-      authProvider: mover.authProvider,
-      status: resolveMemberStatus(mover),
-      isProfileCompleted: mover.isProfileCompleted,
-      createdAt: mover.createdAt,
-      updatedAt: mover.updatedAt,
-    },
+    account: toMemberDetailAccount(mover),
     profile: {
       nickname: profile?.nickname ?? null,
       imageUrl: profile?.imageUrl ?? null,

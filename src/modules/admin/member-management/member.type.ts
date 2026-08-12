@@ -8,6 +8,16 @@ export type HistorySummary<T> = {
   items: T[];
 };
 
+/** 고객·기사 목록 응답에서 공통으로 제공하는 계정 요약입니다. */
+export type MemberListBase = {
+  id: string;
+  email: string;
+  name: string;
+  status: MemberStatus;
+  isProfileCompleted: boolean;
+  createdAt: Date;
+};
+
 /** 고객·기사 상세 응답에서 공통으로 제공하는 계정 정보입니다. */
 export type MemberDetailAccount = {
   id: string;

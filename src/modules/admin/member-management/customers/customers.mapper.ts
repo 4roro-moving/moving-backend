@@ -1,4 +1,4 @@
-import { resolveMemberStatus } from "../member.policy";
+import { toMemberDetailAccount, toMemberListBase } from "../member.mapper";
 import type {
   CustomerDetailRow,
   CustomerListRow,
@@ -12,13 +12,8 @@ import type { CustomerDetail, CustomerListItem } from "./customers.type";
 
 export function toCustomerListItem(customer: CustomerListRow): CustomerListItem {
   return {
-    id: customer.id,
-    email: customer.email,
-    name: customer.name,
+    ...toMemberListBase(customer),
     phone: customer.phone,
-    status: resolveMemberStatus(customer),
-    isProfileCompleted: customer.isProfileCompleted,
-    createdAt: customer.createdAt,
   };
 }
 
@@ -80,17 +75,7 @@ export function toCustomerDetail(
   const profile = customer.customerProfile;
 
   return {
-    account: {
-      id: customer.id,
-      email: customer.email,
-      name: customer.name,
-      phone: customer.phone,
-      authProvider: customer.authProvider,
-      status: resolveMemberStatus(customer),
-      isProfileCompleted: customer.isProfileCompleted,
-      createdAt: customer.createdAt,
-      updatedAt: customer.updatedAt,
-    },
+    account: toMemberDetailAccount(customer),
     profile: {
       imageUrl: profile?.imageUrl ?? null,
       serviceAreas: profile?.serviceAreas.map((area) => area.region.name) ?? [],

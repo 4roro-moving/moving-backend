@@ -21,6 +21,7 @@ registerRouterDocs(adminMoverRouter, {
       summary: "기사님 목록 조회",
       description: [
         "관리자가 기사님(MOVER) 목록을 검색·필터링·페이지네이션하여 조회합니다.",
+        "응답에는 계정 휴대폰 번호를 포함합니다.",
         "",
         "- `keyword`: 이름·닉네임·이메일 부분일치(대소문자 무시)",
         "- `status`: ACTIVE | SUSPENDED | WITHDRAWN (미지정 시 탈퇴 회원 제외)",

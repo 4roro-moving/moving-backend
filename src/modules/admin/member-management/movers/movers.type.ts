@@ -16,6 +16,7 @@ export type MoverListItem = {
   id: string;
   email: string;
   name: string;
+  phone: string | null;
   nickname: string | null;
   career: number;
   status: MemberStatus;
