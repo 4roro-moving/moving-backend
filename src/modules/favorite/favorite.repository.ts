@@ -1,7 +1,7 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
-import { buildActiveMoverUserWhere, MOVER_LIST_SELECT } from "../mover/mover.shared";
+import { buildActiveMoverUserWhere, MOVER_LIST_SELECT } from "../mover/mover.query";
 import type {
   DeleteFavoriteMoversByCustomerIdParams,
   FavoriteMoverParams,
@@ -11,7 +11,6 @@ import type {
 
 type Db = PrismaClient | Prisma.TransactionClient;
 
-// 찜 목록 조회와 전체 개수 조회에 동일하게 적용할 조건
 function buildFavoriteMoverListWhere(customerId: string): Prisma.FavoriteMoverWhereInput {
   return {
     customerId,
@@ -56,7 +55,6 @@ export const favoriteRepository = {
   },
 
   deleteFavoriteMover({ customerId, moverId }: FavoriteMoverParams) {
-    // 이미 해제된 찜도 성공 처리하기 위해 deleteMany 사용
     return prisma.favoriteMover.deleteMany({
       where: {
         customerId,
@@ -65,7 +63,6 @@ export const favoriteRepository = {
     });
   },
 
-  /** 찜 일괄 삭제. moverIds가 있으면 해당 id만, 없으면 excludedIds 제외 전체 */
   deleteFavoriteMoversByCustomerId(
     { customerId, moverIds, excludedIds }: DeleteFavoriteMoversByCustomerIdParams,
     db: Db = prisma,
