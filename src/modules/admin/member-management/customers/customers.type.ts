@@ -9,24 +9,24 @@ import type {
 } from "@prisma/client";
 import type { z } from "zod";
 
+import type { MEMBER_STATUS, MemberStatus } from "../member-status.constants";
 import type {
   customerIdParamSchema,
-  customerStatusSchema,
   listCustomerQuerySchema,
   updateCustomerStatusBodySchema,
 } from "./customers.validator";
 
-export type CustomerStatus = z.infer<typeof customerStatusSchema>;
+/** validator 입력과 mapper가 만드는 관리자 고객 API 응답 계약입니다. */
 export type ListCustomerQuery = z.infer<typeof listCustomerQuerySchema>;
 export type CustomerIdParam = z.infer<typeof customerIdParamSchema>;
 export type UpdateCustomerStatusBody = z.infer<typeof updateCustomerStatusBodySchema>;
 
 export type UpdateCustomerStatusResponse = {
   id: string;
-  status: "ACTIVE" | "SUSPENDED";
+  status: Exclude<MemberStatus, typeof MEMBER_STATUS.WITHDRAWN>;
   suspension: {
     id: number;
-    action: "SUSPEND" | "RELEASE";
+    action: SuspensionAction;
     reason: string;
     adminId: string;
     createdAt: Date;
@@ -38,7 +38,7 @@ export type CustomerListItem = {
   email: string;
   name: string;
   phone: string | null;
-  status: CustomerStatus;
+  status: MemberStatus;
   isProfileCompleted: boolean;
   createdAt: Date;
 };
@@ -54,7 +54,7 @@ export type CustomerDetailAccount = {
   name: string;
   phone: string | null;
   authProvider: AuthProvider;
-  status: CustomerStatus;
+  status: MemberStatus;
   isProfileCompleted: boolean;
   createdAt: Date;
   updatedAt: Date;

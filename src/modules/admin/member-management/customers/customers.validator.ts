@@ -1,15 +1,23 @@
+import { SuspensionAction } from "@prisma/client";
 import { z } from "zod";
 
-const MAX_PAGE = 10000;
+import { MEMBER_STATUSES } from "../member-status.constants";
+
+// 깊은 offset 페이지 조회로 인한 DB 부하를 줄이기 위해 최대 1,000페이지로 제한
+const MAX_PAGE = 1_000;
 const MAX_LIMIT = 100;
+const MAX_KEYWORD_LENGTH = 100;
+const MAX_STATUS_REASON_LENGTH = 500;
+const MAX_STATUS_INTERNAL_NOTE_LENGTH = 1_000;
+const DEFAULT_ADMIN_LIST_LIMIT = 20;
 
 const dateQuerySchema = z.iso.date("날짜는 YYYY-MM-DD 형식의 유효한 날짜여야 합니다.").optional();
 
 /**
  * 고객 상태 (DB 컬럼이 아닌 isActive + deletedAt 조합으로 계산).
  */
-export const customerStatusSchema = z.enum(["ACTIVE", "SUSPENDED", "WITHDRAWN"], {
-  error: "회원 상태는 ACTIVE, SUSPENDED, WITHDRAWN 중 하나여야 합니다.",
+export const customerStatusSchema = z.enum(MEMBER_STATUSES, {
+  error: `회원 상태는 ${MEMBER_STATUSES.join(", ")} 중 하나여야 합니다.`,
 });
 
 export const customerIdParamSchema = z.object({
@@ -17,15 +25,25 @@ export const customerIdParamSchema = z.object({
 });
 
 export const updateCustomerStatusBodySchema = z.object({
-  action: z.enum(["SUSPEND", "RELEASE"], {
+  action: z.enum(SuspensionAction, {
     error: "처리 동작은 SUSPEND 또는 RELEASE여야 합니다.",
   }),
   reason: z
     .string()
     .trim()
     .min(1, "처리 사유를 입력해 주세요.")
-    .max(500, "처리 사유는 500자 이하여야 합니다."),
-  internalNote: z.string().trim().max(1000, "내부 메모는 1000자 이하여야 합니다.").optional(),
+    .max(
+      MAX_STATUS_REASON_LENGTH,
+      `처리 사유는 ${String(MAX_STATUS_REASON_LENGTH)}자 이하여야 합니다.`,
+    ),
+  internalNote: z
+    .string()
+    .trim()
+    .max(
+      MAX_STATUS_INTERNAL_NOTE_LENGTH,
+      `내부 메모는 ${String(MAX_STATUS_INTERNAL_NOTE_LENGTH)}자 이하여야 합니다.`,
+    )
+    .optional(),
 });
 
 /**
@@ -45,12 +63,12 @@ export const listCustomerQuerySchema = z
       .int("조회 개수는 정수여야 합니다.")
       .positive("조회 개수는 1 이상이어야 합니다.")
       .max(MAX_LIMIT, `조회 개수는 ${String(MAX_LIMIT)} 이하여야 합니다.`)
-      .default(20),
+      .default(DEFAULT_ADMIN_LIST_LIMIT),
     keyword: z
       .string()
       .trim()
       .min(1, "검색어를 입력해 주세요.")
-      .max(100, "검색어는 100자 이하여야 합니다.")
+      .max(MAX_KEYWORD_LENGTH, `검색어는 ${String(MAX_KEYWORD_LENGTH)}자 이하여야 합니다.`)
       .optional(),
     status: customerStatusSchema.optional(),
     fromDate: dateQuerySchema,
