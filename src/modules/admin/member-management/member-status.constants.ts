@@ -1,6 +1,6 @@
 /**
- * User.isActive와 deletedAt 조합으로 계산하는 회원 상태
- * Prisma 모델의 enum이 아니므로 관리자 회원 관리(일반 유저/기사) 모듈에서 공통으로 관리
+ * User.isActive와 deletedAt 조합으로 계산하는 회원 상태입니다.
+ * Prisma 모델의 enum이 아니므로 관리자 회원 관리(일반 유저/기사) 모듈에서 공통으로 관리합니다.
  */
 export const MEMBER_STATUS = {
   ACTIVE: "ACTIVE",

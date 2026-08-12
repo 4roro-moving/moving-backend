@@ -17,7 +17,11 @@ import { runTransaction } from "../../../../utils/transaction";
 
 import { customersRepository } from "./customers.repository";
 import { customersStatusRepository } from "./customers-status.repository";
-import { buildMemberStatusWhere } from "../member-status.policy";
+import {
+  assertAdminCanChangeMemberStatus,
+  buildMemberStatusWhere,
+  resolveIsActiveForSuspensionAction,
+} from "../member-status.policy";
 import { MEMBER_STATUS } from "../member-status.constants";
 import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
 import type {
@@ -135,10 +139,7 @@ export const customersService = {
     adminId: string;
     input: UpdateCustomerStatusBody;
   }): Promise<UpdateCustomerStatusResponse> {
-    // 관리자는 자기 자신을 정지·해제할 수 없음
-    if (customerId === adminId) {
-      throw new AppError("SELF_ACTION_NOT_ALLOWED");
-    }
+    assertAdminCanChangeMemberStatus(customerId, adminId);
 
     // 상태 변경과 정지 후속 DB 작업(견적 요청/견적 상태, 이력·알림·토큰 폐기)을 하나의 트랜잭션으로 처리
     const result = await runTransaction<UpdateCustomerStatusResponse>(async (tx) => {
@@ -148,7 +149,7 @@ export const customersService = {
         throw new AppError("USER_NOT_FOUND");
       }
 
-      const shouldBeActive = input.action === SuspensionAction.RELEASE;
+      const shouldBeActive = resolveIsActiveForSuspensionAction(input.action);
 
       // 이미 요청한 상태라면 다시 변경하지 않도록 현재 상태를 where 조건에 포함
       const { count } = await customersStatusRepository.updateCustomerIsActiveIfCurrent(

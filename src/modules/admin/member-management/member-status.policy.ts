@@ -1,5 +1,7 @@
+import { SuspensionAction } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 
+import { AppError } from "../../../lib/app-error";
 import { MEMBER_STATUS, type MemberStatus } from "./member-status.constants";
 
 /**
@@ -33,4 +35,16 @@ export function buildMemberStatusWhere(status: MemberStatus | undefined): Prisma
 
   // 미지정 시 탈퇴 회원(WITHDRAWN) 제외
   return { deletedAt: null };
+}
+
+/** 관리자는 자기 자신의 계정 상태를 정지·해제할 수 없습니다. */
+export function assertAdminCanChangeMemberStatus(memberId: string, adminId: string): void {
+  if (memberId === adminId) {
+    throw new AppError("SELF_ACTION_NOT_ALLOWED");
+  }
+}
+
+/** 정지·해제 동작을 User.isActive에 저장할 값으로 변환합니다. */
+export function resolveIsActiveForSuspensionAction(action: SuspensionAction): boolean {
+  return action === SuspensionAction.RELEASE;
 }
