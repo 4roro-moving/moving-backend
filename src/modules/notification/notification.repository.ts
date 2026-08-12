@@ -26,6 +26,39 @@ const notificationSelect = {
   createdAt: true,
 } as const;
 
+const ownedNotificationSelect = {
+  ...notificationSelect,
+  userId: true,
+} as const;
+
+const buildActiveNotificationWhere = (userId: string, now: Date): Prisma.NotificationWhereInput => {
+  return {
+    userId,
+    OR: [
+      {
+        expiresAt: null,
+      },
+      {
+        expiresAt: {
+          gt: now,
+        },
+      },
+    ],
+  };
+};
+
+const toNotificationCreateData = (input: CreateNotificationInput) => {
+  return {
+    userId: input.userId,
+    type: input.type,
+    title: input.title,
+    content: input.content,
+    linkUrl: input.linkUrl ?? null,
+    sourceId: input.sourceId ?? null,
+    expiresAt: input.expiresAt,
+  };
+};
+
 /*
  * 사용자의 유효한 알림 목록 조회에 필요한 값을 정의한다.
  *
@@ -73,20 +106,7 @@ interface FindRecipientIdsByRoleInput {
  */
 async function findManyByUserId(input: FindManyByUserIdInput, db: DbClient = prisma) {
   const now = new Date();
-
-  const where: Prisma.NotificationWhereInput = {
-    userId: input.userId,
-    OR: [
-      {
-        expiresAt: null,
-      },
-      {
-        expiresAt: {
-          gt: now,
-        },
-      },
-    ],
-  };
+  const where = buildActiveNotificationWhere(input.userId, now);
 
   const [notifications, totalCount] = await Promise.all([
     db.notification.findMany({
@@ -125,18 +145,8 @@ async function countUnreadByUserId(userId: string, db: DbClient = prisma) {
 
   return db.notification.count({
     where: {
-      userId,
       isRead: false,
-      OR: [
-        {
-          expiresAt: null,
-        },
-        {
-          expiresAt: {
-            gt: now,
-          },
-        },
-      ],
+      ...buildActiveNotificationWhere(userId, now),
     },
   });
 }
@@ -154,10 +164,7 @@ async function findById(notificationId: number, db: DbClient = prisma) {
     where: {
       id: notificationId,
     },
-    select: {
-      ...notificationSelect,
-      userId: true,
-    },
+    select: ownedNotificationSelect,
   });
 }
 
@@ -216,18 +223,8 @@ async function markAllAsRead(
   db: DbClient = prisma,
 ) {
   const unreadCondition: Prisma.NotificationWhereInput = {
-    userId,
     isRead: false,
-    OR: [
-      {
-        expiresAt: null,
-      },
-      {
-        expiresAt: {
-          gt: readAt,
-        },
-      },
-    ],
+    ...buildActiveNotificationWhere(userId, readAt),
   };
 
   const chatResult = await db.notification.updateMany({
@@ -275,15 +272,7 @@ async function markAllAsRead(
  */
 async function create(input: CreateNotificationInput, db: DbClient = prisma) {
   return db.notification.create({
-    data: {
-      userId: input.userId,
-      type: input.type,
-      title: input.title,
-      content: input.content,
-      linkUrl: input.linkUrl ?? null,
-      sourceId: input.sourceId ?? null,
-      expiresAt: input.expiresAt,
-    },
+    data: toNotificationCreateData(input),
     select: notificationSelect,
   });
 }
@@ -374,15 +363,7 @@ async function createMany(
   }
 
   const result = await db.notification.createMany({
-    data: inputs.map((input) => ({
-      userId: input.userId,
-      type: input.type,
-      title: input.title,
-      content: input.content,
-      linkUrl: input.linkUrl ?? null,
-      sourceId: input.sourceId ?? null,
-      expiresAt: input.expiresAt,
-    })),
+    data: inputs.map(toNotificationCreateData),
     skipDuplicates: true,
   });
 

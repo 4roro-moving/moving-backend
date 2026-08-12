@@ -2,9 +2,9 @@ import type { Response } from "express";
 
 import logger from "../../config/logger";
 
-import type { NotificationItem } from "./notification.type";
+import { HEARTBEAT_INTERVAL_MS, NOTIFICATION_SSE_EVENTS } from "./notification.constants";
 
-const HEARTBEAT_INTERVAL_MS = 30 * 1000;
+import type { NotificationItem } from "./notification.type";
 
 /*
  * 사용자별 SSE 연결을 저장한다.
@@ -131,7 +131,7 @@ const addConnection = (userId: string, response: Response): void => {
   userConnections.add(response);
   connections.set(userId, userConnections);
 
-  writeEvent(response, "connected", {
+  writeEvent(response, NOTIFICATION_SSE_EVENTS.CONNECTED, {
     connectedAt: new Date().toISOString(),
   });
 
@@ -167,7 +167,7 @@ const sendNotification = (userId: string, notification: NotificationItem): void 
     }
 
     try {
-      writeEvent(response, "notification", notification);
+      writeEvent(response, NOTIFICATION_SSE_EVENTS.NOTIFICATION, notification);
     } catch (error) {
       logger.warn("SSE 알림 전송에 실패했습니다.", {
         userId,
@@ -212,7 +212,7 @@ const sendNotificationRefresh = (userIds: string[]): void => {
       }
 
       try {
-        writeEvent(response, "notification-refresh", {
+        writeEvent(response, NOTIFICATION_SSE_EVENTS.REFRESH, {
           refreshedAt,
         });
       } catch (error) {
