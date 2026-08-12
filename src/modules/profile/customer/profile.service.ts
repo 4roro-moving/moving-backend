@@ -1,5 +1,7 @@
 import bcrypt from "bcrypt";
+import { RefreshTokenSessionType } from "@prisma/client";
 
+import { authRepository } from "../../auth/auth.repository";
 import { AppError } from "../../../lib/app-error";
 import { runTransaction } from "../../../utils/transaction";
 
@@ -8,6 +10,7 @@ import { hasUniqueConstraintField, PASSWORD_SALT_ROUNDS } from "../profile.share
 import { mapProfileResponse } from "./profile.mapper";
 import { assertActiveCustomer } from "./profile.policy";
 import { profileRepository } from "./profile.repository";
+
 import type {
   CreateProfileInput,
   ProfileResponse,
@@ -182,6 +185,12 @@ const getProfileStatus = async (
  * - name
  * - phone
  * - password
+ *
+ * 비밀번호가 변경되는 경우 기존 USER Refresh Token 세션을
+ * 모두 폐기하여 재로그인을 요구한다.
+ *
+ * 비밀번호 변경과 Refresh Token 세션 폐기는
+ * 하나의 트랜잭션으로 처리한다.
  */
 const updateBasicInfo = async (
   userId: string,
@@ -272,6 +281,10 @@ const updateBasicInfo = async (
       });
     }
 
+    /*
+     * bcrypt 해시는 DB 작업이 아니므로
+     * 트랜잭션 밖에서 처리하여 커넥션 점유 시간을 줄인다.
+     */
     hashedPassword = await bcrypt.hash(input.newPassword, PASSWORD_SALT_ROUNDS);
   }
 
@@ -295,6 +308,23 @@ const updateBasicInfo = async (
 
       if (Object.keys(userUpdateData).length > 0) {
         await profileRepository.updateUser(user.id, userUpdateData, tx);
+      }
+
+      /*
+       * 비밀번호가 실제로 변경된 경우
+       * 해당 사용자의 기존 USER Refresh Token 세션을
+       * 모두 폐기한다.
+       *
+       * password UPDATE와 세션 revoke를 동일한
+       * 트랜잭션으로 묶어 둘 중 하나만 반영되는
+       * 상태를 방지한다.
+       */
+      if (hashedPassword !== undefined) {
+        await authRepository.revokeAllRefreshTokensByUserId(
+          user.id,
+          RefreshTokenSessionType.USER,
+          tx,
+        );
       }
 
       const profile = await profileRepository.findProfileByUserId(user.id, tx);
