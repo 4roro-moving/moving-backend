@@ -2,7 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 
-import { mapMoverBase } from "../mover/mover.shared";
+import { mapMoverSummary } from "../mover/mover.mapper";
 import { favoriteRepository } from "./favorite.repository";
 import type {
   BulkDeleteFavoriteMoversParams,
@@ -88,7 +88,6 @@ export const favoriteService = {
         moverId,
       });
     } catch (error) {
-      // 고객-기사님 복합 unique 충돌인 경우에만 성공 처리, 다른 unique 에러는 에러 처리
       if (!isFavoriteMoverUniqueError(error)) {
         throw error;
       }
@@ -103,7 +102,6 @@ export const favoriteService = {
   },
 
   async deleteFavoriteMover({ customerId, moverId }: FavoriteMoverParams) {
-    // deleteMany는 멱등 처리이므로 비활성·삭제된 기사 찜도 해제 가능해야 함
     await favoriteRepository.deleteFavoriteMover({ customerId, moverId });
 
     return {
@@ -170,7 +168,7 @@ export const favoriteService = {
         }
 
         return {
-          ...mapMoverBase(mover),
+          ...mapMoverSummary(mover),
           isFavorite: true,
           favoritedAt: favorite.createdAt,
         };
