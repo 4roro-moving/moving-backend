@@ -15,6 +15,46 @@ import type { PendingEstimateQuery } from "./customer-estimate.type";
 // 고객: 기사에게 받은 견적 목록·상세 조회 필드
 // =============================================================================
 
+function getFavoriteStateSelect(customerId: string) {
+  return {
+    favoritesReceived: {
+      where: {
+        customerId,
+      },
+      select: {
+        id: true,
+      },
+      take: 1,
+    },
+    _count: {
+      select: {
+        favoritesReceived: true,
+      },
+    },
+  } satisfies Prisma.UserSelect;
+}
+
+const receivedEstimateListMoverProfileSelect = {
+  nickname: true,
+  imageUrl: true,
+  career: true,
+  shortIntro: true,
+  averageRating: true,
+  reviewCount: true,
+  confirmedCount: true,
+} satisfies Prisma.MoverProfileSelect;
+
+const receivedEstimateRequestSummarySelect = {
+  id: true,
+  moveType: true,
+  moveDate: true,
+  fromAddress: true,
+  toAddress: true,
+  status: true,
+  createdAt: true,
+  confirmedEstimateId: true,
+} satisfies Prisma.EstimateRequestSelect;
+
 // 2026.07.24 정슬기 - [수정] 목록에 찜 여부·찜 수를 포함해 하트 버튼 연동
 function getReceivedEstimateSelect(customerId: string) {
   return {
@@ -27,30 +67,9 @@ function getReceivedEstimateSelect(customerId: string) {
       select: {
         id: true,
         name: true,
-        favoritesReceived: {
-          where: {
-            customerId,
-          },
-          select: {
-            id: true,
-          },
-          take: 1,
-        },
+        ...getFavoriteStateSelect(customerId),
         moverProfile: {
-          select: {
-            nickname: true,
-            imageUrl: true,
-            career: true,
-            shortIntro: true,
-            averageRating: true,
-            reviewCount: true,
-            confirmedCount: true,
-          },
-        },
-        _count: {
-          select: {
-            favoritesReceived: true,
-          },
+          select: receivedEstimateListMoverProfileSelect,
         },
       },
     },
@@ -100,16 +119,11 @@ function getReceivedEstimateDetailSelect(customerId: string) {
       select: {
         id: true,
         name: true,
+        ...getFavoriteStateSelect(customerId),
         moverProfile: {
           select: {
-            nickname: true,
-            imageUrl: true,
-            career: true,
-            shortIntro: true,
+            ...receivedEstimateListMoverProfileSelect,
             description: true,
-            averageRating: true,
-            reviewCount: true,
-            confirmedCount: true,
             serviceTypes: {
               select: {
                 moveType: true,
@@ -127,24 +141,28 @@ function getReceivedEstimateDetailSelect(customerId: string) {
             },
           },
         },
-        favoritesReceived: {
-          where: {
-            customerId,
-          },
-          select: {
-            id: true,
-          },
-          take: 1,
-        },
-        _count: {
-          select: {
-            favoritesReceived: true,
-          },
-        },
       },
     },
   } satisfies Prisma.EstimateSelect;
 }
+
+const receivedEstimateForConfirmSelect = {
+  id: true,
+  status: true,
+  estimateRequest: {
+    select: {
+      customerId: true,
+      moveDate: true,
+      customer: {
+        select: {
+          name: true,
+        },
+      },
+      status: true,
+      confirmedEstimateId: true,
+    },
+  },
+} satisfies Prisma.EstimateSelect;
 
 // =============================================================================
 // 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
@@ -202,7 +220,6 @@ export const receivedEstimateRepository = {
           createdAt: true,
           expiresAt: true,
           canceledAt: true,
-          confirmedEstimateId: true,
           designatedMovers: {
             select: {
               moverId: true,
@@ -242,15 +259,8 @@ export const receivedEstimateRepository = {
         id: estimateRequestId,
       },
       select: {
-        id: true,
         customerId: true,
-        moveType: true,
-        moveDate: true,
-        fromAddress: true,
-        toAddress: true,
-        status: true,
-        createdAt: true,
-        confirmedEstimateId: true,
+        ...receivedEstimateRequestSummarySelect,
       },
     });
   },
@@ -283,14 +293,7 @@ export const receivedEstimateRepository = {
         },
       },
       select: {
-        id: true,
-        moveType: true,
-        moveDate: true,
-        fromAddress: true,
-        toAddress: true,
-        status: true,
-        createdAt: true,
-        confirmedEstimateId: true,
+        ...receivedEstimateRequestSummarySelect,
         estimates: {
           where: {
             status: {
@@ -345,38 +348,7 @@ export const receivedEstimateRepository = {
         id: estimateId,
         estimateRequestId,
       },
-      select: {
-        id: true,
-        price: true,
-        status: true,
-        confirmedAt: true,
-        estimateRequest: {
-          select: {
-            id: true,
-            customerId: true,
-            moveDate: true,
-            customer: {
-              select: {
-                name: true,
-              },
-            },
-            status: true,
-            confirmedEstimateId: true,
-          },
-        },
-        mover: {
-          select: {
-            id: true,
-            name: true,
-            moverProfile: {
-              select: {
-                nickname: true,
-                imageUrl: true,
-              },
-            },
-          },
-        },
-      },
+      select: receivedEstimateForConfirmSelect,
     });
   },
 

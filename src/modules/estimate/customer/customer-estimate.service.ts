@@ -1,11 +1,11 @@
-import type { EstimateRequestStatus, EstimateStatus, Prisma } from "@prisma/client";
-
 import logger from "../../../config/logger";
 import { AppError } from "../../../lib/app-error";
 import { getProfileImageUrl } from "../../../utils/image-url";
 import { buildPagination } from "../../../utils/pagination.util";
 import { runTransaction } from "../../../utils/transaction";
 import { notificationService } from "../../notification/notification.service";
+import { mapDetailEstimate, mapListEstimate } from "./customer-estimate.mapper";
+import { assertConfirmableReceivedEstimate } from "./customer-estimate.policy";
 import { receivedEstimateRepository } from "./customer-estimate.repository";
 import type {
   ConfirmReceivedEstimateParams,
@@ -13,6 +13,7 @@ import type {
   GetReceivedEstimateListParams,
   PendingEstimateQuery,
 } from "./customer-estimate.type";
+import { getKstEndOfDay } from "./customer-estimate.utils";
 
 /*
 2026.07.23 add 김성현
@@ -21,165 +22,32 @@ import type {
 - 받은 견적 확정 비즈니스 로직
 */
 
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+function assertCustomerOwnership(ownerId: string, customerId: string, message: string): void {
+  if (ownerId !== customerId) {
+    throw new AppError("FORBIDDEN", {
+      message,
+    });
+  }
+}
 
-function getKstEndOfDay(date: Date): Date {
-  const kstDate = new Date(date.getTime() + KST_OFFSET_MS);
-
-  return new Date(
-    Date.UTC(
-      kstDate.getUTCFullYear(),
-      kstDate.getUTCMonth(),
-      kstDate.getUTCDate(),
-      14,
-      59,
-      59,
-      999,
-    ),
-  );
+function buildEstimateConfirmedNotificationPayload(params: {
+  moverId: string;
+  customerName: string;
+  moveDate: Date;
+}) {
+  return {
+    userId: params.moverId,
+    type: "ESTIMATE_CONFIRMED" as const,
+    title: "견적 확정",
+    content: `${params.customerName}님의`,
+    linkUrl: "/estimate/sent",
+    expiresAt: getKstEndOfDay(params.moveDate),
+  };
 }
 
 // =============================================================================
 // 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
 // =============================================================================
-
-// 2026.07.24 정슬기 - [추가] 확정 불가 사유를 FE disabled 안내에 전달
-function getConfirmDisabledReason(
-  estimateStatus: EstimateStatus,
-  requestStatus: EstimateRequestStatus,
-  isConfirmed: boolean,
-): string | null {
-  if (isConfirmed) {
-    return null;
-  }
-
-  if (estimateStatus === "SENT" && requestStatus === "OPEN") {
-    return null;
-  }
-
-  // 2026.07.24 정슬기 - [예외 처리] 같은 요청에 확정 견적이 있으면 추가 확정 차단 안내
-  if (
-    estimateStatus === "SENT" &&
-    (requestStatus === "CONFIRMED" || requestStatus === "COMPLETED")
-  ) {
-    return "이미 확정된 견적이 있어 추가로 확정할 수 없습니다.";
-  }
-
-  if (estimateStatus === "CONFIRMED") {
-    return null;
-  }
-
-  return "확정할 수 없는 견적입니다.";
-}
-
-// 2026.07.24 정슬기 - [수정] 목록 응답에 찜 여부·찜 수를 포함
-function mapListEstimate(estimate: {
-  id: number;
-  price: number;
-  status: EstimateStatus;
-  isDesignated: boolean;
-  createdAt: Date;
-  mover: {
-    id: string;
-    name: string;
-    moverProfile: {
-      nickname: string | null;
-      imageUrl: string | null;
-      career: number;
-      shortIntro: string | null;
-      averageRating: Prisma.Decimal | number;
-      reviewCount: number;
-      confirmedCount: number;
-    } | null;
-    favoritesReceived: { id: number }[];
-    _count: { favoritesReceived: number };
-  };
-}) {
-  return {
-    id: estimate.id,
-    price: estimate.price,
-    status: estimate.status,
-    isDesignated: estimate.isDesignated,
-    createdAt: estimate.createdAt,
-    mover: {
-      id: estimate.mover.id,
-      name: estimate.mover.name,
-      nickname: estimate.mover.moverProfile?.nickname ?? null,
-      imageUrl: getProfileImageUrl(estimate.mover.moverProfile?.imageUrl ?? null),
-      career: estimate.mover.moverProfile?.career ?? 0,
-      shortIntro: estimate.mover.moverProfile?.shortIntro ?? null,
-      averageRating: Number(estimate.mover.moverProfile?.averageRating ?? 0),
-      reviewCount: estimate.mover.moverProfile?.reviewCount ?? 0,
-      confirmedCount: estimate.mover.moverProfile?.confirmedCount ?? 0,
-      favoriteCount: estimate.mover._count.favoritesReceived,
-      isFavorite: estimate.mover.favoritesReceived.length > 0,
-    },
-  };
-}
-
-function mapDetailEstimate(
-  estimate: NonNullable<
-    Awaited<ReturnType<typeof receivedEstimateRepository.findReceivedEstimateDetailById>>
-  >,
-) {
-  const moverProfile = estimate.mover.moverProfile;
-  // 2026.07.24 정슬기 - [추가] 상세 응답에 확정 여부·추가 확정 가능 여부 포함
-  const isConfirmed = estimate.estimateRequest.confirmedEstimateId === estimate.id;
-  const canConfirm = estimate.status === "SENT" && estimate.estimateRequest.status === "OPEN";
-
-  return {
-    id: estimate.id,
-    price: estimate.price,
-    comment: estimate.comment,
-    status: estimate.status,
-    isDesignated: estimate.isDesignated,
-    isConfirmed,
-    canConfirm,
-    confirmDisabledReason: getConfirmDisabledReason(
-      estimate.status,
-      estimate.estimateRequest.status,
-      isConfirmed,
-    ),
-    createdAt: estimate.createdAt,
-    updatedAt: estimate.updatedAt,
-    confirmedAt: estimate.confirmedAt,
-    estimateRequest: {
-      id: estimate.estimateRequest.id,
-      moveType: estimate.estimateRequest.moveType,
-      moveDate: estimate.estimateRequest.moveDate,
-      fromZipCode: estimate.estimateRequest.fromZipCode,
-      fromAddress: estimate.estimateRequest.fromAddress,
-      fromDetailAddress: estimate.estimateRequest.fromDetailAddress,
-      fromRegion: estimate.estimateRequest.fromRegion,
-      toZipCode: estimate.estimateRequest.toZipCode,
-      toAddress: estimate.estimateRequest.toAddress,
-      toDetailAddress: estimate.estimateRequest.toDetailAddress,
-      toRegion: estimate.estimateRequest.toRegion,
-      status: estimate.estimateRequest.status,
-      confirmedEstimateId: estimate.estimateRequest.confirmedEstimateId,
-    },
-    mover: {
-      id: estimate.mover.id,
-      name: estimate.mover.name,
-      nickname: moverProfile?.nickname ?? null,
-      imageUrl: getProfileImageUrl(moverProfile?.imageUrl ?? null),
-      career: moverProfile?.career ?? 0,
-      shortIntro: moverProfile?.shortIntro ?? null,
-      description: moverProfile?.description ?? null,
-      averageRating: Number(moverProfile?.averageRating ?? 0),
-      reviewCount: moverProfile?.reviewCount ?? 0,
-      confirmedCount: moverProfile?.confirmedCount ?? 0,
-      favoriteCount: estimate.mover._count.favoritesReceived,
-      isFavorite: estimate.mover.favoritesReceived.length > 0,
-      serviceTypes: moverProfile?.serviceTypes.map((serviceType) => serviceType.moveType) ?? [],
-      serviceAreas:
-        moverProfile?.serviceAreas.map((serviceArea) => ({
-          id: serviceArea.region.id,
-          name: serviceArea.region.name,
-        })) ?? [],
-    },
-  };
-}
 
 export const receivedEstimateService = {
   // 2026.07.27 add 김성현
@@ -242,7 +110,6 @@ export const receivedEstimateService = {
   },
 
   async getReceivedEstimateList({ estimateRequestId, customerId }: GetReceivedEstimateListParams) {
-    //견적 요청 조회
     const estimateRequest =
       await receivedEstimateRepository.findEstimateRequestById(estimateRequestId);
 
@@ -250,20 +117,17 @@ export const receivedEstimateService = {
       throw new AppError("ESTIMATE_REQUEST_NOT_FOUND");
     }
 
-    //견적 요청 소유자 확인
-    if (estimateRequest.customerId !== customerId) {
-      throw new AppError("FORBIDDEN", {
-        message: "본인의 견적 요청만 조회할 수 있습니다.",
-      });
-    }
+    assertCustomerOwnership(
+      estimateRequest.customerId,
+      customerId,
+      "본인의 견적 요청만 조회할 수 있습니다.",
+    );
 
-    //받은 견적 목록 조회
     const estimates = await receivedEstimateRepository.findReceivedEstimatesByEstimateRequestId(
       estimateRequestId,
       customerId,
     );
 
-    //목록 응답 형태 가공
     return {
       estimateRequest: {
         id: estimateRequest.id,
@@ -295,12 +159,11 @@ export const receivedEstimateService = {
       throw new AppError("ESTIMATE_NOT_FOUND");
     }
 
-    //견적 요청 소유자 확인
-    if (estimate.estimateRequest.customerId !== customerId) {
-      throw new AppError("FORBIDDEN", {
-        message: "본인의 견적 요청에 도착한 견적만 조회할 수 있습니다.",
-      });
-    }
+    assertCustomerOwnership(
+      estimate.estimateRequest.customerId,
+      customerId,
+      "본인의 견적 요청에 도착한 견적만 조회할 수 있습니다.",
+    );
 
     return mapDetailEstimate(estimate);
   },
@@ -358,30 +221,16 @@ export const receivedEstimateService = {
         });
       }
 
-      //견적 요청 소유자 확인
-      if (estimate.estimateRequest.customerId !== customerId) {
-        throw new AppError("FORBIDDEN", {
-          message: "본인의 견적 요청에 도착한 견적만 확정할 수 있습니다.",
-        });
-      }
-
-      if (estimate.estimateRequest.status !== "OPEN") {
-        throw new AppError("CONFLICT", {
-          message: "확정할 수 없는 견적 요청 상태입니다.",
-        });
-      }
-
-      if (estimate.estimateRequest.confirmedEstimateId !== null) {
-        throw new AppError("CONFLICT", {
-          message: "이미 확정된 견적 요청입니다.",
-        });
-      }
-
-      if (estimate.status !== "SENT") {
-        throw new AppError("CONFLICT", {
-          message: "확정할 수 없는 견적 상태입니다.",
-        });
-      }
+      assertCustomerOwnership(
+        estimate.estimateRequest.customerId,
+        customerId,
+        "본인의 견적 요청에 도착한 견적만 확정할 수 있습니다.",
+      );
+      assertConfirmableReceivedEstimate({
+        estimateStatus: estimate.status,
+        requestStatus: estimate.estimateRequest.status,
+        confirmedEstimateId: estimate.estimateRequest.confirmedEstimateId,
+      });
 
       const confirmedAt = new Date();
 
@@ -455,17 +304,11 @@ export const receivedEstimateService = {
         tx,
       );
 
-      const notificationPayload = {
-        userId: confirmedEstimate.mover.id,
-        type: "ESTIMATE_CONFIRMED" as const,
-        title: "견적 확정",
-        // FE 템플릿: content + "이 확정되었어요" → "OO님의 견적이 확정되었어요"
-        // 2026.08.03 정슬기 - [수정] 미완성 "님의" → 완결된 강조 문구
-        content: `${estimate.estimateRequest.customer.name}님의`,
-        // 견적 확정 시 알림 클릭하면 보낸 견적 페이지 연결(확정견적 확인가능)
-        linkUrl: "/estimate/sent",
-        expiresAt: getKstEndOfDay(estimate.estimateRequest.moveDate),
-      };
+      const notificationPayload = buildEstimateConfirmedNotificationPayload({
+        moverId: confirmedEstimate.mover.id,
+        customerName: estimate.estimateRequest.customer.name,
+        moveDate: estimate.estimateRequest.moveDate,
+      });
 
       //확정 응답 형태 가공
       return {
