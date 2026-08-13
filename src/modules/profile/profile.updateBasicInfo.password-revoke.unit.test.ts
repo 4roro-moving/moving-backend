@@ -17,6 +17,24 @@ const NEW_PASSWORD = "NewSecurePass2!";
 
 type Role = "customer" | "mover";
 
+type ProfileService = Pick<typeof customerProfileService, "updateBasicInfo">;
+type ProfileRepository = Omit<
+  Pick<
+    typeof customerProfileRepository,
+    | "findUserById"
+    | "findProfileByUserId"
+    | "findUserWithPasswordById"
+    | "hasPasswordByUserId"
+    | "updateUser"
+  >,
+  "findProfileByUserId"
+> & {
+  findProfileByUserId: (
+    userId: string,
+    db?: Parameters<typeof customerProfileRepository.findProfileByUserId>[1],
+  ) => Promise<unknown>;
+};
+
 type TestUser = {
   id: string;
   email: string;
@@ -31,8 +49,8 @@ type TestUser = {
 type RoleHarness = {
   role: Role;
   userId: string;
-  profileService: typeof customerProfileService;
-  profileRepository: typeof customerProfileRepository;
+  profileService: ProfileService;
+  profileRepository: ProfileRepository;
   user: TestUser;
   profile: {
     id: number;
@@ -106,7 +124,14 @@ function installStubs(harness: RoleHarness, options: { password?: string | null 
       state.passwordUpdates.push(data.password);
     }
 
-    return harness.user;
+    return {
+      ...harness.user,
+      password: data.password ?? null,
+      authProvider: "LOCAL",
+      providerUserId: null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
   };
 
   authRepository.revokeAllRefreshTokensByUserId = async (userId, sessionType) => {

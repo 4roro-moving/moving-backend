@@ -24,19 +24,22 @@ const PASSWORD_SALT_ROUNDS = 10;
 
 type Role = "customer" | "mover";
 
+type ProfileService = Pick<typeof customerProfileService, "updateBasicInfo">;
+type ProfileRepository = Pick<typeof customerProfileRepository, "updateUser">;
+
 type Fixture = {
   role: Role;
   suffix: string;
   userId: string;
   otherUserId: string;
   email: string;
-  profileService: typeof customerProfileService;
-  profileRepository: typeof customerProfileRepository;
+  profileService: ProfileService;
+  profileRepository: ProfileRepository;
 };
 
 function getRoleServices(role: Role): {
-  profileService: typeof customerProfileService;
-  profileRepository: typeof customerProfileRepository;
+  profileService: ProfileService;
+  profileRepository: ProfileRepository;
 } {
   if (role === "customer") {
     return {
@@ -478,6 +481,7 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
               authService.login({
                 email: fixture.email,
                 password: CURRENT_PASSWORD,
+                role: role === "customer" ? "CUSTOMER" : "MOVER",
               }),
             assertUnauthorizedLogin,
           );
@@ -485,6 +489,7 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
           const loginResult = await authService.login({
             email: fixture.email,
             password: NEW_PASSWORD,
+            role: role === "customer" ? "CUSTOMER" : "MOVER",
           });
 
           assert.equal(typeof loginResult.tokens.refreshToken, "string");
