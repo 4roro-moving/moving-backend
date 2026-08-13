@@ -4,7 +4,11 @@ import { AppError } from "../../lib/app-error";
 import { emitSocketError, type SocketErrorResponse } from "../../socket/socket-error";
 import { chatService } from "./chat.service";
 import type { ChatMessageResponse, ChatRoomSummary, MissedChatMessagesResponse } from "./chat.type";
-import { joinChatRoomPayloadSchema, sendChatMessagePayloadSchema } from "./chat.validator";
+import {
+  joinChatRoomPayloadSchema,
+  leaveChatRoomPayloadSchema,
+  sendChatMessagePayloadSchema,
+} from "./chat.validator";
 
 type JoinRoomAck =
   | {
@@ -29,7 +33,35 @@ type SendMessageAck =
       clientMessageId?: string;
     };
 
+type LeaveRoomAck =
+  | {
+      ok: true;
+    }
+  | {
+      ok: false;
+      error: SocketErrorResponse;
+    };
+
 const toRoomName = (roomId: number): string => `chat:room:${roomId}`;
+
+function hasReceiverSocketInRoom(io: SocketIOServer, roomId: number, senderId: string): boolean {
+  const socketIds = io.sockets.adapter.rooms.get(toRoomName(roomId));
+
+  if (!socketIds) {
+    return false;
+  }
+
+  for (const socketId of socketIds) {
+    const roomSocket = io.sockets.sockets.get(socketId);
+    const userId = roomSocket?.data.user?.id;
+
+    if (userId && userId !== senderId) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 function getSocketUserId(socket: Socket): string {
   const userId = socket.data.user?.id;
@@ -43,6 +75,13 @@ function getSocketUserId(socket: Socket): string {
   return userId;
 }
 
+function nextRoomSequence(socket: Socket): number {
+  const nextSequence = (socket.data.roomSequence ?? 0) + 1;
+  socket.data.roomSequence = nextSequence;
+
+  return nextSequence;
+}
+
 export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): void => {
   socket.on("chat:ping", (callback?: (response: { ok: boolean }) => void) => {
     callback?.({ ok: true });
@@ -53,11 +92,16 @@ export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): 
     async (payload: unknown, callback?: (response: JoinRoomAck) => void) => {
       try {
         const input = joinChatRoomPayloadSchema.parse(payload);
+        const roomSequence = nextRoomSequence(socket);
         const result = await chatService.joinRoom(
           getSocketUserId(socket),
           input.roomId,
           input.lastMessageId,
         );
+
+        if (socket.data.roomSequence !== roomSequence) {
+          return;
+        }
 
         if (socket.data.roomId && socket.data.roomId !== input.roomId) {
           socket.leave(toRoomName(socket.data.roomId));
@@ -74,6 +118,23 @@ export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): 
     },
   );
 
+  socket.on("chat:room:leave", (payload: unknown, callback?: (response: LeaveRoomAck) => void) => {
+    try {
+      const input = leaveChatRoomPayloadSchema.parse(payload);
+
+      nextRoomSequence(socket);
+      socket.leave(toRoomName(input.roomId));
+
+      if (socket.data.roomId === input.roomId) {
+        delete socket.data.roomId;
+      }
+
+      callback?.({ ok: true });
+    } catch (error) {
+      callback?.({ ok: false, error: emitSocketError(socket, error) });
+    }
+  });
+
   socket.on(
     "chat:message:send",
     async (payload: unknown, callback?: (response: SendMessageAck) => void) => {
@@ -87,6 +148,7 @@ export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): 
 
       try {
         const input = sendChatMessagePayloadSchema.parse(payload);
+        const senderId = getSocketUserId(socket);
 
         if (socket.data.roomId !== input.roomId) {
           throw new AppError("FORBIDDEN", {
@@ -95,12 +157,19 @@ export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): 
         }
 
         const message = await chatService.createTextMessageForJoinedRoom(
-          getSocketUserId(socket),
+          senderId,
           input.roomId,
           input.content,
         );
 
         io.to(toRoomName(input.roomId)).emit("chat:message:new", message);
+        void chatService.createMessageReceivedNotification({
+          roomId: input.roomId,
+          senderId,
+          messageId: message.id,
+          skip: hasReceiverSocketInRoom(io, input.roomId, senderId),
+        });
+
         callback?.({
           ok: true,
           message,

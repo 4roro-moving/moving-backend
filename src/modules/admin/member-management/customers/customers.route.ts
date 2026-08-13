@@ -12,10 +12,6 @@ import {
   updateCustomerStatusBodySchema,
 } from "./customers.validator";
 
-/**
- * 관리자 고객(회원) 라우터 (/api/admin/users)
- * 일반 고객(CUSTOMER) 목록/상세 조회. 기사님은 /api/admin/movers 에서 별도 제공.
- */
 const adminCustomerRouter = Router();
 
 adminCustomerRouter.use(authenticate, authorize(UserRole.ADMIN), requireActiveAdmin);

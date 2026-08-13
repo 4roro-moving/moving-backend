@@ -4,6 +4,7 @@ declare module "socket.io" {
   interface SocketData {
     user?: AuthenticatedUser;
     roomId?: number;
+    roomSequence?: number;
   }
 }
 
