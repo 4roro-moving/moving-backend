@@ -24,6 +24,8 @@ import { tokenHash } from "../../utils/tokenHash";
 import { runTransaction } from "../../utils/transaction";
 
 const PASSWORD_SALT_ROUNDS = 10;
+const REFRESH_TOKEN_RETENTION_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 const DUMMY_PASSWORD_HASH = "$2b$10$CxtIUUg2JDRWy.TYdu0y0e9bahGlNcJg2F78GaW9lRboxNL/OZpE6";
 
@@ -683,6 +685,21 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
 };
 
 /*
+ * 만료 후 보존 기간이 지난 Refresh Token 세션을 영구 삭제한다.
+ *
+ * 삭제 기준은 revokedAt이 아니라 expiresAt을 사용한다.
+ * 폐기된 토큰도 원래 만료 시점 이후 일정 기간 보존하여
+ * 추후 Refresh Token 재사용 탐지에 활용할 수 있도록 한다.
+ */
+const cleanupExpiredRefreshTokens = async (): Promise<number> => {
+  const cutoff = new Date(Date.now() - REFRESH_TOKEN_RETENTION_DAYS * DAY_MS);
+
+  const result = await authRepository.deleteRefreshTokensExpiredBefore(cutoff);
+
+  return result.count;
+};
+
+/*
  * 현재 로그인 세션 로그아웃
  *
  * 다중 로그인을 허용하므로 사용자의 모든 Refresh Token을
@@ -714,4 +731,5 @@ export const authService = {
   loginWithNaver,
   refresh,
   logout,
+  cleanupExpiredRefreshTokens,
 };
