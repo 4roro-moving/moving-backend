@@ -139,9 +139,13 @@ export const moverEstimateRequestRepository = {
           name: true,
         },
       },
-      designatedMovers: {
+      _count: {
         select: {
-          moverId: true,
+          designatedMovers: {
+            where: {
+              moverId: params.moverId,
+            },
+          },
         },
       },
     };
@@ -191,31 +195,23 @@ export const moverEstimateRequestRepository = {
         isActive: true,
         expiresAt: true,
         confirmedEstimateId: true,
-        //현재 기사 지정 됐는지
-        designatedMovers: {
-          where: {
-            moverId,
-          },
+        _count: {
           select: {
-            id: true,
-          },
-        },
-        //현재 기사가 이미 보낸 견적이 있는지
-        estimates: {
-          where: {
-            moverId,
-          },
-          select: {
-            id: true,
-          },
-        },
-        //현재 기사가 이미 반려했는지
-        rejections: {
-          where: {
-            moverId,
-          },
-          select: {
-            id: true,
+            designatedMovers: {
+              where: {
+                moverId,
+              },
+            },
+            estimates: {
+              where: {
+                moverId,
+              },
+            },
+            rejections: {
+              where: {
+                moverId,
+              },
+            },
           },
         },
       },
@@ -296,9 +292,12 @@ export const moverEstimateRequestRepository = {
                 name: true,
               },
             },
-            designatedMovers: {
-              where: { moverId },
-              select: { id: true },
+            _count: {
+              select: {
+                designatedMovers: {
+                  where: { moverId },
+                },
+              },
             },
           },
         },
