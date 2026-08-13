@@ -1,5 +1,10 @@
 import type { AuthProvider, UserRole } from "@prisma/client";
 
+export interface AuthenticatedUser {
+  id: string;
+  role: UserRole;
+}
+
 /*
  * 클라이언트 응답으로 반환하는 토큰 정보
  *
@@ -52,14 +57,6 @@ export interface AuthResponse {
 export interface RefreshResponse {
   accessToken: string;
   refreshToken: string;
-}
-
-/*
- * 인증 미들웨어가 Express Request에 저장하는 사용자 정보
- */
-export interface RequestUser {
-  id: string;
-  role: UserRole;
 }
 
 /*
