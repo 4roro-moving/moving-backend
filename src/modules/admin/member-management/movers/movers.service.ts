@@ -1,7 +1,7 @@
 import { UserRole, type Prisma } from "@prisma/client";
 
 import { buildPagination } from "../../../../utils/pagination.util";
-import { toKstEndOfDay, toKstStartOfDay } from "../member-list-date.util";
+import { kstDayEnd, kstDayStart, parseDateMarker } from "../../../../utils/kst";
 import { memberRepository } from "../member.repository";
 import {
   buildMemberStatusWhere,
@@ -46,9 +46,16 @@ function buildMoverListWhere(query: ListMoverQuery): Prisma.UserWhereInput {
   }
 
   if (query.fromDate || query.toDate) {
+    const fromDateMarker = query.fromDate ? parseDateMarker(query.fromDate) : undefined;
+    const toDateMarker = query.toDate ? parseDateMarker(query.toDate) : undefined;
+
+    if ((query.fromDate && !fromDateMarker) || (query.toDate && !toDateMarker)) {
+      throw new Error("검증된 가입일 범위를 DateMarker로 변환하지 못했습니다.");
+    }
+
     where.createdAt = {
-      ...(query.fromDate ? { gte: toKstStartOfDay(query.fromDate) } : {}),
-      ...(query.toDate ? { lte: toKstEndOfDay(query.toDate) } : {}),
+      ...(fromDateMarker ? { gte: kstDayStart(fromDateMarker) } : {}),
+      ...(toDateMarker ? { lte: kstDayEnd(toDateMarker) } : {}),
     };
   }
 
