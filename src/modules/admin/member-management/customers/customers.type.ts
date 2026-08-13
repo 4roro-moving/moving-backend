@@ -1,4 +1,5 @@
 import type {
+  AuthProvider,
   EstimateRequestStatus,
   MoveType,
   ReportReason,
@@ -37,7 +38,9 @@ export type UpdateCustomerStatusResponse = {
   };
 };
 
-export type CustomerListItem = MemberListBase;
+export type CustomerListItem = MemberListBase & {
+  authProvider: AuthProvider;
+};
 
 export type CustomerDetailProfile = {
   imageUrl: string | null;

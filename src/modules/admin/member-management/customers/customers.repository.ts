@@ -19,6 +19,7 @@ const customerListSelect = {
   email: true,
   name: true,
   phone: true,
+  authProvider: true,
   isActive: true,
   isProfileCompleted: true,
   deletedAt: true,
@@ -95,7 +96,7 @@ const reportHistorySelect = {
 
 type CustomerListBaseRow = Prisma.UserGetPayload<{ select: typeof customerListSelect }>;
 
-export type CustomerListRow = CustomerListBaseRow & {} & MemberReceivedReportCounts;
+export type CustomerListRow = CustomerListBaseRow & MemberReceivedReportCounts;
 export type CustomerDetailRow = Prisma.UserGetPayload<{ select: typeof customerDetailSelect }>;
 export type EstimateHistoryRow = Prisma.EstimateRequestGetPayload<{
   select: typeof estimateHistorySelect;

@@ -25,6 +25,7 @@ registerRouterDocs(adminCustomerRouter, {
         "",
         "- `keyword`: 이름·이메일 부분일치(대소문자 무시)",
         "- `status`: ACTIVE | SUSPENDED | WITHDRAWN (미지정 시 탈퇴 회원 제외)",
+        "- `authProvider`: LOCAL | GOOGLE | NAVER | KAKAO",
         "- `isProfileCompleted`: 프로필 완료 여부 (`true` | `false`)",
         "- `fromDate` / `toDate`: 가입일 기간 검색 (YYYY-MM-DD, KST 기준)",
         "- `sort`: LATEST(기본값, 최신 가입순) | OLDEST(오래된 가입순)",

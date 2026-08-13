@@ -27,8 +27,7 @@ import {
   buildMemberListOrderBy,
 } from "../member.policy";
 import { MEMBER_STATUS } from "../member-status.constants";
-import { toMemberListBase } from "../member.mapper";
-import { toCustomerDetail } from "./customers.mapper";
+import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
 import type {
   CustomerDetail,
   ListCustomerQuery,
@@ -46,6 +45,7 @@ function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput
     role: UserRole.CUSTOMER,
     ...buildMemberStatusWhere(query.status),
     ...buildProfileCompletedWhere(query.isProfileCompleted),
+    ...(query.authProvider ? { authProvider: query.authProvider } : {}),
   };
 
   if (query.keyword !== undefined) {
@@ -79,7 +79,7 @@ export const customersService = {
     });
 
     return {
-      items: customers.map(toMemberListBase),
+      items: customers.map(toCustomerListItem),
       pagination: buildPagination(totalCount, page, limit),
     };
   },

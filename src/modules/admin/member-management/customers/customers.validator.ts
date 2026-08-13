@@ -1,4 +1,4 @@
-import { SuspensionAction } from "@prisma/client";
+import { AuthProvider, SuspensionAction } from "@prisma/client";
 import { z } from "zod";
 
 import {
@@ -48,6 +48,7 @@ export const listCustomerQuerySchema = z
     limit: memberListLimitSchema,
     keyword: memberListKeywordSchema,
     status: memberStatusSchema.optional(),
+    authProvider: z.enum(AuthProvider, { error: "올바른 가입 방식이 아닙니다." }).optional(),
     isProfileCompleted: memberProfileCompletedSchema,
     fromDate: memberListDateQuerySchema,
     toDate: memberListDateQuerySchema,
