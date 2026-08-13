@@ -7,6 +7,7 @@ declare module "socket.io" {
       role: UserRole;
     };
     roomId?: number;
+    roomSequence?: number;
   }
 }
 
