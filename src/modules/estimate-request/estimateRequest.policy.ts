@@ -1,6 +1,7 @@
 import type { EstimateRequestStatus } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
+import { isPastInKst, kstDayStart, parseDateMarker } from "../../utils/kst";
 
 import {
   CANCELABLE_ESTIMATE_REQUEST_STATUSES,
@@ -41,39 +42,25 @@ export function assertRequestNotExpired(expiresAt: Date): void {
 }
 
 export function resolveMoveDate(moveDate: string): Date {
-  const [year, month, day] = moveDate.split("-").map(Number);
-  const parsed = new Date(`${moveDate}T00:00:00.000Z`);
-
-  if (
-    Number.isNaN(parsed.getTime()) ||
-    parsed.getUTCFullYear() !== year ||
-    parsed.getUTCMonth() + 1 !== month ||
-    parsed.getUTCDate() !== day
-  ) {
-    throw new AppError("INVALID_MOVE_DATE");
+  const parsed = parseDateMarker(moveDate);
+  if (!parsed) {
+    throw new AppError("INVALID_MOVE_DATE", {
+      message: "이사 예정일 형식이 올바르지 않습니다.",
+    });
   }
-
-  const now = new Date();
-  const kstNow = new Date(now.getTime() + 9 * MS_PER_HOUR);
-  const todayInKst = new Date(
-    Date.UTC(kstNow.getUTCFullYear(), kstNow.getUTCMonth(), kstNow.getUTCDate()),
-  );
-
-  if (parsed.getTime() < todayInKst.getTime()) {
-    throw new AppError("INVALID_MOVE_DATE");
+  if (isPastInKst(parsed)) {
+    throw new AppError("INVALID_MOVE_DATE", {
+      message: "이사 예정일은 오늘 또는 이후 날짜로 선택해 주세요.",
+    });
   }
-
   return parsed;
 }
 
 export function resolveExpiresAt(moveDate: Date): Date {
   const now = Date.now();
-
-  const dayBeforeMove = moveDate.getTime() - MS_PER_DAY;
-  const defaultExpiration = now + DEFAULT_EXPIRATION_DAYS * MS_PER_DAY;
-  const minimumExpiration = now + MIN_EXPIRATION_HOURS * MS_PER_HOUR;
-
-  const candidate = Math.min(dayBeforeMove, defaultExpiration);
-
-  return new Date(Math.max(candidate, minimumExpiration));
+  const candidate = Math.min(
+    kstDayStart(moveDate).getTime(),
+    now + DEFAULT_EXPIRATION_DAYS * MS_PER_DAY,
+  );
+  return new Date(Math.max(candidate, now + MIN_EXPIRATION_HOURS * MS_PER_HOUR));
 }

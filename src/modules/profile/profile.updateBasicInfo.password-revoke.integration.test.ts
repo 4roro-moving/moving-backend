@@ -24,35 +24,29 @@ const PASSWORD_SALT_ROUNDS = 10;
 
 type Role = "customer" | "mover";
 
-type ProfileService = Pick<typeof customerProfileService, "updateBasicInfo">;
-type ProfileRepository = Pick<typeof customerProfileRepository, "updateUser">;
-
-type Fixture = {
-  role: Role;
+type CustomerFixture = {
+  role: "customer";
   suffix: string;
   userId: string;
   otherUserId: string;
   email: string;
-  profileService: ProfileService;
-  profileRepository: ProfileRepository;
+  loginRole: typeof UserRole.CUSTOMER;
+  profileService: typeof customerProfileService;
+  profileRepository: typeof customerProfileRepository;
 };
 
-function getRoleServices(role: Role): {
-  profileService: ProfileService;
-  profileRepository: ProfileRepository;
-} {
-  if (role === "customer") {
-    return {
-      profileService: customerProfileService,
-      profileRepository: customerProfileRepository,
-    };
-  }
+type MoverFixture = {
+  role: "mover";
+  suffix: string;
+  userId: string;
+  otherUserId: string;
+  email: string;
+  loginRole: typeof UserRole.MOVER;
+  profileService: typeof moverProfileService;
+  profileRepository: typeof moverProfileRepository;
+};
 
-  return {
-    profileService: moverProfileService,
-    profileRepository: moverProfileRepository,
-  };
-}
+type Fixture = CustomerFixture | MoverFixture;
 
 async function getOrCreateSeoulRegionId(): Promise<number> {
   const region =
@@ -96,6 +90,7 @@ async function createUserWithProfile(role: Role, suffix: string, regionId: numbe
             moverProfile: {
               create: {
                 nickname: `mover-${suffix}`,
+                career: 3,
                 shortIntro: "test intro",
                 description: "test description",
                 serviceAreas: { create: [{ regionId }] },
@@ -132,7 +127,19 @@ async function createFixture(role: Role): Promise<Fixture> {
   const regionId = await getOrCreateSeoulRegionId();
   const primary = await createUserWithProfile(role, suffix, regionId);
   const secondary = await createUserWithProfile(role, `${suffix}-other`, regionId);
-  const services = getRoleServices(role);
+
+  if (role === "customer") {
+    return {
+      role,
+      suffix,
+      userId: primary.userId,
+      otherUserId: secondary.userId,
+      email: primary.email,
+      loginRole: UserRole.CUSTOMER,
+      profileService: customerProfileService,
+      profileRepository: customerProfileRepository,
+    };
+  }
 
   return {
     role,
@@ -140,8 +147,9 @@ async function createFixture(role: Role): Promise<Fixture> {
     userId: primary.userId,
     otherUserId: secondary.userId,
     email: primary.email,
-    profileService: services.profileService,
-    profileRepository: services.profileRepository,
+    loginRole: UserRole.MOVER,
+    profileService: moverProfileService,
+    profileRepository: moverProfileRepository,
   };
 }
 
@@ -481,7 +489,7 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
               authService.login({
                 email: fixture.email,
                 password: CURRENT_PASSWORD,
-                role: role === "customer" ? "CUSTOMER" : "MOVER",
+                role: fixture.loginRole,
               }),
             assertUnauthorizedLogin,
           );
@@ -489,7 +497,7 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
           const loginResult = await authService.login({
             email: fixture.email,
             password: NEW_PASSWORD,
-            role: role === "customer" ? "CUSTOMER" : "MOVER",
+            role: fixture.loginRole,
           });
 
           assert.equal(typeof loginResult.tokens.refreshToken, "string");

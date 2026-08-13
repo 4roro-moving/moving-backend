@@ -1,12 +1,10 @@
 import type { UserRole } from "@prisma/client";
+import type { AuthenticatedUser } from "../modules/auth/auth.type";
 
 declare global {
   namespace Express {
     interface Request {
-      user?: {
-        id: string;
-        role: UserRole;
-      };
+      user?: AuthenticatedUser;
 
       admin?: {
         id: string;
