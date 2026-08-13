@@ -5,7 +5,6 @@ import {
   NotificationType,
   RefreshTokenSessionType,
   SuspensionAction,
-  UserRole,
   type Prisma,
 } from "@prisma/client";
 
@@ -17,14 +16,10 @@ import { runTransaction } from "../../../../utils/transaction";
 
 import { customersRepository } from "./customers.repository";
 import { customersStatusRepository } from "./customers-status.repository";
-import { kstDayEnd, kstDayStart, parseDateMarker } from "../../../../utils/kst";
 import { memberRepository } from "../member.repository";
 import {
   assertAdminCanChangeMemberStatus,
-  buildProfileCompletedWhere,
-  buildMemberStatusWhere,
   resolveIsActiveForSuspensionAction,
-  buildMemberListOrderBy,
 } from "../member.policy";
 import { MEMBER_STATUS } from "../member-status.constants";
 import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
@@ -35,55 +30,18 @@ import type {
   UpdateCustomerStatusResponse,
 } from "./customers.type";
 
-/**
- * 관리자 고객 목록 query를 Prisma User 조회 조건으로 변환합니다.
- * 역할, 회원 상태, 이름·이메일 검색어, 가입일 범위를 조합합니다.
- */
-function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput {
-  // 상태 계산 규칙을 policy에 위임해 고객/기사 목록이 같은 기준을 사용
-  const where: Prisma.UserWhereInput = {
-    role: UserRole.CUSTOMER,
-    ...buildMemberStatusWhere(query.status),
-    ...buildProfileCompletedWhere(query.isProfileCompleted),
-    ...(query.authProvider ? { authProvider: query.authProvider } : {}),
-  };
-
-  if (query.keyword !== undefined) {
-    where.OR = [
-      { name: { contains: query.keyword, mode: "insensitive" } },
-      { email: { contains: query.keyword, mode: "insensitive" } },
-    ];
-  }
-
-  if (query.fromDate || query.toDate) {
-    const fromDateMarker = query.fromDate ? parseDateMarker(query.fromDate) : undefined;
-    const toDateMarker = query.toDate ? parseDateMarker(query.toDate) : undefined;
-
-    if ((query.fromDate && !fromDateMarker) || (query.toDate && !toDateMarker)) {
-      throw new Error("검증된 가입일 범위를 DateMarker로 변환하지 못했습니다.");
-    }
-
-    where.createdAt = {
-      ...(fromDateMarker ? { gte: kstDayStart(fromDateMarker) } : {}),
-      ...(toDateMarker ? { lte: kstDayEnd(toDateMarker) } : {}),
-    };
-  }
-
-  return where;
-}
-
 export const customersService = {
   /** 관리자용 일반 고객(CUSTOMER) 목록을 조회합니다. */
   async getCustomerList(query: ListCustomerQuery) {
-    const { page, limit, sorts } = query;
-    const sort = sorts?.includes("CREATED_AT_ASC") ? "OLDEST" : "LATEST";
+    const { page, limit } = query;
+
+    const sorts = query.sorts?.length ? query.sorts : ["CREATED_AT_DESC"];
 
     const { customers, totalCount } = await customersRepository.findManyWithCount({
       skip: (page - 1) * limit,
       take: limit,
-      where: buildCustomerListWhere(query),
-      orderBy: buildMemberListOrderBy(sort),
-      ...(sorts ? { sorts } : {}),
+      sorts,
+      filters: query,
     });
 
     return {

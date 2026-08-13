@@ -1,40 +1,20 @@
-import { EstimateRequestStatus, EstimateStatus, ReportTargetType, UserRole } from "@prisma/client";
-import type { Prisma } from "@prisma/client";
+import {
+  EstimateRequestStatus,
+  EstimateStatus,
+  Prisma,
+  ReportTargetType,
+  UserRole,
+} from "@prisma/client";
+import type { MoveType } from "@prisma/client";
 import type { DbClient } from "../../../../utils/transaction";
 import { prisma } from "../../../../lib/prisma";
-import { buildReceivedReportCountsByMemberId } from "../member.policy";
+import { kstDayEnd, kstDayStart, parseDateMarker } from "../../../../utils/kst";
 import type { MemberReceivedReportCounts } from "../member.type";
+import type { ListMoverQuery } from "./movers.type";
 
-/** 기사 목록 DTO 변환에 필요한 User 및 MoverProfile 조회 필드입니다. */
-const moverListSelect = {
-  id: true,
-  email: true,
-  name: true,
-  phone: true,
-  isActive: true,
-  isProfileCompleted: true,
-  deletedAt: true,
-  createdAt: true,
-  moverProfile: {
-    select: {
-      nickname: true,
-      career: true,
-      averageRating: true,
-      reviewCount: true,
-      confirmedCount: true,
-      serviceAreas: {
-        select: { region: { select: { name: true } } },
-        orderBy: { regionId: "asc" },
-      },
-      serviceTypes: {
-        select: { moveType: true },
-        orderBy: { id: "asc" },
-      },
-    },
-  },
-} satisfies Prisma.UserSelect;
+/** 기사 상세 응답에서 각 이력 항목별로 제공하는 기본 최신 건수입니다. */
+export const MOVER_HISTORY_LIMIT = 5;
 
-/** 기사 계정·프로필과 서비스 지역/유형을 포함한 상세 조회 필드입니다. */
 const moverDetailSelect = {
   id: true,
   email: true,
@@ -108,9 +88,25 @@ const reportHistorySelect = {
   createdAt: true,
 } satisfies Prisma.ReportSelect;
 
-type MoverListBaseRow = Prisma.UserGetPayload<{ select: typeof moverListSelect }>;
-
-export type MoverListRow = MoverListBaseRow & {} & MemberReceivedReportCounts;
+export type MoverListRow = MemberReceivedReportCounts & {
+  id: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  isActive: boolean;
+  isProfileCompleted: boolean;
+  deletedAt: Date | null;
+  createdAt: Date;
+  moverProfile: {
+    nickname: string;
+    career: number;
+    averageRating: Prisma.Decimal;
+    reviewCount: number;
+    confirmedCount: number;
+    serviceAreas: Array<{ region: { name: string } }>;
+    serviceTypes: Array<{ moveType: MoveType }>;
+  } | null;
+};
 export type MoverDetailRow = Prisma.UserGetPayload<{ select: typeof moverDetailSelect }>;
 export type InProgressEstimateRow = Prisma.EstimateGetPayload<{
   select: typeof inProgressEstimateSelect;
@@ -122,9 +118,8 @@ export type MoverReportHistoryRow = Prisma.ReportGetPayload<{ select: typeof rep
 type ListParams = {
   skip: number;
   take: number;
-  where: Prisma.UserWhereInput;
-  orderBy: Prisma.UserOrderByWithRelationInput[];
-  sorts?: string[];
+  sorts: string[];
+  filters: ListMoverQuery;
 };
 
 type HistoryParams = {
@@ -132,85 +127,222 @@ type HistoryParams = {
   take?: number;
 };
 
-/** 상세 화면에서 각 이력 항목별로 제공하는 기본 최신 건수입니다. */
-export const MOVER_HISTORY_LIMIT = 5;
+/** raw SQL 쿼리 전용 응답 DTO 타입 */
+type MoverListRawRow = {
+  id: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  isActive: boolean;
+  isProfileCompleted: boolean;
+  deletedAt: Date | null;
+  createdAt: Date;
+  nickname: string | null;
+  career: number | null;
+  averageRating: Prisma.Decimal | null;
+  reviewCount: number | null;
+  confirmedCount: number | null;
+  serviceAreas: Array<{ region: { name: string } }>;
+  serviceTypes: Array<{ moveType: string }>;
+  receivedReportCount: number;
+  pendingReceivedReportCount: number;
+  totalCount: bigint;
+};
+
+/**
+ * `sorts` 파라미터로 받은 정렬 기준들을 순서대로 SQL ORDER BY 절로 변환합니다.
+ *
+ * `CREATED_AT_DESC` 또는 `CREATED_AT_ASC`가 없는 경우,
+ * `createdAt DESC`, `id ASC`를 보조 정렬로 붙여 페이지 순서를 고정합니다.
+ */
+function buildMoverReportOrderBy(sorts: string[]): Prisma.Sql {
+  const columns: Record<string, Prisma.Sql> = {
+    PENDING_DESC: Prisma.sql`"pendingReceivedReportCount" DESC`,
+    PENDING_ASC: Prisma.sql`"pendingReceivedReportCount" ASC`,
+    CONFIRMED_DESC: Prisma.sql`COALESCE(mp."confirmedCount", 0) DESC`,
+    CONFIRMED_ASC: Prisma.sql`COALESCE(mp."confirmedCount", 0) ASC`,
+    RATING_DESC: Prisma.sql`COALESCE(mp."averageRating", 0) DESC`,
+    RATING_ASC: Prisma.sql`COALESCE(mp."averageRating", 0) ASC`,
+    CAREER_DESC: Prisma.sql`COALESCE(mp.career, 0) DESC`,
+    CAREER_ASC: Prisma.sql`COALESCE(mp.career, 0) ASC`,
+    CREATED_AT_DESC: Prisma.sql`u."createdAt" DESC`,
+    CREATED_AT_ASC: Prisma.sql`u."createdAt" ASC`,
+  };
+
+  const orderBy = sorts.flatMap((sort) => (columns[sort] ? [columns[sort]] : []));
+
+  if (!sorts.some((sort) => sort.startsWith("CREATED_AT_"))) {
+    orderBy.push(Prisma.sql`u."createdAt" DESC`);
+  }
+  orderBy.push(Prisma.sql`u.id ASC`);
+
+  return Prisma.join(orderBy, ", ");
+}
+
+/** 기사 목록의 요청받은 필터를 raw SQL WHERE 절로 만듭니다. */
+function buildMoverListWhereSql(filters: ListMoverQuery): Prisma.Sql {
+  const conditions: Prisma.Sql[] = [Prisma.sql`u.role = ${UserRole.MOVER}::"UserRole"`];
+
+  if (filters.status === "ACTIVE") {
+    conditions.push(Prisma.sql`u."deletedAt" IS NULL AND u."isActive" = TRUE`);
+  } else if (filters.status === "SUSPENDED") {
+    conditions.push(Prisma.sql`u."deletedAt" IS NULL AND u."isActive" = FALSE`);
+  } else if (filters.status === "WITHDRAWN") {
+    conditions.push(Prisma.sql`u."deletedAt" IS NOT NULL`);
+  } else {
+    conditions.push(Prisma.sql`u."deletedAt" IS NULL`);
+  }
+
+  if (filters.isProfileCompleted !== undefined) {
+    conditions.push(Prisma.sql`u."isProfileCompleted" = ${filters.isProfileCompleted}`);
+  }
+
+  if (filters.keyword) {
+    const pattern = `%${filters.keyword}%`;
+    conditions.push(Prisma.sql`(
+      u.name ILIKE ${pattern}
+      OR u.email ILIKE ${pattern}
+      OR EXISTS (
+        SELECT 1 FROM mover_profiles AS mp_keyword
+        WHERE mp_keyword."userId" = u.id AND mp_keyword.nickname ILIKE ${pattern}
+      )
+    )`);
+  }
+
+  if (filters.regionId !== undefined || filters.moveType !== undefined) {
+    const profileConditions: Prisma.Sql[] = [Prisma.sql`mp_filter."userId" = u.id`];
+    if (filters.regionId !== undefined) {
+      profileConditions.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM mover_service_areas AS msa
+        WHERE msa."moverProfileId" = mp_filter.id AND msa."regionId" = ${filters.regionId}
+      )`);
+    }
+    if (filters.moveType !== undefined) {
+      profileConditions.push(Prisma.sql`EXISTS (
+        SELECT 1 FROM mover_service_types AS mst
+        WHERE mst."moverProfileId" = mp_filter.id AND mst."moveType" = ${filters.moveType}::"MoveType"
+      )`);
+    }
+    conditions.push(Prisma.sql`EXISTS (
+      SELECT 1 FROM mover_profiles AS mp_filter
+      WHERE ${Prisma.join(profileConditions, " AND ")}
+    )`);
+  }
+
+  if (filters.fromDate) {
+    const marker = parseDateMarker(filters.fromDate);
+    if (!marker) throw new Error("Validated mover-list fromDate could not be parsed.");
+    conditions.push(Prisma.sql`u."createdAt" >= ${kstDayStart(marker)}`);
+  }
+  if (filters.toDate) {
+    const marker = parseDateMarker(filters.toDate);
+    if (!marker) throw new Error("Validated mover-list toDate could not be parsed.");
+    conditions.push(Prisma.sql`u."createdAt" <= ${kstDayEnd(marker)}`);
+  }
+
+  return Prisma.join(conditions, " AND ");
+}
 
 export const moversRepository = {
-  /**
-   * 목록과 전체 건수를 동일한 필터 조건으로 병렬 조회합니다.
-   */
-  async findManyWithCount(
-    { skip, take, where, orderBy, sorts }: ListParams,
-    db: DbClient = prisma,
-  ) {
-    const [movers, totalCount] = await Promise.all([
-      db.user.findMany({
-        where,
-        select: moverListSelect,
-        orderBy,
-        ...(sorts?.length ? {} : { skip, take }),
-      }),
-      db.user.count({ where }),
-    ]);
+  /** 기사 목록과 피신고 건수를 함께 조회합니다. */
+  async findManyWithCount({ skip, take, sorts, filters }: ListParams, db: DbClient = prisma) {
+    const whereSql = buildMoverListWhereSql(filters);
 
-    if (movers.length === 0) {
-      return { movers: [] as MoverListRow[], totalCount };
-    }
+    /**
+     * 필터·신고 집계·다중 정렬을 적용한 전체 결과에서 LIMIT/OFFSET을 적용해 현재 페이지 행만 조회합니다.
+     * 기사 프로필과 서비스 지역·유형도 함께 조회해 Prisma로 프로필·지역·유형을 각각 다시 조회하는 쿼리를 줄입니다.
+     */
+    const rows = await db.$queryRaw<MoverListRawRow[]>(Prisma.sql`
+        SELECT
+          u.id,
+          u.email,
+          u.name,
+          u.phone,
+          u."isActive",
+          u."isProfileCompleted",
+          u."deletedAt",
+          u."createdAt",
+          mp.nickname,
+          mp.career,
+          mp."averageRating",
+          mp."reviewCount",
+          mp."confirmedCount",
+          COALESCE((
+            SELECT jsonb_agg(jsonb_build_object('region', jsonb_build_object('name', r.name)))
+            FROM mover_service_areas AS msa
+            INNER JOIN regions AS r ON r.id = msa."regionId"
+            WHERE msa."moverProfileId" = mp.id
+          ), '[]'::jsonb) AS "serviceAreas",
+          COALESCE((
+            SELECT jsonb_agg(jsonb_build_object('moveType', mst."moveType"))
+            FROM mover_service_types AS mst
+            WHERE mst."moverProfileId" = mp.id
+          ), '[]'::jsonb) AS "serviceTypes",
+          COUNT(rp.id)::int AS "receivedReportCount",
+          COUNT(rp.id) FILTER (WHERE rp.status = ${"PENDING"}::"ReportStatus")::int
+            AS "pendingReceivedReportCount",
+          COUNT(*) OVER()::bigint AS "totalCount"
+        FROM "User" AS u
+        LEFT JOIN mover_profiles AS mp ON mp."userId" = u.id
+        LEFT JOIN reports AS rp
+          ON rp.target_type = ${ReportTargetType.MOVER}::"ReportTargetType"
+          AND rp.target_id = u.id::text
+        WHERE ${whereSql}
+        GROUP BY
+          u.id,
+          u.email,
+          u.name,
+          u.phone,
+          u."isActive",
+          u."isProfileCompleted",
+          u."deletedAt",
+          u."createdAt",
+          mp.id,
+          mp.nickname,
+          mp.career,
+          mp."averageRating",
+          mp."reviewCount",
+          mp."confirmedCount"
+        ORDER BY ${buildMoverReportOrderBy(sorts)}
+        LIMIT ${take} OFFSET ${skip}
+    `);
 
-    const reportGroups = await db.report.groupBy({
-      by: ["targetId", "status"],
-      where: {
-        targetType: ReportTargetType.MOVER,
-        targetId: { in: movers.map((mover) => mover.id) },
-      },
-      _count: { _all: true },
-    });
-    const countsByMoverId = buildReceivedReportCountsByMemberId(
-      reportGroups.map((group) => ({
-        memberId: group.targetId,
-        status: group.status,
-        count: group._count._all,
-      })),
-    );
-
-    const moversWithReportCounts = movers.map((mover) => {
-      const counts = countsByMoverId.get(mover.id) ?? {
-        receivedReportCount: 0,
-        pendingReceivedReportCount: 0,
-      };
-      return {
-        ...mover,
-        ...counts,
-      };
-    });
-
-    const sortedMovers = [...moversWithReportCounts].sort((left, right) => {
-      for (const sort of sorts ?? []) {
-        const difference =
-          sort === "PENDING_DESC" || sort === "PENDING_ASC"
-            ? left.pendingReceivedReportCount - right.pendingReceivedReportCount
-            : sort === "CONFIRMED_DESC" || sort === "CONFIRMED_ASC"
-              ? (left.moverProfile?.confirmedCount ?? 0) - (right.moverProfile?.confirmedCount ?? 0)
-              : sort === "RATING_DESC" || sort === "RATING_ASC"
-                ? Number(left.moverProfile?.averageRating ?? 0) -
-                  Number(right.moverProfile?.averageRating ?? 0)
-                : sort === "CAREER_DESC" || sort === "CAREER_ASC"
-                  ? (left.moverProfile?.career ?? 0) - (right.moverProfile?.career ?? 0)
-                  : sort === "CREATED_AT_DESC" || sort === "CREATED_AT_ASC"
-                    ? left.createdAt.getTime() - right.createdAt.getTime()
-                    : 0;
-
-        if (difference !== 0) {
-          return sort.endsWith("_DESC") ? -difference : difference;
-        }
-      }
-
-      const createdAtDifference = right.createdAt.getTime() - left.createdAt.getTime();
-      return createdAtDifference !== 0 ? createdAtDifference : left.id.localeCompare(right.id);
-    });
+    const firstRow = rows[0];
+    const countRows = firstRow
+      ? undefined
+      : await db.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+          SELECT COUNT(*)::bigint AS count
+          FROM "User" AS u
+          WHERE ${whereSql}
+        `);
+    // 페이지 범위를 벗어나 행이 없을 때만 같은 raw SQL 필터로 count를 다시 조회
+    const totalCount = firstRow ? Number(firstRow.totalCount) : Number(countRows?.[0]?.count ?? 0);
 
     return {
-      movers: sorts?.length ? sortedMovers.slice(skip, skip + take) : sortedMovers,
+      movers: rows.map(({ totalCount: _totalCount, ...row }) => ({
+        id: row.id,
+        email: row.email,
+        name: row.name,
+        phone: row.phone,
+        isActive: row.isActive,
+        isProfileCompleted: row.isProfileCompleted,
+        deletedAt: row.deletedAt,
+        createdAt: row.createdAt,
+        moverProfile:
+          row.nickname === null
+            ? null
+            : {
+                nickname: row.nickname,
+                career: row.career ?? 0,
+                averageRating: row.averageRating ?? new Prisma.Decimal(0),
+                reviewCount: row.reviewCount ?? 0,
+                confirmedCount: row.confirmedCount ?? 0,
+                serviceAreas: row.serviceAreas,
+                serviceTypes: row.serviceTypes,
+              },
+        receivedReportCount: row.receivedReportCount,
+        pendingReceivedReportCount: row.pendingReceivedReportCount,
+      })) as MoverListRow[],
       totalCount,
     };
   },
