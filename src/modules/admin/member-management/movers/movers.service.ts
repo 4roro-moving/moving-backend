@@ -55,16 +55,34 @@ function buildMoverListWhere(query: ListMoverQuery): Prisma.UserWhereInput {
   return where;
 }
 
+/** 확정 건수 정렬을 선택한 경우에만 기사 프로필의 확정 견적 수를 우선 정렬합니다. */
+function buildMoverListOrderBy(query: ListMoverQuery): Prisma.UserOrderByWithRelationInput[] {
+  const defaultOrderBy = buildMemberListOrderBy(query.sort);
+
+  if (!query.confirmedSort) {
+    return defaultOrderBy;
+  }
+
+  return [
+    {
+      moverProfile: {
+        confirmedCount: query.confirmedSort === "CONFIRMED_DESC" ? "desc" : "asc",
+      },
+    },
+    ...defaultOrderBy,
+  ];
+}
+
 export const moversService = {
   /** 관리자용 기사(MOVER) 목록을 조회합니다. */
   async getMoverList(query: ListMoverQuery) {
-    const { page, limit, sort, reportSort } = query;
+    const { page, limit, reportSort } = query;
 
     const { movers, totalCount } = await moversRepository.findManyWithCount({
       skip: (page - 1) * limit,
       take: limit,
       where: buildMoverListWhere(query),
-      orderBy: buildMemberListOrderBy(sort),
+      orderBy: buildMoverListOrderBy(query),
       reportSort,
     });
 

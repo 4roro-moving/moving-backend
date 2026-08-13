@@ -34,5 +34,10 @@ export const listMoverQuerySchema = z
     toDate: memberListDateQuerySchema,
     sort: memberListSortOrderSchema,
     reportSort: memberPendingReportSortSchema,
+    confirmedSort: z
+      .enum(["CONFIRMED_DESC", "CONFIRMED_ASC"], {
+        error: "확정 건수 정렬 기준은 CONFIRMED_DESC 또는 CONFIRMED_ASC여야 합니다.",
+      })
+      .optional(),
   })
   .superRefine(validateMemberListDateRange);

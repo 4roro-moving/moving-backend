@@ -29,6 +29,7 @@ registerRouterDocs(adminMoverRouter, {
         "- `regionId` / `moveType`: 서비스 가능 지역·제공 이사 유형 필터",
         "- `fromDate` / `toDate`: 가입일 기간 검색 (YYYY-MM-DD, KST 기준)",
         "- `reportSort`: PENDING_DESC(미처리 피신고 많은 순) | PENDING_ASC(적은 순)",
+        "- `confirmedSort`: CONFIRMED_DESC(확정 건수 많은 순) | CONFIRMED_ASC(적은 순)",
         "- `sort`: LATEST(기본값, 최신 가입순) | OLDEST(오래된 가입순)",
       ].join("\n"),
       responses: { 200: "조회 성공" },
