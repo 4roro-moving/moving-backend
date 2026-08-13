@@ -81,6 +81,17 @@ function buildMoverListOrderBy(query: ListMoverQuery): Prisma.UserOrderByWithRel
     ];
   }
 
+  if (query.careerSort) {
+    return [
+      {
+        moverProfile: {
+          career: query.careerSort === "CAREER_DESC" ? "desc" : "asc",
+        },
+      },
+      ...defaultOrderBy,
+    ];
+  }
+
   return defaultOrderBy;
 }
 

@@ -44,5 +44,10 @@ export const listMoverQuerySchema = z
         error: "평균 평점 정렬 기준은 RATING_DESC 또는 RATING_ASC여야 합니다.",
       })
       .optional(),
+    careerSort: z
+      .enum(["CAREER_DESC", "CAREER_ASC"], {
+        error: "경력 정렬 기준은 CAREER_DESC 또는 CAREER_ASC여야 합니다.",
+      })
+      .optional(),
   })
   .superRefine(validateMemberListDateRange);
