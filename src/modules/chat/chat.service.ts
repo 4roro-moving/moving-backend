@@ -144,7 +144,7 @@ function assertChatRoomCreatable(estimate: {
 }
 
 function getMessageNotificationContext(
-  room: Pick<ChatRoomRow, "customerId" | "moverId" | "customer" | "mover">,
+  room: Pick<ChatRoomRow, "estimateId" | "customerId" | "moverId" | "customer" | "mover">,
   senderId: string,
 ) {
   assertParticipant(room, senderId);
@@ -153,12 +153,14 @@ function getMessageNotificationContext(
     return {
       receiverId: room.moverId,
       senderName: room.customer.name,
+      linkUrl: `/estimate/sent/${String(room.estimateId)}?chat=open`,
     };
   }
 
   return {
     receiverId: room.customerId,
     senderName: room.mover.moverProfile?.nickname ?? room.mover.name,
+    linkUrl: `/estimates/pending/${String(room.estimateId)}?chat=open`,
   };
 }
 
@@ -362,14 +364,17 @@ export const chatService = {
         return;
       }
 
-      const { receiverId, senderName } = getMessageNotificationContext(room, params.senderId);
+      const { receiverId, senderName, linkUrl } = getMessageNotificationContext(
+        room,
+        params.senderId,
+      );
 
       const notification = await notificationService.createNotification({
         userId: receiverId,
         type: "CHAT_MESSAGE_RECEIVED",
         title: "새 메시지",
         content: senderName,
-        linkUrl: `/chats/${String(params.roomId)}`,
+        linkUrl,
         sourceId: `chat-message:${params.messageId}`,
         expiresAt: null,
       });
