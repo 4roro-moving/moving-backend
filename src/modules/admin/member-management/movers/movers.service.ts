@@ -64,35 +64,38 @@ function buildMoverListWhere(query: ListMoverQuery): Prisma.UserWhereInput {
 
 /** 기사 전용 정렬을 선택한 경우에만 해당 프로필 지표를 우선 정렬합니다. */
 function buildMoverListOrderBy(query: ListMoverQuery): Prisma.UserOrderByWithRelationInput[] {
-  const defaultOrderBy = buildMemberListOrderBy(query.sort);
+  const sorts = query.sorts ?? [];
+  const defaultOrderBy = buildMemberListOrderBy(
+    sorts.includes("CREATED_AT_ASC") ? "OLDEST" : "LATEST",
+  );
 
-  if (query.confirmedSort) {
+  if (sorts.includes("CONFIRMED_DESC") || sorts.includes("CONFIRMED_ASC")) {
     return [
       {
         moverProfile: {
-          confirmedCount: query.confirmedSort === "CONFIRMED_DESC" ? "desc" : "asc",
+          confirmedCount: sorts.includes("CONFIRMED_DESC") ? "desc" : "asc",
         },
       },
       ...defaultOrderBy,
     ];
   }
 
-  if (query.ratingSort) {
+  if (sorts.includes("RATING_DESC") || sorts.includes("RATING_ASC")) {
     return [
       {
         moverProfile: {
-          averageRating: query.ratingSort === "RATING_DESC" ? "desc" : "asc",
+          averageRating: sorts.includes("RATING_DESC") ? "desc" : "asc",
         },
       },
       ...defaultOrderBy,
     ];
   }
 
-  if (query.careerSort) {
+  if (sorts.includes("CAREER_DESC") || sorts.includes("CAREER_ASC")) {
     return [
       {
         moverProfile: {
-          career: query.careerSort === "CAREER_DESC" ? "desc" : "asc",
+          career: sorts.includes("CAREER_DESC") ? "desc" : "asc",
         },
       },
       ...defaultOrderBy,
@@ -105,14 +108,14 @@ function buildMoverListOrderBy(query: ListMoverQuery): Prisma.UserOrderByWithRel
 export const moversService = {
   /** 관리자용 기사(MOVER) 목록을 조회합니다. */
   async getMoverList(query: ListMoverQuery) {
-    const { page, limit, reportSort } = query;
+    const { page, limit, sorts } = query;
 
     const { movers, totalCount } = await moversRepository.findManyWithCount({
       skip: (page - 1) * limit,
       take: limit,
       where: buildMoverListWhere(query),
       orderBy: buildMoverListOrderBy(query),
-      reportSort,
+      ...(sorts ? { sorts } : {}),
     });
 
     return {

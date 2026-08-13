@@ -75,14 +75,15 @@ function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput
 export const customersService = {
   /** 관리자용 일반 고객(CUSTOMER) 목록을 조회합니다. */
   async getCustomerList(query: ListCustomerQuery) {
-    const { page, limit, sort, reportSort } = query;
+    const { page, limit, sorts } = query;
+    const sort = sorts?.includes("CREATED_AT_ASC") ? "OLDEST" : "LATEST";
 
     const { customers, totalCount } = await customersRepository.findManyWithCount({
       skip: (page - 1) * limit,
       take: limit,
       where: buildCustomerListWhere(query),
       orderBy: buildMemberListOrderBy(sort),
-      reportSort,
+      ...(sorts ? { sorts } : {}),
     });
 
     return {
