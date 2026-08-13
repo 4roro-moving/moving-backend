@@ -7,7 +7,7 @@ import type { DbClient } from "../../../../utils/transaction";
 /** 고객 상세 응답에서 각 이력 항목별로 제공하는 기본 최신 건수입니다. */
 export const CUSTOMER_HISTORY_LIMIT = 5;
 
-/** 고객 목록 행을 API 목록 응답 DTO로 변환하는 데 필요한 최소 필드입니다. */
+/** 고객 목록 DTO 변환에 필요한 최소 필드입니다. */
 const customerListSelect = {
   id: true,
   email: true,
@@ -87,14 +87,6 @@ const reportHistorySelect = {
   createdAt: true,
 } satisfies Prisma.ReportSelect;
 
-/** 관리자에 의한 정지·해제 이력 요약 필드입니다. */
-const suspensionHistorySelect = {
-  id: true,
-  action: true,
-  reason: true,
-  createdAt: true,
-} satisfies Prisma.UserSuspensionSelect;
-
 export type CustomerListRow = Prisma.UserGetPayload<{ select: typeof customerListSelect }>;
 export type CustomerDetailRow = Prisma.UserGetPayload<{ select: typeof customerDetailSelect }>;
 export type EstimateHistoryRow = Prisma.EstimateRequestGetPayload<{
@@ -102,9 +94,6 @@ export type EstimateHistoryRow = Prisma.EstimateRequestGetPayload<{
 }>;
 export type ReviewHistoryRow = Prisma.ReviewGetPayload<{ select: typeof reviewHistorySelect }>;
 export type ReportHistoryRow = Prisma.ReportGetPayload<{ select: typeof reportHistorySelect }>;
-export type SuspensionHistoryRow = Prisma.UserSuspensionGetPayload<{
-  select: typeof suspensionHistorySelect;
-}>;
 
 type ListParams = {
   skip: number;
@@ -119,8 +108,7 @@ type HistoryParams = {
 
 export const customersRepository = {
   /**
-   * 목록 페이지와 전체 건수를 동일한 조건으로 병렬 조회합니다.
-   * 목록 데이터와 pagination.totalCount의 필터 기준을 일치시키기 위함입니다.
+   * 목록과 전체 건수를 동일한 필터 조건으로 병렬 조회합니다.
    */
   async findManyWithCount({ skip, take, where }: ListParams, db: DbClient = prisma) {
     const [customers, totalCount] = await Promise.all([
@@ -250,29 +238,6 @@ export const customersRepository = {
         take,
       }),
       db.report.count({ where }),
-    ]);
-
-    return { items, totalCount };
-  },
-
-  /**
-   * 고객 계정의 정지·해제 처리 이력 최신 일부와 전체 건수를 조회합니다.
-   * 정지와 해제를 모두 UserSuspension에 남기므로 action으로 두 처리 유형을 구분합니다.
-   */
-  async findSuspensionHistory(
-    { customerId, take = CUSTOMER_HISTORY_LIMIT }: HistoryParams,
-    db: DbClient = prisma,
-  ) {
-    const where: Prisma.UserSuspensionWhereInput = { userId: customerId };
-
-    const [items, totalCount] = await Promise.all([
-      db.userSuspension.findMany({
-        where,
-        select: suspensionHistorySelect,
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-        take,
-      }),
-      db.userSuspension.count({ where }),
     ]);
 
     return { items, totalCount };

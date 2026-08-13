@@ -37,6 +37,13 @@ export function buildMemberStatusWhere(status: MemberStatus | undefined): Prisma
   return { deletedAt: null };
 }
 
+/** 목록 조회에서 프로필 완료 여부가 지정된 경우에만 Prisma 조건을 만듭니다. */
+export function buildProfileCompletedWhere(
+  isProfileCompleted: boolean | undefined,
+): Prisma.UserWhereInput {
+  return isProfileCompleted === undefined ? {} : { isProfileCompleted };
+}
+
 /** 관리자는 자기 자신의 계정 상태를 정지·해제할 수 없습니다. */
 export function assertAdminCanChangeMemberStatus(memberId: string, adminId: string): void {
   if (memberId === adminId) {
