@@ -75,6 +75,13 @@ function getSocketUserId(socket: Socket): string {
   return userId;
 }
 
+function nextRoomSequence(socket: Socket): number {
+  const nextSequence = (socket.data.roomSequence ?? 0) + 1;
+  socket.data.roomSequence = nextSequence;
+
+  return nextSequence;
+}
+
 export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): void => {
   socket.on("chat:ping", (callback?: (response: { ok: boolean }) => void) => {
     callback?.({ ok: true });
@@ -85,11 +92,16 @@ export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): 
     async (payload: unknown, callback?: (response: JoinRoomAck) => void) => {
       try {
         const input = joinChatRoomPayloadSchema.parse(payload);
+        const roomSequence = nextRoomSequence(socket);
         const result = await chatService.joinRoom(
           getSocketUserId(socket),
           input.roomId,
           input.lastMessageId,
         );
+
+        if (socket.data.roomSequence !== roomSequence) {
+          return;
+        }
 
         if (socket.data.roomId && socket.data.roomId !== input.roomId) {
           socket.leave(toRoomName(socket.data.roomId));
@@ -110,6 +122,7 @@ export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): 
     try {
       const input = leaveChatRoomPayloadSchema.parse(payload);
 
+      nextRoomSequence(socket);
       socket.leave(toRoomName(input.roomId));
 
       if (socket.data.roomId === input.roomId) {
