@@ -489,7 +489,7 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
               authService.login({
                 email: fixture.email,
                 password: CURRENT_PASSWORD,
-                role: role === "customer" ? UserRole.CUSTOMER : UserRole.MOVER,
+                role: fixture.loginRole,
               }),
             assertUnauthorizedLogin,
           );
@@ -497,7 +497,7 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
           const loginResult = await authService.login({
             email: fixture.email,
             password: NEW_PASSWORD,
-            role: role === "customer" ? UserRole.CUSTOMER : UserRole.MOVER,
+            role: fixture.loginRole,
           });
 
           assert.equal(typeof loginResult.tokens.refreshToken, "string");
