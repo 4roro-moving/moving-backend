@@ -23,6 +23,10 @@ export const joinChatRoomPayloadSchema = z.object({
   lastMessageId: z.number().int().positive("유효하지 않은 메시지 ID입니다.").nullable().optional(),
 });
 
+export const leaveChatRoomPayloadSchema = z.object({
+  roomId: z.number().int().positive("유효하지 않은 채팅방 ID입니다."),
+});
+
 export const sendChatMessagePayloadSchema = z.object({
   roomId: z.number().int().positive("유효하지 않은 채팅방 ID입니다."),
   content: z

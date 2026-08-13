@@ -4,7 +4,11 @@ import { AppError } from "../../lib/app-error";
 import { emitSocketError, type SocketErrorResponse } from "../../socket/socket-error";
 import { chatService } from "./chat.service";
 import type { ChatMessageResponse, ChatRoomSummary, MissedChatMessagesResponse } from "./chat.type";
-import { joinChatRoomPayloadSchema, sendChatMessagePayloadSchema } from "./chat.validator";
+import {
+  joinChatRoomPayloadSchema,
+  leaveChatRoomPayloadSchema,
+  sendChatMessagePayloadSchema,
+} from "./chat.validator";
 
 type JoinRoomAck =
   | {
@@ -27,6 +31,15 @@ type SendMessageAck =
       ok: false;
       error: SocketErrorResponse;
       clientMessageId?: string;
+    };
+
+type LeaveRoomAck =
+  | {
+      ok: true;
+    }
+  | {
+      ok: false;
+      error: SocketErrorResponse;
     };
 
 const toRoomName = (roomId: number): string => `chat:room:${roomId}`;
@@ -92,6 +105,22 @@ export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): 
       }
     },
   );
+
+  socket.on("chat:room:leave", (payload: unknown, callback?: (response: LeaveRoomAck) => void) => {
+    try {
+      const input = leaveChatRoomPayloadSchema.parse(payload);
+
+      socket.leave(toRoomName(input.roomId));
+
+      if (socket.data.roomId === input.roomId) {
+        delete socket.data.roomId;
+      }
+
+      callback?.({ ok: true });
+    } catch (error) {
+      callback?.({ ok: false, error: emitSocketError(socket, error) });
+    }
+  });
 
   socket.on(
     "chat:message:send",
