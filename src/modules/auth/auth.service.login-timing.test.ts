@@ -152,6 +152,30 @@ describe("authService.login timing mitigation", () => {
     assert.equal(calls[0]?.hash, REAL_PASSWORD_HASH);
   });
 
+  it("returns UNAUTHORIZED instead of AUTH_ROLE_MISMATCH for wrong password with mismatched role", async () => {
+    const { calls, compare } = createCompareStub();
+
+    authRepository.findByEmail = async () => createLocalUser({ role: UserRole.CUSTOMER });
+    bcrypt.compare = compare as typeof bcrypt.compare;
+
+    await assert.rejects(
+      () =>
+        authService.login({
+          email: "user@example.com",
+          password: "wrong-password",
+          role: UserRole.MOVER,
+        }),
+      (error: unknown) => {
+        assert.equal(assertUnauthorized(error), true);
+        assert.notEqual(error instanceof AppError && error.code, "AUTH_ROLE_MISMATCH");
+        return true;
+      },
+    );
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.hash, REAL_PASSWORD_HASH);
+  });
+
   it("keeps existing inactive or deleted user responses without bcrypt.compare", async () => {
     const inactiveCases = [
       {
