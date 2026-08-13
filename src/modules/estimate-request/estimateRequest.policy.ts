@@ -50,7 +50,7 @@ export function resolveMoveDate(moveDate: string): Date {
   }
   if (isPastInKst(parsed)) {
     throw new AppError("INVALID_MOVE_DATE", {
-      message: "이사 예정일은 오늘 이후로 선택해 주세요.",
+      message: "이사 예정일은 오늘 또는 이후 날짜로 선택해 주세요.",
     });
   }
   return parsed;
