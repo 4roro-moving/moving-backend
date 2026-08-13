@@ -268,13 +268,19 @@ export const moversRepository = {
           mp."reviewCount",
           mp."confirmedCount",
           COALESCE((
-            SELECT jsonb_agg(jsonb_build_object('region', jsonb_build_object('name', r.name)))
+            SELECT jsonb_agg(
+              jsonb_build_object('region', jsonb_build_object('name', r.name))
+              ORDER BY msa."regionId"
+            )
             FROM mover_service_areas AS msa
             INNER JOIN regions AS r ON r.id = msa."regionId"
             WHERE msa."moverProfileId" = mp.id
           ), '[]'::jsonb) AS "serviceAreas",
           COALESCE((
-            SELECT jsonb_agg(jsonb_build_object('moveType', mst."moveType"))
+            SELECT jsonb_agg(
+              jsonb_build_object('moveType', mst."moveType")
+              ORDER BY mst.id
+            )
             FROM mover_service_types AS mst
             WHERE mst."moverProfileId" = mp.id
           ), '[]'::jsonb) AS "serviceTypes",
