@@ -50,6 +50,15 @@ export const memberListSortOrderSchema = z
   })
   .default("LATEST");
 
+/** 미처리 피신고 건수 정렬은 지정할 때만 적용합니다. */
+export const memberPendingReportSortSchema = z
+  .enum(["PENDING_DESC", "PENDING_ASC"], {
+    error: "신고 정렬 기준은 PENDING_DESC 또는 PENDING_ASC여야 합니다.",
+  })
+  .optional();
+
+export type MemberPendingReportSort = z.infer<typeof memberPendingReportSortSchema>;
+
 export function validateMemberListDateRange(
   data: { fromDate?: string | undefined; toDate?: string | undefined },
   ctx: z.RefinementCtx,

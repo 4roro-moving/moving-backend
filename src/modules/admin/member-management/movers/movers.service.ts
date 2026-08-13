@@ -58,13 +58,14 @@ function buildMoverListWhere(query: ListMoverQuery): Prisma.UserWhereInput {
 export const moversService = {
   /** 관리자용 기사(MOVER) 목록을 조회합니다. */
   async getMoverList(query: ListMoverQuery) {
-    const { page, limit, sort } = query;
+    const { page, limit, sort, reportSort } = query;
 
     const { movers, totalCount } = await moversRepository.findManyWithCount({
       skip: (page - 1) * limit,
       take: limit,
       where: buildMoverListWhere(query),
       orderBy: buildMemberListOrderBy(sort),
+      reportSort,
     });
 
     return {

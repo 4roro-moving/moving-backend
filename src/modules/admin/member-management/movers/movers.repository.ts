@@ -2,8 +2,12 @@ import { EstimateRequestStatus, EstimateStatus, ReportTargetType, UserRole } fro
 import type { Prisma } from "@prisma/client";
 import type { DbClient } from "../../../../utils/transaction";
 import { prisma } from "../../../../lib/prisma";
-import { buildReceivedReportCountsByMemberId } from "../member.policy";
+import {
+  buildReceivedReportCountsByMemberId,
+  sortMembersByPendingReceivedReportCount,
+} from "../member.policy";
 import type { MemberReceivedReportCounts } from "../member.type";
+import type { MemberPendingReportSort } from "../member-list.validator";
 
 /** 기사 목록 DTO 변환에 필요한 User 및 MoverProfile 조회 필드입니다. */
 const moverListSelect = {
@@ -124,6 +128,7 @@ type ListParams = {
   take: number;
   where: Prisma.UserWhereInput;
   orderBy: Prisma.UserOrderByWithRelationInput[];
+  reportSort?: MemberPendingReportSort;
 };
 
 type HistoryParams = {
@@ -138,14 +143,16 @@ export const moversRepository = {
   /**
    * 목록과 전체 건수를 동일한 필터 조건으로 병렬 조회합니다.
    */
-  async findManyWithCount({ skip, take, where, orderBy }: ListParams, db: DbClient = prisma) {
+  async findManyWithCount(
+    { skip, take, where, orderBy, reportSort }: ListParams,
+    db: DbClient = prisma,
+  ) {
     const [movers, totalCount] = await Promise.all([
       db.user.findMany({
         where,
         select: moverListSelect,
         orderBy,
-        skip,
-        take,
+        ...(reportSort ? {} : { skip, take }),
       }),
       db.user.count({ where }),
     ]);
@@ -170,17 +177,24 @@ export const moversRepository = {
       })),
     );
 
+    const moversWithReportCounts = movers.map((mover) => {
+      const counts = countsByMoverId.get(mover.id) ?? {
+        receivedReportCount: 0,
+        pendingReceivedReportCount: 0,
+      };
+      return {
+        ...mover,
+        ...counts,
+      };
+    });
+
+    const sortedMovers = sortMembersByPendingReceivedReportCount(
+      moversWithReportCounts,
+      reportSort,
+    );
+
     return {
-      movers: movers.map((mover) => {
-        const counts = countsByMoverId.get(mover.id) ?? {
-          receivedReportCount: 0,
-          pendingReceivedReportCount: 0,
-        };
-        return {
-          ...mover,
-          ...counts,
-        };
-      }),
+      movers: reportSort ? sortedMovers.slice(skip, skip + take) : sortedMovers,
       totalCount,
     };
   },

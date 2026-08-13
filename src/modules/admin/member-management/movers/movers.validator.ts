@@ -10,6 +10,7 @@ import {
   memberStatusSchema,
   validateMemberListDateRange,
   memberListSortOrderSchema,
+  memberPendingReportSortSchema,
 } from "../member-list.validator";
 
 export const moverIdParamSchema = z.object({
@@ -32,5 +33,6 @@ export const listMoverQuerySchema = z
     fromDate: memberListDateQuerySchema,
     toDate: memberListDateQuerySchema,
     sort: memberListSortOrderSchema,
+    reportSort: memberPendingReportSortSchema,
   })
   .superRefine(validateMemberListDateRange);

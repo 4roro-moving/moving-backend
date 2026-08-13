@@ -28,6 +28,7 @@ registerRouterDocs(adminCustomerRouter, {
         "- `isProfileCompleted`: 프로필 완료 여부 (`true` | `false`)",
         "- `fromDate` / `toDate`: 가입일 기간 검색 (YYYY-MM-DD, KST 기준)",
         "- `sort`: LATEST(기본값, 최신 가입순) | OLDEST(오래된 가입순)",
+        "- `reportSort`: PENDING_DESC(미처리 피신고 많은 순) | PENDING_ASC(적은 순)",
         "- 기사님 목록은 `GET /api/admin/movers` 에서 별도 제공",
       ].join("\n"),
       responses: { 200: "조회 성공" },

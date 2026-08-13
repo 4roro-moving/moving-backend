@@ -3,8 +3,12 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../../../lib/prisma";
 import type { DbClient } from "../../../../utils/transaction";
-import { buildReceivedReportCountsByMemberId } from "../member.policy";
+import {
+  buildReceivedReportCountsByMemberId,
+  sortMembersByPendingReceivedReportCount,
+} from "../member.policy";
 import type { MemberReceivedReportCounts } from "../member.type";
+import type { MemberPendingReportSort } from "../member-list.validator";
 
 /** 고객 상세 응답에서 각 이력 항목별로 제공하는 기본 최신 건수입니다. */
 export const CUSTOMER_HISTORY_LIMIT = 5;
@@ -104,6 +108,7 @@ type ListParams = {
   take: number;
   where: Prisma.UserWhereInput;
   orderBy: Prisma.UserOrderByWithRelationInput[];
+  reportSort?: MemberPendingReportSort;
 };
 
 type HistoryParams = {
@@ -115,14 +120,16 @@ export const customersRepository = {
   /**
    * 목록과 전체 건수를 동일한 필터 조건으로 병렬 조회합니다.
    */
-  async findManyWithCount({ skip, take, where, orderBy }: ListParams, db: DbClient = prisma) {
+  async findManyWithCount(
+    { skip, take, where, orderBy, reportSort }: ListParams,
+    db: DbClient = prisma,
+  ) {
     const [customers, totalCount] = await Promise.all([
       db.user.findMany({
         where,
         select: customerListSelect,
         orderBy,
-        skip,
-        take,
+        ...(reportSort ? {} : { skip, take }),
       }),
       db.user.count({ where }),
     ]);
@@ -145,11 +152,13 @@ export const customersRepository = {
 
     if (reviews.length === 0) {
       return {
-        customers: customers.map((customer) => ({
-          ...customer,
-          receivedReportCount: 0,
-          pendingReceivedReportCount: 0,
-        })),
+        customers: (reportSort ? customers.slice(skip, skip + take) : customers).map(
+          (customer) => ({
+            ...customer,
+            receivedReportCount: 0,
+            pendingReceivedReportCount: 0,
+          }),
+        ),
         totalCount,
       };
     }
@@ -174,17 +183,24 @@ export const customersRepository = {
       }),
     );
 
+    const customersWithReportCounts = customers.map((customer) => {
+      const counts = countsByCustomerId.get(customer.id) ?? {
+        receivedReportCount: 0,
+        pendingReceivedReportCount: 0,
+      };
+      return {
+        ...customer,
+        ...counts,
+      };
+    });
+
+    const sortedCustomers = sortMembersByPendingReceivedReportCount(
+      customersWithReportCounts,
+      reportSort,
+    );
+
     return {
-      customers: customers.map((customer) => {
-        const counts = countsByCustomerId.get(customer.id) ?? {
-          receivedReportCount: 0,
-          pendingReceivedReportCount: 0,
-        };
-        return {
-          ...customer,
-          ...counts,
-        };
-      }),
+      customers: reportSort ? sortedCustomers.slice(skip, skip + take) : sortedCustomers,
       totalCount,
     };
   },

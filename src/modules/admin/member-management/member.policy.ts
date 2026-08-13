@@ -5,6 +5,7 @@ import type { z } from "zod";
 import { AppError } from "../../../lib/app-error";
 import { MEMBER_STATUS, type MemberStatus } from "./member-status.constants";
 import type { memberListSortOrderSchema } from "./member-list.validator";
+import type { MemberPendingReportSort } from "./member-list.validator";
 import type { MemberReceivedReportCounts } from "./member.type";
 
 /**
@@ -88,4 +89,17 @@ export function buildReceivedReportCountsByMemberId(
   }
 
   return countsByMemberId;
+}
+
+/** 미처리 피신고 수 정렬은 가입일 정렬 결과를 동률의 안정적인 순서로 유지합니다. */
+export function sortMembersByPendingReceivedReportCount<T extends MemberReceivedReportCounts>(
+  members: T[],
+  sort: MemberPendingReportSort,
+): T[] {
+  if (!sort) return members;
+
+  return [...members].sort((left, right) => {
+    const difference = left.pendingReceivedReportCount - right.pendingReceivedReportCount;
+    return sort === "PENDING_DESC" ? -difference : difference;
+  });
 }
