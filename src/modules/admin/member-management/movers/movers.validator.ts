@@ -39,5 +39,10 @@ export const listMoverQuerySchema = z
         error: "확정 건수 정렬 기준은 CONFIRMED_DESC 또는 CONFIRMED_ASC여야 합니다.",
       })
       .optional(),
+    ratingSort: z
+      .enum(["RATING_DESC", "RATING_ASC"], {
+        error: "평균 평점 정렬 기준은 RATING_DESC 또는 RATING_ASC여야 합니다.",
+      })
+      .optional(),
   })
   .superRefine(validateMemberListDateRange);
