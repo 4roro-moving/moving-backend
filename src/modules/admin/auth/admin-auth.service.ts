@@ -1,5 +1,10 @@
 import bcrypt from "bcrypt";
-import { AuthProvider, RefreshTokenSessionType, UserRole } from "@prisma/client";
+import {
+  AuthProvider,
+  RefreshTokenRevokedReason,
+  RefreshTokenSessionType,
+  UserRole,
+} from "@prisma/client";
 
 import { adminAuthRepository } from "./admin-auth.repository";
 import { authRepository } from "../../auth/auth.repository";
@@ -51,19 +56,19 @@ const createAdminAuthTokens = (
  * POST /api/admin/auth/login
  */
 const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
-  /*
+  /**
    * Validator에서도 이메일을 정규화하지만,
    * Service를 직접 호출하는 경우까지 고려해 한 번 더 정규화한다.
    */
   const email = input.email.trim().toLowerCase();
 
-  /*
+  /**
    * 조회 결과는 아직 ADMIN 여부가 검증되지 않았으므로
    * admin이 아니라 user로 표현한다.
    */
   const user = await adminAuthRepository.findByEmailForLogin(email);
 
-  /*
+  /**
    * 존재하지 않는 이메일도 실제 비밀번호 검증과 유사한
    * bcrypt 연산 비용을 발생시키도록 Dummy Hash를 비교한다.
    *
@@ -78,7 +83,7 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
     });
   }
 
-  /*
+  /**
    * 일반 사용자 계정으로 관리자 로그인 API를 호출하더라도
    * 관리자 계정 여부가 드러나지 않도록 동일한 401을 반환한다.
    *
@@ -93,7 +98,7 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
     });
   }
 
-  /*
+  /**
    * 비활성화되었거나 탈퇴 처리된 관리자는
    * 새로운 로그인 세션을 생성할 수 없다.
    *
@@ -105,7 +110,7 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
     });
   }
 
-  /*
+  /**
    * 관리자 로그인은 LOCAL 계정만 허용한다.
    *
    * OAuth 계정 여부가 노출되지 않도록
@@ -135,7 +140,7 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
     user.role,
   );
 
-  /*
+  /**
    * 다중 로그인을 허용하므로 기존 세션을 덮어쓰지 않고
    * 새로운 관리자 로그인 세션을 추가한다.
    *
@@ -177,7 +182,7 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
 const refresh = async (currentRefreshToken: string): Promise<AdminRefreshResponse> => {
   let refreshTokenPayload;
 
-  /*
+  /**
    * Refresh Token의 서명과 만료 시간을 검증한다.
    */
   try {
@@ -190,7 +195,7 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
 
   const currentTokenHash = tokenHash(currentRefreshToken);
 
-  /*
+  /**
    * 관리자 인증에서 생성된 ADMIN 세션만 조회한다.
    *
    * 일반 사용자 Refresh Token이 관리자 Cookie에 전달되더라도
@@ -201,7 +206,7 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
     RefreshTokenSessionType.ADMIN,
   );
 
-  /*
+  /**
    * JWT 자체가 유효하더라도 DB에 저장된 세션이 없다면
    * 서버가 발급한 유효한 관리자 세션으로 볼 수 없다.
    */
@@ -211,7 +216,7 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
     });
   }
 
-  /*
+  /**
    * 이미 Rotation 또는 로그아웃으로 폐기된 토큰은
    * 다시 사용할 수 없다.
    */
@@ -221,19 +226,23 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
     });
   }
 
-  /*
+  /**
    * JWT exp 검증과 별도로
    * DB에 저장된 세션 만료 시각도 확인한다.
    */
   if (storedRefreshToken.expiresAt.getTime() <= Date.now()) {
-    await authRepository.revokeRefreshTokenByHash(currentTokenHash, RefreshTokenSessionType.ADMIN);
+    await authRepository.revokeRefreshTokenByHash(
+      currentTokenHash,
+      RefreshTokenSessionType.ADMIN,
+      RefreshTokenRevokedReason.EXPIRED,
+    );
 
     throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않거나 만료된 관리자 Refresh Token입니다.",
     });
   }
 
-  /*
+  /**
    * JWT Payload의 사용자와
    * DB Refresh Token 세션의 소유자가 같은지 확인한다.
    */
@@ -251,7 +260,7 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
     });
   }
 
-  /*
+  /**
    * 세션 유형뿐 아니라 실제 DB 사용자 Role도 다시 확인하여
    * 관리자 권한이 없는 사용자에게 관리자 Token을 발급하지 않는다.
    */
@@ -261,7 +270,7 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
     });
   }
 
-  /*
+  /**
    * 비활성화되었거나 탈퇴 처리된 관리자는
    * 기존 Refresh Token이 남아 있더라도 재발급할 수 없다.
    *
@@ -271,7 +280,11 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
    * 일반 사용자 인증 세션은 폐기 범위에 포함하지 않는다.
    */
   if (!admin.isActive || admin.deletedAt !== null) {
-    await authRepository.revokeAllRefreshTokensByUserId(admin.id, RefreshTokenSessionType.ADMIN);
+    await authRepository.revokeAllRefreshTokensByUserId(
+      admin.id,
+      RefreshTokenSessionType.ADMIN,
+      RefreshTokenRevokedReason.FORCED,
+    );
 
     throw new AppError("FORBIDDEN", {
       message: "비활성화된 관리자 계정입니다.",
@@ -283,7 +296,7 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
     admin.role,
   );
 
-  /*
+  /**
    * 기존 Refresh Token 폐기와 신규 Refresh Token 저장을
    * 하나의 트랜잭션으로 처리한다.
    *
@@ -297,6 +310,7 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
     const revokeResult = await authRepository.revokeRefreshTokenByHash(
       currentTokenHash,
       RefreshTokenSessionType.ADMIN,
+      RefreshTokenRevokedReason.ROTATED,
       tx,
     );
 
@@ -331,7 +345,7 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
 const logout = async (currentRefreshToken: string): Promise<void> => {
   const currentTokenHash = tokenHash(currentRefreshToken);
 
-  /*
+  /**
    * 로그아웃은 멱등성을 유지한다.
    *
    * 현재 Refresh Token에 해당하는 ADMIN 세션만 폐기하며,
@@ -340,7 +354,11 @@ const logout = async (currentRefreshToken: string): Promise<void> => {
    * 일반 사용자 인증 세션은 관리자 로그아웃의
    * 폐기 범위에 포함하지 않는다.
    */
-  await authRepository.revokeRefreshTokenByHash(currentTokenHash, RefreshTokenSessionType.ADMIN);
+  await authRepository.revokeRefreshTokenByHash(
+    currentTokenHash,
+    RefreshTokenSessionType.ADMIN,
+    RefreshTokenRevokedReason.LOGOUT,
+  );
 };
 
 export const adminAuthService = {

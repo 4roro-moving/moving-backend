@@ -164,6 +164,24 @@ enum RefreshTokenSessionType {
   ADMIN
 }
 
+/// Refresh Token 폐기 사유
+///
+/// ROTATED        : Refresh Token Rotation으로 기존 토큰이 교체됨
+/// LOGOUT         : 사용자가 현재 로그인 세션에서 로그아웃함
+/// FORCED         : 비밀번호 변경, 계정 상태 변경 등 서버 정책에 의해 강제 폐기됨
+/// EXPIRED        : Refresh Token의 원래 만료 시각이 지나 폐기됨
+/// REUSE_DETECTED : Rotation으로 폐기된 토큰의 재사용이 탐지되어 Family가 폐기됨
+///
+/// 기존 마이그레이션 이전 Refresh Token에는 폐기 사유 정보가 없을 수 있으므로
+/// RefreshToken.revokedReason은 nullable로 유지합니다.
+enum RefreshTokenRevokedReason {
+  ROTATED
+  LOGOUT
+  FORCED
+  EXPIRED
+  REUSE_DETECTED
+}
+
 // ---------------------------------------------------------------------------
 // 관리자 기능 Enum
 // ---------------------------------------------------------------------------
@@ -429,28 +447,41 @@ model User {
 /// 로그인할 수 있도록 1:N 구조로 관리합니다.
 model RefreshToken {
   /// PK.
-  id          Int                     @id @default(autoincrement())
+  id            Int                        @id @default(autoincrement())
   /// 토큰 소유 사용자.
-  userId      String                  @db.Uuid
+  userId        String                     @db.Uuid
   /// Refresh Token 의 해시값. 원문은 저장하지 않으며 중복 불가입니다.
-  tokenHash   String                  @unique
+  tokenHash     String                     @unique
   /// Refresh Token 세션 용도.
   /// 일반 사용자 인증과 관리자 인증의 조회·폐기 범위를 구분합니다.
-  sessionType RefreshTokenSessionType @default(USER)
+  sessionType   RefreshTokenSessionType    @default(USER)
+  /// 로그인 1회를 기준으로 생성되는 Token Family 식별자.
+  /// Rotation으로 새 Refresh Token을 발급해도 동일한 familyId를 계승합니다.
+  /// 마이그레이션 이전에 발급된 기존 Refresh Token은 null을 유지하며
+  /// 기존 방식으로 자연 만료될 때까지 사용할 수 있습니다.
+  familyId      String?                    @db.Uuid
+  /// Refresh Token 폐기 사유.
+  /// Rotation으로 폐기된 토큰만 재사용 탐지 대상으로 구분하기 위해 사용합니다.
+  /// 아직 폐기되지 않았거나 마이그레이션 이전 기존 토큰은 null일 수 있습니다.
+  revokedReason RefreshTokenRevokedReason?
   /// 토큰 만료 시각.
-  expiresAt   DateTime
-  /// 폐기 시각. 로그아웃/강제 만료 시 채워지며, 값이 있으면 사용 불가입니다.
-  revokedAt   DateTime?
+  expiresAt     DateTime
+  /// 폐기 시각. 값이 있으면 더 이상 Refresh Token으로 사용할 수 없습니다.
+  /// 폐기 원인은 revokedReason으로 별도 구분합니다.
+  revokedAt     DateTime?
   /// 소유 사용자 관계. 계정 삭제 시 함께 삭제(Cascade).
-  user        User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User                       @relation(fields: [userId], references: [id], onDelete: Cascade)
   /// 발급 시각.
-  createdAt   DateTime                @default(now())
+  createdAt     DateTime                   @default(now())
   /// 수정 시각.
-  updatedAt   DateTime                @updatedAt
+  updatedAt     DateTime                   @updatedAt
 
   /// 사용자별 토큰 조회 최적화.
   @@index([userId, sessionType])
+  /// Token Family 단위 조회 및 폐기 최적화.
+  @@index([familyId])
   /// 만료 토큰 정리(스케줄러) 조회 최적화.
+  /// 기존 Cleanup은 expiresAt 기준이므로 Family 필드 추가 후에도 동일하게 사용합니다.
   @@index([expiresAt])
 }
 

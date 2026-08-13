@@ -1,5 +1,12 @@
 import bcrypt from "bcrypt";
-import { AuthProvider, Prisma, RefreshTokenSessionType, UserRole } from "@prisma/client";
+import { randomUUID } from "node:crypto";
+import {
+  AuthProvider,
+  Prisma,
+  RefreshTokenRevokedReason,
+  RefreshTokenSessionType,
+  UserRole,
+} from "@prisma/client";
 
 import { authRepository } from "./auth.repository";
 import { googleOAuth } from "./oauth/google.oauth";
@@ -163,6 +170,7 @@ const createLocalUser = async (input: SignUpInput, role: SignUpRole): Promise<Au
           userId: user.id,
           tokenHash: tokenHash(refreshToken),
           sessionType: RefreshTokenSessionType.USER,
+          familyId: randomUUID(),
           expiresAt: refreshTokenExpiresAt,
         },
         tx,
@@ -308,6 +316,7 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
     userId: user.id,
     tokenHash: tokenHash(refreshToken),
     sessionType: RefreshTokenSessionType.USER,
+    familyId: randomUUID(),
     expiresAt: refreshTokenExpiresAt,
   });
 
@@ -367,6 +376,7 @@ const createOAuthLoginResponse = async (
     userId: user.id,
     tokenHash: tokenHash(refreshToken),
     sessionType: RefreshTokenSessionType.USER,
+    familyId: randomUUID(),
     expiresAt: refreshTokenExpiresAt,
   });
 
@@ -452,6 +462,7 @@ const loginWithOAuth = async (
           userId: user.id,
           tokenHash: tokenHash(refreshToken),
           sessionType: RefreshTokenSessionType.USER,
+          familyId: randomUUID(),
           expiresAt: refreshTokenExpiresAt,
         },
         tx,
@@ -593,10 +604,30 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
   }
 
   /*
-   * 이미 Rotation 또는 로그아웃으로 revoke된 토큰은
-   * 다시 사용할 수 없다.
+   * Rotation으로 폐기된 Refresh Token이 다시 사용되었고
+   * Token Family 식별자가 존재한다면 Refresh Token 재사용으로 판단한다.
+   *
+   * 재사용이 감지되면 동일한 USER Token Family의 활성 세션만 폐기한다.
+   * 다른 로그인에서 생성된 Token Family와 ADMIN 세션에는 영향을 주지 않는다.
+   *
+   * 로그아웃, 강제 폐기, 만료 등 Rotation 이외의 사유로 폐기된 토큰은
+   * 재사용 공격으로 판단하지 않고 일반적인 401 응답으로 처리한다.
+   *
+   * 기존 데이터처럼 familyId가 없는 Refresh Token은
+   * Family 관계를 안전하게 추적할 수 없으므로 재사용 탐지 대상에서 제외한다.
    */
   if (storedRefreshToken.revokedAt !== null) {
+    if (
+      storedRefreshToken.revokedReason === RefreshTokenRevokedReason.ROTATED &&
+      storedRefreshToken.familyId !== null
+    ) {
+      await authRepository.revokeRefreshTokenFamily(
+        storedRefreshToken.familyId,
+        RefreshTokenSessionType.USER,
+        RefreshTokenRevokedReason.REUSE_DETECTED,
+      );
+    }
+
     throw new AppError("UNAUTHORIZED", {
       message: "이미 사용되었거나 폐기된 Refresh Token입니다.",
     });
@@ -612,7 +643,11 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
    * 일정 기간 이력을 유지한다.
    */
   if (storedRefreshToken.expiresAt.getTime() <= Date.now()) {
-    await authRepository.revokeRefreshTokenByHash(currentTokenHash, RefreshTokenSessionType.USER);
+    await authRepository.revokeRefreshTokenByHash(
+      currentTokenHash,
+      RefreshTokenSessionType.USER,
+      RefreshTokenRevokedReason.EXPIRED,
+    );
 
     throw new AppError("UNAUTHORIZED", {
       message: "유효하지 않거나 만료된 Refresh Token입니다.",
@@ -668,6 +703,7 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
     const revokeResult = await authRepository.revokeRefreshTokenByHash(
       currentTokenHash,
       RefreshTokenSessionType.USER,
+      RefreshTokenRevokedReason.ROTATED,
       tx,
     );
 
@@ -682,6 +718,7 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
         userId: user.id,
         tokenHash: tokenHash(refreshToken),
         sessionType: RefreshTokenSessionType.USER,
+        familyId: storedRefreshToken.familyId,
         expiresAt: refreshTokenExpiresAt,
       },
       tx,
@@ -729,7 +766,11 @@ const logout = async (currentRefreshToken: string): Promise<void> => {
    *
    * 일반 로그아웃 API에서는 USER 세션만 폐기한다.
    */
-  await authRepository.revokeRefreshTokenByHash(currentTokenHash, RefreshTokenSessionType.USER);
+  await authRepository.revokeRefreshTokenByHash(
+    currentTokenHash,
+    RefreshTokenSessionType.USER,
+    RefreshTokenRevokedReason.LOGOUT,
+  );
 };
 
 export const authService = {

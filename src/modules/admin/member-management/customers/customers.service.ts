@@ -3,6 +3,7 @@ import {
   EstimateRequestHistoryType,
   EstimateRequestStatus,
   NotificationType,
+  RefreshTokenRevokedReason,
   RefreshTokenSessionType,
   SuspensionAction,
   UserRole,
@@ -253,6 +254,7 @@ export const customersService = {
         await authRepository.revokeAllRefreshTokensByUserId(
           customerId,
           RefreshTokenSessionType.USER,
+          RefreshTokenRevokedReason.FORCED,
           tx,
         );
       }
