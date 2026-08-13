@@ -1,10 +1,11 @@
-import { SuspensionAction } from "@prisma/client";
+import { ReportStatus, SuspensionAction } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import type { z } from "zod";
 
 import { AppError } from "../../../lib/app-error";
 import { MEMBER_STATUS, type MemberStatus } from "./member-status.constants";
 import type { memberListSortOrderSchema } from "./member-list.validator";
+import type { MemberReceivedReportCounts } from "./member.type";
 
 /**
  * User.isActive와 deletedAt 조합으로 관리자 회원의 표시 상태를 계산합니다.
@@ -65,4 +66,26 @@ export function buildMemberListOrderBy(
   sort: MemberListSortOrder,
 ): Prisma.UserOrderByWithRelationInput[] {
   return [{ createdAt: sort === "OLDEST" ? "asc" : "desc" }, { id: "asc" }];
+}
+
+/** Report groupBy 결과를 회원 ID별 전체·미처리(PENDING) 피신고 건수로 합산합니다. */
+export function buildReceivedReportCountsByMemberId(
+  groups: Iterable<{ memberId: string; status: ReportStatus; count: number }>,
+): Map<string, MemberReceivedReportCounts> {
+  const countsByMemberId = new Map<string, MemberReceivedReportCounts>();
+
+  for (const group of groups) {
+    const counts = countsByMemberId.get(group.memberId) ?? {
+      receivedReportCount: 0,
+      pendingReceivedReportCount: 0,
+    };
+
+    counts.receivedReportCount += group.count;
+    if (group.status === ReportStatus.PENDING) {
+      counts.pendingReceivedReportCount += group.count;
+    }
+    countsByMemberId.set(group.memberId, counts);
+  }
+
+  return countsByMemberId;
 }

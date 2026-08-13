@@ -16,7 +16,15 @@ export type MemberListBase = {
   phone: string | null;
   status: MemberStatus;
   isProfileCompleted: boolean;
+  receivedReportCount: number;
+  pendingReceivedReportCount: number;
   createdAt: Date;
+};
+
+/** 회원이 피신고된 전체·미처리 신고 집계입니다. */
+export type MemberReceivedReportCounts = {
+  receivedReportCount: number;
+  pendingReceivedReportCount: number;
 };
 
 /** 고객·기사 상세 응답에서 공통으로 제공하는 계정 정보입니다. */

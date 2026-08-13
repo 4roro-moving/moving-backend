@@ -3,6 +3,8 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../../../lib/prisma";
 import type { DbClient } from "../../../../utils/transaction";
+import { buildReceivedReportCountsByMemberId } from "../member.policy";
+import type { MemberReceivedReportCounts } from "../member.type";
 
 /** 고객 상세 응답에서 각 이력 항목별로 제공하는 기본 최신 건수입니다. */
 export const CUSTOMER_HISTORY_LIMIT = 5;
@@ -87,7 +89,9 @@ const reportHistorySelect = {
   createdAt: true,
 } satisfies Prisma.ReportSelect;
 
-export type CustomerListRow = Prisma.UserGetPayload<{ select: typeof customerListSelect }>;
+type CustomerListBaseRow = Prisma.UserGetPayload<{ select: typeof customerListSelect }>;
+
+export type CustomerListRow = CustomerListBaseRow & {} & MemberReceivedReportCounts;
 export type CustomerDetailRow = Prisma.UserGetPayload<{ select: typeof customerDetailSelect }>;
 export type EstimateHistoryRow = Prisma.EstimateRequestGetPayload<{
   select: typeof estimateHistorySelect;
@@ -123,7 +127,66 @@ export const customersRepository = {
       db.user.count({ where }),
     ]);
 
-    return { customers, totalCount };
+    if (customers.length === 0) {
+      return { customers: [] as CustomerListRow[], totalCount };
+    }
+
+    /**
+     * 고객은 현재 Report의 직접 신고 대상이 아니므로, 고객이 작성한 REVIEW를 통해 피신고 건수를 집계합니다.
+     *
+     * NOTE:
+     * 추후 신고 대상이 추가되면 대상 소유자별 집계를 확장하거나
+     * Report.reportedUserId를 추가해 직접 집계하는 방식으로 전환합니다.
+     */
+    const reviews = await db.review.findMany({
+      where: { customerId: { in: customers.map((customer) => customer.id) } },
+      select: { id: true, customerId: true },
+    });
+
+    if (reviews.length === 0) {
+      return {
+        customers: customers.map((customer) => ({
+          ...customer,
+          receivedReportCount: 0,
+          pendingReceivedReportCount: 0,
+        })),
+        totalCount,
+      };
+    }
+
+    const customerIdByReviewId = new Map(
+      reviews.map((review) => [String(review.id), review.customerId]),
+    );
+    const reportGroups = await db.report.groupBy({
+      by: ["targetId", "status"],
+      where: {
+        targetType: ReportTargetType.REVIEW,
+        targetId: { in: [...customerIdByReviewId.keys()] },
+      },
+      _count: { _all: true },
+    });
+    const countsByCustomerId = buildReceivedReportCountsByMemberId(
+      reportGroups.flatMap((group) => {
+        const customerId = customerIdByReviewId.get(group.targetId);
+        return customerId
+          ? [{ memberId: customerId, status: group.status, count: group._count._all }]
+          : [];
+      }),
+    );
+
+    return {
+      customers: customers.map((customer) => {
+        const counts = countsByCustomerId.get(customer.id) ?? {
+          receivedReportCount: 0,
+          pendingReceivedReportCount: 0,
+        };
+        return {
+          ...customer,
+          ...counts,
+        };
+      }),
+      totalCount,
+    };
   },
 
   /**

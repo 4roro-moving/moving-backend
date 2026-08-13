@@ -2,6 +2,8 @@ import { EstimateRequestStatus, EstimateStatus, ReportTargetType, UserRole } fro
 import type { Prisma } from "@prisma/client";
 import type { DbClient } from "../../../../utils/transaction";
 import { prisma } from "../../../../lib/prisma";
+import { buildReceivedReportCountsByMemberId } from "../member.policy";
+import type { MemberReceivedReportCounts } from "../member.type";
 
 /** 기사 목록 DTO 변환에 필요한 User 및 MoverProfile 조회 필드입니다. */
 const moverListSelect = {
@@ -106,7 +108,9 @@ const reportHistorySelect = {
   createdAt: true,
 } satisfies Prisma.ReportSelect;
 
-export type MoverListRow = Prisma.UserGetPayload<{ select: typeof moverListSelect }>;
+type MoverListBaseRow = Prisma.UserGetPayload<{ select: typeof moverListSelect }>;
+
+export type MoverListRow = MoverListBaseRow & {} & MemberReceivedReportCounts;
 export type MoverDetailRow = Prisma.UserGetPayload<{ select: typeof moverDetailSelect }>;
 export type InProgressEstimateRow = Prisma.EstimateGetPayload<{
   select: typeof inProgressEstimateSelect;
@@ -146,7 +150,39 @@ export const moversRepository = {
       db.user.count({ where }),
     ]);
 
-    return { movers, totalCount };
+    if (movers.length === 0) {
+      return { movers: [] as MoverListRow[], totalCount };
+    }
+
+    const reportGroups = await db.report.groupBy({
+      by: ["targetId", "status"],
+      where: {
+        targetType: ReportTargetType.MOVER,
+        targetId: { in: movers.map((mover) => mover.id) },
+      },
+      _count: { _all: true },
+    });
+    const countsByMoverId = buildReceivedReportCountsByMemberId(
+      reportGroups.map((group) => ({
+        memberId: group.targetId,
+        status: group.status,
+        count: group._count._all,
+      })),
+    );
+
+    return {
+      movers: movers.map((mover) => {
+        const counts = countsByMoverId.get(mover.id) ?? {
+          receivedReportCount: 0,
+          pendingReceivedReportCount: 0,
+        };
+        return {
+          ...mover,
+          ...counts,
+        };
+      }),
+      totalCount,
+    };
   },
 
   /** ID와 MOVER 역할이 일치하는 기사 상세를 조회합니다. 탈퇴 기사도 조회 대상입니다. */
