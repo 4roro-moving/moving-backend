@@ -84,7 +84,7 @@ const stateSchema = z
     error: "OAuth state를 입력해주세요.",
   });
 
-const oauthRoleSchema = z.enum([UserRole.CUSTOMER, UserRole.MOVER], {
+const userRoleSchema = z.enum([UserRole.CUSTOMER, UserRole.MOVER], {
   error: "회원 역할은 CUSTOMER 또는 MOVER여야 합니다.",
 });
 
@@ -98,6 +98,7 @@ export const signUpSchema = z.strictObject({
 export const loginSchema = z.strictObject({
   email: emailSchema,
   password: loginPasswordSchema,
+  role: userRoleSchema,
 });
 
 /*
@@ -111,7 +112,7 @@ export const loginSchema = z.strictObject({
  */
 export const googleOAuthSchema = z.strictObject({
   code: authorizationCodeSchema,
-  role: oauthRoleSchema,
+  role: userRoleSchema,
 });
 
 /*
@@ -125,7 +126,7 @@ export const googleOAuthSchema = z.strictObject({
  */
 export const kakaoOAuthSchema = z.strictObject({
   code: authorizationCodeSchema,
-  role: oauthRoleSchema,
+  role: userRoleSchema,
 });
 
 /*
@@ -140,7 +141,7 @@ export const kakaoOAuthSchema = z.strictObject({
 export const naverOAuthSchema = z.strictObject({
   code: authorizationCodeSchema,
   state: stateSchema,
-  role: oauthRoleSchema,
+  role: userRoleSchema,
 });
 
 export const authValidator = {

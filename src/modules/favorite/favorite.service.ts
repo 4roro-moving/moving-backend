@@ -1,12 +1,14 @@
-import { Prisma } from "@prisma/client";
-
 import { AppError } from "../../lib/app-error";
 
 import { mapMoverSummary } from "../mover/mover.mapper";
+import { decodeFavoriteMoverCursor, encodeFavoriteMoverCursor } from "./favorite.cursor";
+import {
+  isFavoriteMoverUniqueError,
+  normalizeBulkDeleteFavoriteMoversInput,
+} from "./favorite.policy";
 import { favoriteRepository } from "./favorite.repository";
 import type {
   BulkDeleteFavoriteMoversParams,
-  FavoriteMoverCursor,
   FavoriteMoverParams,
   ListFavoriteMoverQuery,
 } from "./favorite.type";
@@ -14,64 +16,6 @@ import type {
 type GetFavoriteMoverListParams = ListFavoriteMoverQuery & {
   customerId: string;
 };
-
-type SerializedFavoriteMoverCursor = {
-  createdAt: string;
-  id: number;
-};
-
-export function encodeFavoriteMoverCursor(cursor: FavoriteMoverCursor): string {
-  return Buffer.from(
-    JSON.stringify({
-      createdAt: cursor.createdAt.toISOString(),
-      id: cursor.id,
-    } satisfies SerializedFavoriteMoverCursor),
-  ).toString("base64url");
-}
-
-export function decodeFavoriteMoverCursor(
-  cursor: string | undefined,
-): FavoriteMoverCursor | undefined {
-  if (!cursor) {
-    return undefined;
-  }
-
-  try {
-    const decoded = JSON.parse(
-      Buffer.from(cursor, "base64url").toString("utf8"),
-    ) as Partial<SerializedFavoriteMoverCursor>;
-    const createdAt = new Date(decoded.createdAt ?? "");
-
-    if (
-      Number.isNaN(createdAt.getTime()) ||
-      !Number.isInteger(decoded.id) ||
-      (decoded.id ?? 0) <= 0
-    ) {
-      throw new Error("Invalid cursor");
-    }
-
-    return { createdAt, id: decoded.id as number };
-  } catch {
-    throw new AppError("VALIDATION_ERROR", {
-      message: "유효하지 않은 찜 목록 커서입니다.",
-    });
-  }
-}
-
-function isFavoriteMoverUniqueError(error: unknown) {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
-    return false;
-  }
-
-  const target = error.meta?.target;
-
-  return (
-    error.code === "P2002" &&
-    Array.isArray(target) &&
-    target.includes("customer_id") &&
-    target.includes("mover_id")
-  );
-}
 
 export const favoriteService = {
   async createFavoriteMover({ customerId, moverId }: FavoriteMoverParams) {
@@ -116,19 +60,21 @@ export const favoriteService = {
     all,
     excludedIds,
   }: BulkDeleteFavoriteMoversParams) {
-    const uniqueMoverIds = moverIds ? [...new Set(moverIds)] : undefined;
-    const uniqueExcludedIds = excludedIds ? [...new Set(excludedIds)] : [];
+    const normalizedInput = normalizeBulkDeleteFavoriteMoversInput({
+      moverIds,
+      excludedIds,
+    });
 
     if (all === true) {
       const { count: deletedCount } = await favoriteRepository.deleteFavoriteMoversByCustomerId({
         customerId,
-        excludedIds: uniqueExcludedIds,
+        excludedIds: normalizedInput.excludedIds,
       });
 
       return { deletedCount };
     }
 
-    const ids = uniqueMoverIds ?? [];
+    const ids = normalizedInput.moverIds ?? [];
     if (ids.length === 0) {
       return { deletedCount: 0 };
     }

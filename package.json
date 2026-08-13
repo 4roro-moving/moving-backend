@@ -14,7 +14,7 @@
     "format:check": "prettier --check .",
     "prepare": "husky",
     "test": "tsx --test \"src/**/*.test.ts\"",
-    "test:db": "tsx --env-file=.env --import ./scripts/enable-db-integration.mjs --test \"src/modules/estimate-request/estimateRequest.cancelRace.test.ts\" \"src/modules/admin/member-management/customers/customers.status-race.test.ts\"",
+    "test:db": "tsx --env-file=.env --import ./scripts/enable-db-integration.mjs --test \"src/modules/estimate-request/estimateRequest.cancelRace.test.ts\" \"src/modules/admin/member-management/customers/customers.status-race.test.ts\" \"src/modules/profile/profile.updateBasicInfo.password-revoke.integration.test.ts\"",
     "prisma:seed": "tsx --tsconfig prisma/tsconfig.json prisma/seed.ts"
   },
   "prisma": {
