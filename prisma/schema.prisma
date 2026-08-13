@@ -336,6 +336,8 @@ model User {
   estimateRequests          EstimateRequest[]          @relation("CustomerEstimateRequests")
   /// (기사로서) 내가 제출한 견적들.
   moverEstimates            Estimate[]                 @relation("MoverEstimates")
+  /// user와 기사 휴무일의  관계.
+  moverUnavailableDates     MoverUnavailableDate[]
   /// (기사로서) 나를 지정한 지정 견적 요청들.
   designatedRequests        DesignatedMover[]          @relation("DesignatedMoverUser")
   /// (기사로서) 내가 반려한 견적 요청 기록들.
@@ -516,6 +518,26 @@ model MoverProfile {
   /// 확정 많은 순 정렬 최적화.
   @@index([confirmedCount])
   @@map("mover_profiles")
+}
+/// 기사 휴무일 저장
+///
+/// 기사가 예약을 받지 않는 날짜입니다. 예약 마감은 확정 견적에서 계산합니다.
+model MoverUnavailableDate {
+  id        Int      @id @default(autoincrement())
+  /// 휴무를 등록한 기사 ID
+  moverId   String   @map("mover_id") @db.Uuid
+  /// 휴무 날짜.
+  date      DateTime @db.Date
+  /// User 테이블과 연결 - 해당 휴무일이 어느 기사 소유인지 표현하기 위함
+  mover     User     @relation(fields: [moverId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// 같은 기사가 같은 날짜를 중복 등록하지 못함
+  @@unique([moverId, date])
+  /// 날짜 범위 조회 성능 개선
+  @@index([date])
+  @@map("mover_unavailable_dates")
 }
 
 /// 기사님 서비스 가능 지역
