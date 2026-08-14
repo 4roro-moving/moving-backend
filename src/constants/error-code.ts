@@ -121,6 +121,18 @@ export const ERROR_CODES = {
     message: "프로필 정보가 없는 기사의 견적은 확정할 수 없습니다.",
   },
 
+  MOVER_DATE_OFF: {
+    status: 409,
+    code: "MOVER_DATE_OFF",
+    message: "기사가 휴무로 지정한 날짜입니다.",
+  },
+
+  MOVER_DATE_FULL: {
+    status: 409,
+    code: "MOVER_DATE_FULL",
+    message: "이미 확정된 일정이 있는 날짜입니다.",
+  },
+
   ALREADY_DESIGNATED: {
     status: 409,
     code: "ALREADY_DESIGNATED",
