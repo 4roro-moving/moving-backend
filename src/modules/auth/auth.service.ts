@@ -27,6 +27,7 @@ import { AppError } from "../../lib/app-error";
 
 import { createAccessToken, createRefreshToken, verifyRefreshToken } from "../../utils/jwt";
 
+import { runRefreshTokenSingleFlight } from "../../utils/refresh-token-single-flight";
 import { tokenHash } from "../../utils/tokenHash";
 import { runTransaction } from "../../utils/transaction";
 
@@ -569,9 +570,29 @@ const loginWithNaver = async (input: NaverOAuthInput): Promise<AuthResponse> => 
  * 기존 토큰 revoke와 신규 토큰 저장은
  * 하나의 트랜잭션으로 처리한다.
  */
-const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> => {
+/*
+ * 실제 Access Token 및 Refresh Token 재발급 작업을 수행한다.
+ *
+ * Refresh Token Rotation을 적용하며,
+ * 기존 Refresh Token은 물리적으로 삭제하지 않고
+ * revokedAt을 기록하여 사용 불가능한 상태로 변경한다.
+ *
+ * 기존 토큰 revoke와 신규 토큰 저장은
+ * 하나의 트랜잭션으로 처리한다.
+ *
+ * 이 함수는 SingleFlight 내부에서 실행되므로,
+ * 동일 Refresh Token으로 동시에 요청이 들어온 경우
+ * 하나의 요청만 이 로직을 실제로 수행한다.
+ */
+const executeRefresh = async (
+  currentRefreshToken: string,
+  currentTokenHash: string,
+): Promise<RefreshResponse> => {
   let refreshTokenPayload;
 
+  /*
+   * Refresh Token의 서명과 JWT 만료 시간을 검증한다.
+   */
   try {
     refreshTokenPayload = verifyRefreshToken(currentRefreshToken);
   } catch {
@@ -579,8 +600,6 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
       message: "유효하지 않거나 만료된 Refresh Token입니다.",
     });
   }
-
-  const currentTokenHash = tokenHash(currentRefreshToken);
 
   /*
    * 일반 사용자 인증에서 생성된 USER 세션만 조회한다.
@@ -673,7 +692,7 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
   }
 
   /*
-   * 비활성화되었거나 탈퇴 처리된 사용자는
+   * 비활성화되거나 정지된 사용자는
    * 기존 Refresh Token이 남아 있더라도 재발급할 수 없다.
    */
   if (!user.isActive && user.deletedAt === null) {
@@ -693,8 +712,13 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
    * 새로운 Refresh Token 저장을 하나의 트랜잭션으로 처리한다.
    *
    * revoke 결과 count가 1인 요청만 성공하도록 하여
-   * 동일 Refresh Token으로 동시에 재발급 요청이 들어와도
-   * 하나의 요청만 Rotation에 성공하도록 한다.
+   * DB 수준에서도 동일 Refresh Token이 중복 Rotation되는 것을 방지한다.
+   *
+   * SingleFlight가 정상적인 동시 요청의 중복 실행을 방지하고,
+   * 이 조건은 최종적인 DB 수준의 방어선 역할을 한다.
+   *
+   * Rotation으로 발급되는 새로운 Refresh Token은
+   * 기존 Token Family의 familyId를 그대로 계승한다.
    *
    * 기존 세션 폐기와 신규 세션 저장 모두
    * USER 세션 범위 안에서만 처리한다.
@@ -729,6 +753,39 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
     accessToken,
     refreshToken,
   };
+};
+
+/*
+ * Access Token 및 Refresh Token 재발급
+ *
+ * 동일한 Refresh Token으로 동시에 여러 요청이 들어오면
+ * SingleFlight를 통해 하나의 Refresh 작업만 실행한다.
+ *
+ * 먼저 들어온 요청이 수행 중이라면 이후 요청은
+ * 새로운 Rotation을 실행하지 않고 동일한 Promise 결과를 공유한다.
+ *
+ * 따라서 정상적인 동시 Refresh 요청이
+ * Rotation된 Refresh Token의 재사용으로 오탐되는 것을 방지한다.
+ *
+ * Rotation이 완전히 끝난 이후 이전 Refresh Token이 다시 사용되는 경우에는
+ * SingleFlight 대상이 아니며 executeRefresh 내부의
+ * Token Family 기반 Reuse Detection이 처리한다.
+ *
+ * 현재 SingleFlight 저장소는 프로세스 메모리를 사용하므로
+ * 단일 Node.js 프로세스를 전제로 한다.
+ */
+const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> => {
+  /*
+   * Refresh Token 원문을 SingleFlight Key로 사용하지 않는다.
+   *
+   * 기존 인증 정책과 동일한 HMAC-SHA256 Hash를 사용하여
+   * 메모리에 Refresh Token 원문이 저장되는 것을 방지한다.
+   */
+  const currentTokenHash = tokenHash(currentRefreshToken);
+
+  return runRefreshTokenSingleFlight(RefreshTokenSessionType.USER, currentTokenHash, () =>
+    executeRefresh(currentRefreshToken, currentTokenHash),
+  );
 };
 
 /*

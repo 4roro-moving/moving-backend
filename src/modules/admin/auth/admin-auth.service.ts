@@ -1,3 +1,5 @@
+import { randomUUID } from "node:crypto";
+
 import bcrypt from "bcrypt";
 import {
   AuthProvider,
@@ -141,6 +143,17 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
   );
 
   /**
+   * 로그인 1회를 하나의 Token Family로 관리한다.
+   *
+   * 새로운 관리자 로그인 세션마다 새로운 familyId를 생성하며,
+   * 이후 Refresh Token Rotation에서는 동일한 familyId를 계승한다.
+   *
+   * 다중 로그인을 허용하므로 다른 로그인 세션은
+   * 서로 다른 Token Family를 가진다.
+   */
+  const familyId = randomUUID();
+
+  /**
    * 다중 로그인을 허용하므로 기존 세션을 덮어쓰지 않고
    * 새로운 관리자 로그인 세션을 추가한다.
    *
@@ -154,6 +167,7 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
     userId: user.id,
     tokenHash: tokenHash(refreshToken),
     sessionType: RefreshTokenSessionType.ADMIN,
+    familyId,
     expiresAt: refreshTokenExpiresAt,
   });
 
@@ -217,8 +231,38 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
   }
 
   /**
-   * 이미 Rotation 또는 로그아웃으로 폐기된 토큰은
-   * 다시 사용할 수 없다.
+   * Rotation으로 이미 폐기된 Refresh Token이 다시 사용되고,
+   * Token Family 정보가 존재하는 경우 Refresh Token Reuse로 판단한다.
+   *
+   * 재사용이 감지되면 사용자의 다른 관리자 로그인 세션에는
+   * 영향을 주지 않고 동일 Token Family의 활성 ADMIN 세션만 폐기한다.
+   *
+   * 마이그레이션 이전 Refresh Token은 familyId가 null일 수 있으므로
+   * Family 기반 Reuse Detection을 적용하지 않는다.
+   */
+  if (
+    storedRefreshToken.revokedAt !== null &&
+    storedRefreshToken.revokedReason === RefreshTokenRevokedReason.ROTATED &&
+    storedRefreshToken.familyId !== null
+  ) {
+    await authRepository.revokeRefreshTokenFamily(
+      storedRefreshToken.familyId,
+      RefreshTokenSessionType.ADMIN,
+      RefreshTokenRevokedReason.REUSE_DETECTED,
+    );
+
+    /**
+     * Refresh Token 재사용 탐지 여부는 외부에 상세하게 노출하지 않고
+     * 일반적인 인증 실패와 동일하게 401로 처리한다.
+     */
+    throw new AppError("UNAUTHORIZED", {
+      message: "이미 사용되었거나 폐기된 관리자 Refresh Token입니다.",
+    });
+  }
+
+  /**
+   * 로그아웃, 강제 폐기, 만료 등의 이유로 이미 폐기된 토큰은
+   * Reuse Detection 대상으로 처리하지 않고 일반 인증 실패로 처리한다.
    */
   if (storedRefreshToken.revokedAt !== null) {
     throw new AppError("UNAUTHORIZED", {
@@ -300,6 +344,12 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
    * 기존 Refresh Token 폐기와 신규 Refresh Token 저장을
    * 하나의 트랜잭션으로 처리한다.
    *
+   * 기존 Refresh Token은 ROTATED 사유로 폐기하고,
+   * 새 Refresh Token은 기존 Token Family의 familyId를 그대로 계승한다.
+   *
+   * 기존 마이그레이션 이전 Token은 familyId가 null일 수 있으며,
+   * 이 경우 임의로 새로운 Family를 생성하지 않고 null을 그대로 계승한다.
+   *
    * 동일 Refresh Token으로 동시 재발급 요청이 들어오더라도
    * revoke 결과가 1건인 요청만 Rotation에 성공한다.
    *
@@ -325,6 +375,7 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
         userId: admin.id,
         tokenHash: tokenHash(refreshToken),
         sessionType: RefreshTokenSessionType.ADMIN,
+        familyId: storedRefreshToken.familyId,
         expiresAt: refreshTokenExpiresAt,
       },
       tx,
