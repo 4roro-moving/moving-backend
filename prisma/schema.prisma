@@ -711,7 +711,7 @@ model EstimateRequest {
   /// 이사 유형.
   moveType            MoveType
   /// 이사 예정일.
-  moveDate            DateTime
+  moveDate            DateTime            @db.Date
   /// 출발지 우편번호.
   fromZipCode         String
   /// 출발지 기본 주소.
