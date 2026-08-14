@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { parseDateMarker } from "../../../utils/kst";
+import { formatDateMarker, parseDateMarker } from "../../../utils/kst";
 import { memberListDateQuerySchema } from "./member-list.validator";
 
 describe("memberListDateQuerySchema", () => {
@@ -16,8 +16,15 @@ describe("memberListDateQuerySchema", () => {
 
   for (const [value, expected] of cases) {
     it(`${value}의 검증 결과가 DateMarker 변환 결과와 일치한다`, () => {
-      assert.equal(memberListDateQuerySchema.safeParse(value).success, expected);
-      assert.equal(parseDateMarker(value) !== null, expected);
+      const schemaResult = memberListDateQuerySchema.safeParse(value);
+      const parsedDate = parseDateMarker(value);
+
+      assert.equal(schemaResult.success, expected);
+      assert.equal(parsedDate !== null, expected);
+
+      if (schemaResult.success && parsedDate) {
+        assert.equal(schemaResult.data, formatDateMarker(parsedDate));
+      }
     });
   }
 });
