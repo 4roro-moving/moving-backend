@@ -1,12 +1,10 @@
-import type { UserRole } from "@prisma/client";
+import type { AuthenticatedUser } from "../modules/auth/auth.type";
 
 declare module "socket.io" {
   interface SocketData {
-    user?: {
-      id: string;
-      role: UserRole;
-    };
+    user?: AuthenticatedUser;
     roomId?: number;
+    roomSequence?: number;
   }
 }
 

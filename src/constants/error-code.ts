@@ -12,6 +12,12 @@ export const ERROR_CODES = {
     message: "인증이 필요합니다.",
   },
 
+  AUTH_ROLE_MISMATCH: {
+    status: 403,
+    code: "AUTH_ROLE_MISMATCH",
+    message: "선택한 회원 유형과 계정의 회원 유형이 일치하지 않습니다.",
+  },
+
   FORBIDDEN: {
     status: 403,
     code: "FORBIDDEN",

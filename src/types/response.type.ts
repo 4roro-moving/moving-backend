@@ -17,22 +17,33 @@ export interface CursorPagination {
   totalPages?: never;
 }
 
+export type ResponsePagination = Pagination | CursorPagination;
+
 // 성공 응답 공통 타입
 export interface ApiResponse<T = unknown> {
+  success?: true;
   message?: string;
-  data?: T;
-  pagination?: Pagination | CursorPagination;
+  data?: T | null;
+  pagination?: ResponsePagination;
+}
+
+export interface ErrorBody {
+  code: string;
+  message: string;
+  data?: unknown;
 }
 
 // 에러 응답 공통 타입
 export interface ErrorResponse {
-  code: string;
-  message: string;
-  details?: unknown;
+  success: false;
+  error: ErrorBody;
+  path: string;
+  method: string;
+  timestamp: string;
 }
 
 // 유효성 검사 에러 상세 타입
 export interface ValidationErrorDetail {
-  field: string;
+  path: string;
   message: string;
 }

@@ -1,24 +1,23 @@
-import { resolveMemberStatus } from "../member-status.policy";
+import {
+  toMemberDetailAccount,
+  toMemberListBase,
+  toMemberSuspensionHistoryItem,
+} from "../member.mapper";
+import type { memberRepository } from "../member.repository";
 import type {
   CustomerDetailRow,
   CustomerListRow,
   EstimateHistoryRow,
   ReportHistoryRow,
   ReviewHistoryRow,
-  SuspensionHistoryRow,
   customersRepository,
 } from "./customers.repository";
 import type { CustomerDetail, CustomerListItem } from "./customers.type";
 
 export function toCustomerListItem(customer: CustomerListRow): CustomerListItem {
   return {
-    id: customer.id,
-    email: customer.email,
-    name: customer.name,
-    phone: customer.phone,
-    status: resolveMemberStatus(customer),
-    isProfileCompleted: customer.isProfileCompleted,
-    createdAt: customer.createdAt,
+    ...toMemberListBase(customer),
+    authProvider: customer.authProvider,
   };
 }
 
@@ -55,21 +54,12 @@ function toReportHistoryItem(item: ReportHistoryRow) {
   };
 }
 
-function toSuspensionHistoryItem(item: SuspensionHistoryRow) {
-  return {
-    id: item.id,
-    action: item.action,
-    reason: item.reason,
-    createdAt: item.createdAt,
-  };
-}
-
 type CustomerDetailHistories = {
   estimateHistory: Awaited<ReturnType<typeof customersRepository.findEstimateHistory>>;
   reviewHistory: Awaited<ReturnType<typeof customersRepository.findReviewHistory>>;
   filedReports: Awaited<ReturnType<typeof customersRepository.findFiledReportHistory>>;
   receivedReports: Awaited<ReturnType<typeof customersRepository.findReceivedReportHistory>>;
-  suspensionHistory: Awaited<ReturnType<typeof customersRepository.findSuspensionHistory>>;
+  suspensionHistory: Awaited<ReturnType<typeof memberRepository.findSuspensionHistory>>;
 };
 
 export function toCustomerDetail(
@@ -80,17 +70,7 @@ export function toCustomerDetail(
   const profile = customer.customerProfile;
 
   return {
-    account: {
-      id: customer.id,
-      email: customer.email,
-      name: customer.name,
-      phone: customer.phone,
-      authProvider: customer.authProvider,
-      status: resolveMemberStatus(customer),
-      isProfileCompleted: customer.isProfileCompleted,
-      createdAt: customer.createdAt,
-      updatedAt: customer.updatedAt,
-    },
+    account: toMemberDetailAccount(customer),
     profile: {
       imageUrl: profile?.imageUrl ?? null,
       serviceAreas: profile?.serviceAreas.map((area) => area.region.name) ?? [],
@@ -117,7 +97,7 @@ export function toCustomerDetail(
     },
     suspensionHistory: {
       totalCount: histories.suspensionHistory.totalCount,
-      items: histories.suspensionHistory.items.map(toSuspensionHistoryItem),
+      items: histories.suspensionHistory.items.map(toMemberSuspensionHistoryItem),
     },
   };
 }

@@ -1,5 +1,6 @@
 import type { RequestHandler } from "express";
 import type { ZodObject, ZodType } from "zod";
+import type { ValidationErrorDetail } from "../types/response.type";
 
 import { AppError } from "../lib/app-error";
 
@@ -17,7 +18,7 @@ export type SchemaCarrier = RequestHandler & {
 
 export function validate(schemas: ValidationSchemas): RequestHandler {
   const handler: SchemaCarrier = (req, res, next) => {
-    const errors: { path: string; message: string }[] = [];
+    const errors: ValidationErrorDetail[] = [];
 
     const check = (key: keyof ValidationSchemas, value: unknown) => {
       const schema = schemas[key];

@@ -5,7 +5,6 @@ import {
   NotificationType,
   RefreshTokenSessionType,
   SuspensionAction,
-  UserRole,
   type Prisma,
 } from "@prisma/client";
 
@@ -17,11 +16,11 @@ import { runTransaction } from "../../../../utils/transaction";
 
 import { customersRepository } from "./customers.repository";
 import { customersStatusRepository } from "./customers-status.repository";
+import { memberRepository } from "../member.repository";
 import {
   assertAdminCanChangeMemberStatus,
-  buildMemberStatusWhere,
   resolveIsActiveForSuspensionAction,
-} from "../member-status.policy";
+} from "../member.policy";
 import { MEMBER_STATUS } from "../member-status.constants";
 import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
 import type {
@@ -31,63 +30,18 @@ import type {
   UpdateCustomerStatusResponse,
 } from "./customers.type";
 
-/**
- * KST(Asia/Seoul) 달력 날짜의 시작 시각을 UTC로 변환합니다.
- * DB의 createdAt은 UTC timestamp로 저장되므로, 관리자 화면의 날짜 기준에 맞춰 조회 범위만 UTC로 변환합니다.
- */
-export function toKstStartOfDay(date: string): Date {
-  const [year = NaN, month = NaN, day = NaN] = date.split("-").map(Number);
-
-  return new Date(Date.UTC(year, month - 1, day, -9));
-}
-
-/** KST 달력 날짜의 마지막 시각을 UTC로 변환합니다. */
-export function toKstEndOfDay(date: string): Date {
-  const [year = NaN, month = NaN, day = NaN] = date.split("-").map(Number);
-
-  return new Date(Date.UTC(year, month - 1, day, 14, 59, 59, 999));
-}
-
-/**
- * 관리자 고객 목록 query를 Prisma User 조회 조건으로 변환합니다.
- * 역할, 회원 상태, 이름·이메일 검색어, 가입일 범위를 조합합니다.
- */
-function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput {
-  // 상태 계산 규칙을 policy에 위임해 고객/기사 목록이 같은 기준을 사용
-  const where: Prisma.UserWhereInput = {
-    role: UserRole.CUSTOMER,
-    ...buildMemberStatusWhere(query.status),
-  };
-
-  if (query.keyword !== undefined) {
-    where.OR = [
-      { name: { contains: query.keyword, mode: "insensitive" } },
-      { email: { contains: query.keyword, mode: "insensitive" } },
-    ];
-  }
-
-  if (query.fromDate || query.toDate) {
-    where.createdAt = {
-      ...(query.fromDate ? { gte: toKstStartOfDay(query.fromDate) } : {}),
-      ...(query.toDate ? { lte: toKstEndOfDay(query.toDate) } : {}),
-    };
-  }
-
-  return where;
-}
-
 export const customersService = {
-  /**
-   * 관리자용 일반 고객(CUSTOMER) 목록을 조회합니다.
-   * status 미지정 시 탈퇴 회원은 제외되며, createdAt DESC 로 정렬됩니다.
-   */
+  /** 관리자용 일반 고객(CUSTOMER) 목록을 조회합니다. */
   async getCustomerList(query: ListCustomerQuery) {
     const { page, limit } = query;
+
+    const sorts = query.sorts?.length ? query.sorts : ["CREATED_AT_DESC"];
 
     const { customers, totalCount } = await customersRepository.findManyWithCount({
       skip: (page - 1) * limit,
       take: limit,
-      where: buildCustomerListWhere(query),
+      sorts,
+      filters: query,
     });
 
     return {
@@ -96,10 +50,7 @@ export const customersService = {
     };
   },
 
-  /**
-   * 관리자용 일반 고객(CUSTOMER) 상세를 조회합니다.
-   * Mover/존재하지 않는 id 는 USER_NOT_FOUND, 탈퇴 회원은 조회 가능합니다.
-   */
+  /** 관리자용 일반 고객(CUSTOMER) 상세를 조회합니다. */
   async getCustomerDetail(customerId: string): Promise<CustomerDetail> {
     const customer = await customersRepository.findCustomerById(customerId);
 
@@ -107,14 +58,13 @@ export const customersService = {
       throw new AppError("USER_NOT_FOUND");
     }
 
-    // 서로 의존하지 않는 이력 조회이므로 병렬 실행
     const [estimateHistory, reviewHistory, filedReports, receivedReports, suspensionHistory] =
       await Promise.all([
         customersRepository.findEstimateHistory({ customerId }),
         customersRepository.findReviewHistory({ customerId }),
         customersRepository.findFiledReportHistory({ customerId }),
         customersRepository.findReceivedReportHistory({ customerId }),
-        customersRepository.findSuspensionHistory({ customerId }),
+        memberRepository.findSuspensionHistory({ memberId: customerId }),
       ]);
 
     return toCustomerDetail(customer, {

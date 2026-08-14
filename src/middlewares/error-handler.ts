@@ -1,20 +1,9 @@
 import type { ErrorRequestHandler, Request, Response } from "express";
+import type { ErrorResponse } from "../types/response.type";
 
 import logger from "../config/logger";
 import { ERROR_CODES } from "../constants/error-code";
 import { AppError } from "../lib/app-error";
-
-type ErrorResponse = {
-  success: false;
-  error: {
-    code: string;
-    message: string;
-    data?: unknown;
-  };
-  path: string;
-  method: string;
-  timestamp: string;
-};
 
 // 전역 에러 처리
 const errorHandler: ErrorRequestHandler = (
