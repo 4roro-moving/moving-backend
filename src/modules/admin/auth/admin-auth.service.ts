@@ -16,6 +16,7 @@ import type { AdminLoginInput } from "./admin-auth.validator";
 
 import { AppError } from "../../../lib/app-error";
 import { createAccessToken, createRefreshToken, verifyRefreshToken } from "../../../utils/jwt";
+import { runRefreshTokenSingleFlight } from "../../../utils/refresh-token-single-flight";
 import { tokenHash } from "../../../utils/tokenHash";
 import { runTransaction } from "../../../utils/transaction";
 
@@ -187,13 +188,23 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
 };
 
 /**
- * 관리자 Access Token 및 Refresh Token 재발급
+ * 실제 관리자 Access Token 및 Refresh Token 재발급 작업을 수행한다.
  *
- * POST /api/admin/auth/refresh
+ * Refresh Token Rotation을 적용하며,
+ * 기존 Refresh Token은 물리적으로 삭제하지 않고
+ * revokedAt을 기록하여 사용 불가능한 상태로 변경한다.
  *
- * Refresh Token Rotation을 적용한다.
+ * 기존 토큰 revoke와 신규 토큰 저장은
+ * 하나의 트랜잭션으로 처리한다.
+ *
+ * 이 함수는 SingleFlight 내부에서 실행되므로,
+ * 동일 관리자 Refresh Token으로 동시에 요청이 들어온 경우
+ * 하나의 요청만 이 로직을 실제로 수행한다.
  */
-const refresh = async (currentRefreshToken: string): Promise<AdminRefreshResponse> => {
+const executeAdminRefresh = async (
+  currentRefreshToken: string,
+  currentTokenHash: string,
+): Promise<AdminRefreshResponse> => {
   let refreshTokenPayload;
 
   /**
@@ -206,8 +217,6 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
       message: "유효하지 않거나 만료된 관리자 Refresh Token입니다.",
     });
   }
-
-  const currentTokenHash = tokenHash(currentRefreshToken);
 
   /**
    * 관리자 인증에서 생성된 ADMIN 세션만 조회한다.
@@ -350,8 +359,8 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
    * 기존 마이그레이션 이전 Token은 familyId가 null일 수 있으며,
    * 이 경우 임의로 새로운 Family를 생성하지 않고 null을 그대로 계승한다.
    *
-   * 동일 Refresh Token으로 동시 재발급 요청이 들어오더라도
-   * revoke 결과가 1건인 요청만 Rotation에 성공한다.
+   * SingleFlight가 정상적인 동시 요청의 중복 실행을 방지하고,
+   * revoke 결과 count 조건은 최종적인 DB 수준의 방어선 역할을 한다.
    *
    * 기존 세션 폐기와 신규 세션 저장 모두
    * ADMIN 세션 범위 안에서만 처리한다.
@@ -386,6 +395,41 @@ const refresh = async (currentRefreshToken: string): Promise<AdminRefreshRespons
     accessToken,
     refreshToken,
   };
+};
+
+/**
+ * 관리자 Access Token 및 Refresh Token 재발급
+ *
+ * POST /api/admin/auth/refresh
+ *
+ * 동일한 관리자 Refresh Token으로 동시에 여러 요청이 들어오면
+ * SingleFlight를 통해 하나의 Refresh 작업만 실행한다.
+ *
+ * 먼저 들어온 요청이 처리 중이라면 이후 요청은
+ * 새로운 Rotation을 실행하지 않고 동일한 Promise 결과를 공유한다.
+ *
+ * 따라서 정상적인 동시 Refresh 요청이
+ * Rotation된 Refresh Token의 재사용으로 오탐되는 것을 방지한다.
+ *
+ * Rotation이 완전히 끝난 이후 이전 Refresh Token이 다시 사용되는 경우에는
+ * SingleFlight 대상이 아니며 executeAdminRefresh 내부의
+ * Token Family 기반 Reuse Detection이 처리한다.
+ *
+ * 현재 SingleFlight 저장소는 프로세스 메모리를 사용하므로
+ * 단일 Node.js 프로세스를 전제로 한다.
+ */
+const refresh = async (currentRefreshToken: string): Promise<AdminRefreshResponse> => {
+  /**
+   * Refresh Token 원문을 SingleFlight Key로 사용하지 않는다.
+   *
+   * 기존 인증 정책과 동일한 HMAC-SHA256 Hash를 사용하여
+   * 메모리에 Refresh Token 원문이 저장되는 것을 방지한다.
+   */
+  const currentTokenHash = tokenHash(currentRefreshToken);
+
+  return runRefreshTokenSingleFlight(RefreshTokenSessionType.ADMIN, currentTokenHash, () =>
+    executeAdminRefresh(currentRefreshToken, currentTokenHash),
+  );
 };
 
 /**
