@@ -5,7 +5,6 @@ import {
   NotificationType,
   RefreshTokenSessionType,
   SuspensionAction,
-  UserRole,
   type Prisma,
 } from "@prisma/client";
 
@@ -17,17 +16,13 @@ import { runTransaction } from "../../../../utils/transaction";
 
 import { customersRepository } from "./customers.repository";
 import { customersStatusRepository } from "./customers-status.repository";
-import { toKstEndOfDay, toKstStartOfDay } from "../member-list-date.util";
 import { memberRepository } from "../member.repository";
 import {
   assertAdminCanChangeMemberStatus,
-  buildProfileCompletedWhere,
-  buildMemberStatusWhere,
   resolveIsActiveForSuspensionAction,
 } from "../member.policy";
 import { MEMBER_STATUS } from "../member-status.constants";
-import { toMemberListBase } from "../member.mapper";
-import { toCustomerDetail } from "./customers.mapper";
+import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
 import type {
   CustomerDetail,
   ListCustomerQuery,
@@ -35,48 +30,22 @@ import type {
   UpdateCustomerStatusResponse,
 } from "./customers.type";
 
-/**
- * 관리자 고객 목록 query를 Prisma User 조회 조건으로 변환합니다.
- * 역할, 회원 상태, 이름·이메일 검색어, 가입일 범위를 조합합니다.
- */
-function buildCustomerListWhere(query: ListCustomerQuery): Prisma.UserWhereInput {
-  // 상태 계산 규칙을 policy에 위임해 고객/기사 목록이 같은 기준을 사용
-  const where: Prisma.UserWhereInput = {
-    role: UserRole.CUSTOMER,
-    ...buildMemberStatusWhere(query.status),
-    ...buildProfileCompletedWhere(query.isProfileCompleted),
-  };
-
-  if (query.keyword !== undefined) {
-    where.OR = [
-      { name: { contains: query.keyword, mode: "insensitive" } },
-      { email: { contains: query.keyword, mode: "insensitive" } },
-    ];
-  }
-
-  if (query.fromDate || query.toDate) {
-    where.createdAt = {
-      ...(query.fromDate ? { gte: toKstStartOfDay(query.fromDate) } : {}),
-      ...(query.toDate ? { lte: toKstEndOfDay(query.toDate) } : {}),
-    };
-  }
-
-  return where;
-}
-
 export const customersService = {
   /** 관리자용 일반 고객(CUSTOMER) 목록을 조회합니다. */
   async getCustomerList(query: ListCustomerQuery) {
     const { page, limit } = query;
 
+    const sorts = query.sorts?.length ? query.sorts : ["CREATED_AT_DESC"];
+
     const { customers, totalCount } = await customersRepository.findManyWithCount({
       skip: (page - 1) * limit,
       take: limit,
-      where: buildCustomerListWhere(query),
+      sorts,
+      filters: query,
     });
 
     return {
-      items: customers.map(toMemberListBase),
+      items: customers.map(toCustomerListItem),
       pagination: buildPagination(totalCount, page, limit),
     };
   },

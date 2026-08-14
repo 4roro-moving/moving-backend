@@ -18,17 +18,15 @@ import type {
 import type { MoverDetail, MoverListItem } from "./movers.type";
 
 export function toMoverListItem(mover: MoverListRow): MoverListItem {
-  const profile = mover.moverProfile;
-
   return {
     ...toMemberListBase(mover),
-    nickname: profile?.nickname ?? null,
-    career: profile?.career ?? 0,
-    averageRating: Number(profile?.averageRating ?? 0),
-    reviewCount: profile?.reviewCount ?? 0,
-    confirmedCount: profile?.confirmedCount ?? 0,
-    serviceAreas: profile?.serviceAreas.map((area) => area.region.name) ?? [],
-    serviceTypes: profile?.serviceTypes.map((type) => type.moveType) ?? [],
+    nickname: mover.nickname,
+    career: mover.career,
+    averageRating: mover.averageRating.toNumber(),
+    reviewCount: mover.reviewCount,
+    confirmedCount: mover.confirmedCount,
+    serviceAreas: mover.serviceAreas,
+    serviceTypes: mover.serviceTypes,
   };
 }
 

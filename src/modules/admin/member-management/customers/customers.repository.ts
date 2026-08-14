@@ -1,25 +1,15 @@
-import { ReportTargetType, UserRole } from "@prisma/client";
-import type { Prisma } from "@prisma/client";
+import { Prisma, ReportTargetType, UserRole } from "@prisma/client";
+import type { AuthProvider } from "@prisma/client";
 
 import { prisma } from "../../../../lib/prisma";
+import { kstDayEnd, kstDayStart, parseDateMarker } from "../../../../utils/kst";
 import type { DbClient } from "../../../../utils/transaction";
+import type { MemberReceivedReportCounts } from "../member.type";
+import type { ListCustomerQuery } from "./customers.type";
 
 /** 고객 상세 응답에서 각 이력 항목별로 제공하는 기본 최신 건수입니다. */
 export const CUSTOMER_HISTORY_LIMIT = 5;
 
-/** 고객 목록 DTO 변환에 필요한 최소 필드입니다. */
-const customerListSelect = {
-  id: true,
-  email: true,
-  name: true,
-  phone: true,
-  isActive: true,
-  isProfileCompleted: true,
-  deletedAt: true,
-  createdAt: true,
-} satisfies Prisma.UserSelect;
-
-/** 고객 계정·프로필과 서비스 지역/유형을 포함한 상세 조회 필드입니다. */
 const customerDetailSelect = {
   id: true,
   email: true,
@@ -50,7 +40,6 @@ const customerDetailSelect = {
   },
 } satisfies Prisma.UserSelect;
 
-/** 고객 상세의 견적 요청 이력 요약에 필요한 필드입니다. */
 const estimateHistorySelect = {
   id: true,
   moveType: true,
@@ -59,7 +48,6 @@ const estimateHistorySelect = {
   createdAt: true,
 } satisfies Prisma.EstimateRequestSelect;
 
-/** 고객이 작성한 리뷰와 작성 당시 기사 표시명에 필요한 필드입니다. */
 const reviewHistorySelect = {
   id: true,
   moverId: true,
@@ -77,7 +65,6 @@ const reviewHistorySelect = {
   },
 } satisfies Prisma.ReviewSelect;
 
-/** 고객이 신고했거나 고객 리뷰가 피신고된 신고 이력 요약 필드입니다. */
 const reportHistorySelect = {
   id: true,
   targetType: true,
@@ -87,7 +74,17 @@ const reportHistorySelect = {
   createdAt: true,
 } satisfies Prisma.ReportSelect;
 
-export type CustomerListRow = Prisma.UserGetPayload<{ select: typeof customerListSelect }>;
+export type CustomerListRow = MemberReceivedReportCounts & {
+  id: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  authProvider: AuthProvider;
+  isActive: boolean;
+  isProfileCompleted: boolean;
+  deletedAt: Date | null;
+  createdAt: Date;
+};
 export type CustomerDetailRow = Prisma.UserGetPayload<{ select: typeof customerDetailSelect }>;
 export type EstimateHistoryRow = Prisma.EstimateRequestGetPayload<{
   select: typeof estimateHistorySelect;
@@ -98,7 +95,8 @@ export type ReportHistoryRow = Prisma.ReportGetPayload<{ select: typeof reportHi
 type ListParams = {
   skip: number;
   take: number;
-  where: Prisma.UserWhereInput;
+  sorts: string[];
+  filters: ListCustomerQuery;
 };
 
 type HistoryParams = {
@@ -106,23 +104,145 @@ type HistoryParams = {
   take?: number;
 };
 
-export const customersRepository = {
-  /**
-   * 목록과 전체 건수를 동일한 필터 조건으로 병렬 조회합니다.
-   */
-  async findManyWithCount({ skip, take, where }: ListParams, db: DbClient = prisma) {
-    const [customers, totalCount] = await Promise.all([
-      db.user.findMany({
-        where,
-        select: customerListSelect,
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-        skip,
-        take,
-      }),
-      db.user.count({ where }),
-    ]);
+/** raw SQL 쿼리 전용 응답 DTO 타입 */
+type CustomerListRawRow = {
+  id: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  authProvider: AuthProvider;
+  isActive: boolean;
+  isProfileCompleted: boolean;
+  deletedAt: Date | null;
+  createdAt: Date;
+  receivedReportCount: number;
+  pendingReceivedReportCount: number;
+  totalCount: bigint;
+};
 
-    return { customers, totalCount };
+/**
+ * `sorts` 파라미터로 받은 정렬 기준들을 순서대로 SQL ORDER BY 절로 변환합니다.
+ *
+ * `CREATED_AT_DESC` 또는 `CREATED_AT_ASC`가 없는 경우,
+ * `createdAt DESC`, `id ASC`를 보조 정렬로 붙여 페이지 순서를 고정합니다.
+ */
+function buildCustomerReportOrderBy(sorts: string[]): Prisma.Sql {
+  const columns: Record<string, Prisma.Sql> = {
+    PENDING_DESC: Prisma.sql`"pendingReceivedReportCount" DESC`,
+    PENDING_ASC: Prisma.sql`"pendingReceivedReportCount" ASC`,
+    CREATED_AT_DESC: Prisma.sql`u."createdAt" DESC`,
+    CREATED_AT_ASC: Prisma.sql`u."createdAt" ASC`,
+  };
+
+  const orderBy = sorts.flatMap((sort) => (columns[sort] ? [columns[sort]] : []));
+
+  if (!sorts.some((sort) => sort.startsWith("CREATED_AT_"))) {
+    orderBy.push(Prisma.sql`u."createdAt" DESC`);
+  }
+  orderBy.push(Prisma.sql`u.id ASC`);
+
+  return Prisma.join(orderBy, ", ");
+}
+
+/** 고객 목록의 요청받은 필터를 raw SQL WHERE 절로 만듭니다. */
+function buildCustomerListWhereSql(filters: ListCustomerQuery): Prisma.Sql {
+  const conditions: Prisma.Sql[] = [Prisma.sql`u.role = ${UserRole.CUSTOMER}::"UserRole"`];
+
+  if (filters.status === "ACTIVE") {
+    conditions.push(Prisma.sql`u."deletedAt" IS NULL AND u."isActive" = TRUE`);
+  } else if (filters.status === "SUSPENDED") {
+    conditions.push(Prisma.sql`u."deletedAt" IS NULL AND u."isActive" = FALSE`);
+  } else if (filters.status === "WITHDRAWN") {
+    conditions.push(Prisma.sql`u."deletedAt" IS NOT NULL`);
+  } else {
+    conditions.push(Prisma.sql`u."deletedAt" IS NULL`);
+  }
+
+  if (filters.isProfileCompleted !== undefined) {
+    conditions.push(Prisma.sql`u."isProfileCompleted" = ${filters.isProfileCompleted}`);
+  }
+
+  if (filters.authProvider) {
+    conditions.push(Prisma.sql`u."authProvider" = ${filters.authProvider}::"AuthProvider"`);
+  }
+
+  if (filters.keyword) {
+    const pattern = `%${filters.keyword}%`;
+    conditions.push(Prisma.sql`(u.name ILIKE ${pattern} OR u.email ILIKE ${pattern})`);
+  }
+
+  if (filters.fromDate) {
+    const marker = parseDateMarker(filters.fromDate);
+    if (!marker) throw new Error("Validated customer-list fromDate could not be parsed.");
+    conditions.push(Prisma.sql`u."createdAt" >= ${kstDayStart(marker)}`);
+  }
+  if (filters.toDate) {
+    const marker = parseDateMarker(filters.toDate);
+    if (!marker) throw new Error("Validated customer-list toDate could not be parsed.");
+    conditions.push(Prisma.sql`u."createdAt" <= ${kstDayEnd(marker)}`);
+  }
+
+  return Prisma.join(conditions, " AND ");
+}
+
+export const customersRepository = {
+  /** 고객 목록과 리뷰 기반 피신고 건수를 함께 조회합니다. */
+  async findManyWithCount({ skip, take, sorts, filters }: ListParams, db: DbClient = prisma) {
+    const whereSql = buildCustomerListWhereSql(filters);
+
+    /**
+     * 필터·리뷰 기반 신고 집계·다중 정렬을 적용한 전체 결과에서 LIMIT/OFFSET을 적용해 현재 페이지 행만 조회합니다.
+     */
+    const rows = await db.$queryRaw<CustomerListRawRow[]>(Prisma.sql`
+        SELECT
+          u.id,
+          u.email,
+          u.name,
+          u.phone,
+          u."authProvider",
+          u."isActive",
+          u."isProfileCompleted",
+          u."deletedAt",
+          u."createdAt",
+          COUNT(rp.id)::int AS "receivedReportCount",
+          COUNT(rp.id) FILTER (WHERE rp.status = ${"PENDING"}::"ReportStatus")::int
+            AS "pendingReceivedReportCount",
+          COUNT(*) OVER()::bigint AS "totalCount"
+        FROM "User" AS u
+        LEFT JOIN reviews AS rv ON rv.customer_id = u.id
+        LEFT JOIN reports AS rp
+          ON rp.target_type = ${ReportTargetType.REVIEW}::"ReportTargetType"
+          AND rp.target_id = rv.id::text
+        WHERE ${whereSql}
+        GROUP BY
+          u.id,
+          u.email,
+          u.name,
+          u.phone,
+          u."authProvider",
+          u."isActive",
+          u."isProfileCompleted",
+          u."deletedAt",
+          u."createdAt"
+        ORDER BY ${buildCustomerReportOrderBy(sorts)}
+        LIMIT ${take} OFFSET ${skip}
+    `);
+
+    const firstRow = rows[0];
+    const countRows = firstRow
+      ? undefined
+      : await db.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+          SELECT COUNT(*)::bigint AS count
+          FROM "User" AS u
+          WHERE ${whereSql}
+        `);
+    // 페이지 범위를 벗어나 행이 없을 때만 같은 raw SQL 필터로 count를 다시 조회
+    const totalCount = firstRow ? Number(firstRow.totalCount) : Number(countRows?.[0]?.count ?? 0);
+
+    return {
+      customers: rows.map(({ totalCount: _totalCount, ...customer }) => customer),
+      totalCount,
+    };
   },
 
   /**
