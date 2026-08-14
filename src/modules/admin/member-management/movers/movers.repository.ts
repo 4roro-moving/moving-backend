@@ -88,7 +88,7 @@ const reportHistorySelect = {
   createdAt: true,
 } satisfies Prisma.ReportSelect;
 
-export type MoverListRow = MemberReceivedReportCounts & {
+type MoverListMemberFields = MemberReceivedReportCounts & {
   id: string;
   email: string;
   name: string;
@@ -97,16 +97,18 @@ export type MoverListRow = MemberReceivedReportCounts & {
   isProfileCompleted: boolean;
   deletedAt: Date | null;
   createdAt: Date;
-  moverProfile: {
-    nickname: string;
-    career: number;
-    averageRating: Prisma.Decimal;
-    reviewCount: number;
-    confirmedCount: number;
-    serviceAreas: Array<{ region: { name: string } }>;
-    serviceTypes: Array<{ moveType: MoveType }>;
-  } | null;
 };
+
+export type MoverListRow = MoverListMemberFields & {
+  nickname: string | null;
+  career: number;
+  averageRating: Prisma.Decimal;
+  reviewCount: number;
+  confirmedCount: number;
+  serviceAreas: string[];
+  serviceTypes: MoveType[];
+};
+
 export type MoverDetailRow = Prisma.UserGetPayload<{ select: typeof moverDetailSelect }>;
 export type InProgressEstimateRow = Prisma.EstimateGetPayload<{
   select: typeof inProgressEstimateSelect;
@@ -128,24 +130,14 @@ type HistoryParams = {
 };
 
 /** raw SQL 쿼리 전용 응답 DTO 타입 */
-type MoverListRawRow = {
-  id: string;
-  email: string;
-  name: string;
-  phone: string | null;
-  isActive: boolean;
-  isProfileCompleted: boolean;
-  deletedAt: Date | null;
-  createdAt: Date;
+type MoverListRawRow = MoverListMemberFields & {
   nickname: string | null;
   career: number | null;
   averageRating: Prisma.Decimal | null;
   reviewCount: number | null;
   confirmedCount: number | null;
-  serviceAreas: Array<{ region: { name: string } }>;
-  serviceTypes: Array<{ moveType: string }>;
-  receivedReportCount: number;
-  pendingReceivedReportCount: number;
+  serviceAreas: string[];
+  serviceTypes: MoveType[];
   totalCount: bigint;
 };
 
@@ -268,19 +260,13 @@ export const moversRepository = {
           mp."reviewCount",
           mp."confirmedCount",
           COALESCE((
-            SELECT jsonb_agg(
-              jsonb_build_object('region', jsonb_build_object('name', r.name))
-              ORDER BY msa."regionId"
-            )
+            SELECT jsonb_agg(r.name ORDER BY msa."regionId")
             FROM mover_service_areas AS msa
             INNER JOIN regions AS r ON r.id = msa."regionId"
             WHERE msa."moverProfileId" = mp.id
           ), '[]'::jsonb) AS "serviceAreas",
           COALESCE((
-            SELECT jsonb_agg(
-              jsonb_build_object('moveType', mst."moveType")
-              ORDER BY mst.id
-            )
+            SELECT jsonb_agg(mst."moveType" ORDER BY mst.id)
             FROM mover_service_types AS mst
             WHERE mst."moverProfileId" = mp.id
           ), '[]'::jsonb) AS "serviceTypes",
@@ -324,31 +310,16 @@ export const moversRepository = {
     // 페이지 범위를 벗어나 행이 없을 때만 같은 raw SQL 필터로 count를 다시 조회
     const totalCount = firstRow ? Number(firstRow.totalCount) : Number(countRows?.[0]?.count ?? 0);
 
+    const movers = rows.map(({ totalCount: _totalCount, ...row }) => ({
+      ...row,
+      career: row.career ?? 0,
+      averageRating: row.averageRating ?? new Prisma.Decimal(0),
+      reviewCount: row.reviewCount ?? 0,
+      confirmedCount: row.confirmedCount ?? 0,
+    })) satisfies MoverListRow[];
+
     return {
-      movers: rows.map(({ totalCount: _totalCount, ...row }) => ({
-        id: row.id,
-        email: row.email,
-        name: row.name,
-        phone: row.phone,
-        isActive: row.isActive,
-        isProfileCompleted: row.isProfileCompleted,
-        deletedAt: row.deletedAt,
-        createdAt: row.createdAt,
-        moverProfile:
-          row.nickname === null
-            ? null
-            : {
-                nickname: row.nickname,
-                career: row.career ?? 0,
-                averageRating: row.averageRating ?? new Prisma.Decimal(0),
-                reviewCount: row.reviewCount ?? 0,
-                confirmedCount: row.confirmedCount ?? 0,
-                serviceAreas: row.serviceAreas,
-                serviceTypes: row.serviceTypes,
-              },
-        receivedReportCount: row.receivedReportCount,
-        pendingReceivedReportCount: row.pendingReceivedReportCount,
-      })) as MoverListRow[],
+      movers,
       totalCount,
     };
   },
