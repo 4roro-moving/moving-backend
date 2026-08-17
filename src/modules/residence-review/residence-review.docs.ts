@@ -1,0 +1,105 @@
+import { z } from "zod";
+
+import { registerRouterDocs } from "../../config/openapi-router";
+import { ERROR_CODES } from "../../constants/error-code";
+import { publicResidenceReviewRouter, residenceReviewRouter } from "./residence-review.route";
+
+const authHeaderSchema = z.object({
+  authorization: z.string().meta({ example: "Bearer <access-token>" }),
+});
+
+const RESIDENCE_REVIEW_DOCS = {
+  TAG_PUBLIC: "Residence Review",
+  TAG_CUSTOMER: "Residence Review (Customer)",
+  PUBLIC_LIST_SUMMARY: "거주후기 목록 (공개)",
+  PUBLIC_LIST_DESCRIPTION: [
+    "인증 없이 접근 가능합니다.",
+    "",
+    "- 노출 중인(`isHidden=false`) 후기만 최신순으로 조회합니다.",
+    "- `regionId` 로 특정 지역만 필터할 수 있습니다.",
+  ].join("\n"),
+  PUBLIC_DETAIL_SUMMARY: "거주후기 상세 (공개)",
+  PUBLIC_DETAIL_DESCRIPTION: "숨김 처리된 후기는 조회할 수 없습니다.",
+  MY_LIST_SUMMARY: "내 거주후기 목록",
+  MY_LIST_DESCRIPTION:
+    "로그인한 고객이 작성한 후기를 최신순으로 조회합니다. 숨김 후기도 포함됩니다.",
+  CREATE_SUMMARY: "거주후기 작성",
+  CREATE_DESCRIPTION: [
+    "특정 지역에 대한 거주후기를 작성합니다.",
+    "",
+    "- 작성은 고객 본인만 가능합니다.",
+    "- 평점은 정수 1~5입니다.",
+    "- 지역 평점 통계는 같은 트랜잭션에서 갱신됩니다.",
+  ].join("\n"),
+  UPDATE_SUMMARY: "거주후기 수정",
+  UPDATE_DESCRIPTION:
+    "작성자 본인만 수정할 수 있습니다. 평점이 바뀌면 지역 통계도 함께 갱신됩니다.",
+  DELETE_SUMMARY: "거주후기 삭제",
+  DELETE_DESCRIPTION: "작성자 본인만 삭제할 수 있습니다. 삭제 시 지역 통계도 함께 갱신됩니다.",
+  LIST_SUCCESS: "조회 성공",
+  CREATE_SUCCESS: "생성 성공",
+  UPDATE_SUCCESS: "수정 성공",
+  DELETE_SUCCESS: "삭제 성공",
+} as const;
+
+registerRouterDocs(publicResidenceReviewRouter, {
+  basePath: "/api/residence-reviews",
+  tag: RESIDENCE_REVIEW_DOCS.TAG_PUBLIC,
+  endpoints: {
+    "GET /": {
+      summary: RESIDENCE_REVIEW_DOCS.PUBLIC_LIST_SUMMARY,
+      description: RESIDENCE_REVIEW_DOCS.PUBLIC_LIST_DESCRIPTION,
+      responses: { 200: RESIDENCE_REVIEW_DOCS.LIST_SUCCESS },
+    },
+    "GET /:residenceReviewId": {
+      summary: RESIDENCE_REVIEW_DOCS.PUBLIC_DETAIL_SUMMARY,
+      description: RESIDENCE_REVIEW_DOCS.PUBLIC_DETAIL_DESCRIPTION,
+      responses: {
+        200: RESIDENCE_REVIEW_DOCS.LIST_SUCCESS,
+        404: ERROR_CODES.RESIDENCE_REVIEW_NOT_FOUND.message,
+      },
+    },
+  },
+});
+
+registerRouterDocs(residenceReviewRouter, {
+  basePath: "/api/residence-reviews",
+  tag: RESIDENCE_REVIEW_DOCS.TAG_CUSTOMER,
+  headers: authHeaderSchema,
+  commonResponses: {
+    401: ERROR_CODES.UNAUTHORIZED.message,
+    403: ERROR_CODES.FORBIDDEN.message,
+    422: ERROR_CODES.VALIDATION_ERROR.message,
+  },
+  endpoints: {
+    "GET /me": {
+      summary: RESIDENCE_REVIEW_DOCS.MY_LIST_SUMMARY,
+      description: RESIDENCE_REVIEW_DOCS.MY_LIST_DESCRIPTION,
+      responses: { 200: RESIDENCE_REVIEW_DOCS.LIST_SUCCESS },
+    },
+    "POST /": {
+      summary: RESIDENCE_REVIEW_DOCS.CREATE_SUMMARY,
+      description: RESIDENCE_REVIEW_DOCS.CREATE_DESCRIPTION,
+      responses: {
+        201: RESIDENCE_REVIEW_DOCS.CREATE_SUCCESS,
+        400: ERROR_CODES.REGION_NOT_FOUND.message,
+      },
+    },
+    "PATCH /:residenceReviewId": {
+      summary: RESIDENCE_REVIEW_DOCS.UPDATE_SUMMARY,
+      description: RESIDENCE_REVIEW_DOCS.UPDATE_DESCRIPTION,
+      responses: {
+        200: RESIDENCE_REVIEW_DOCS.UPDATE_SUCCESS,
+        404: ERROR_CODES.RESIDENCE_REVIEW_NOT_FOUND.message,
+      },
+    },
+    "DELETE /:residenceReviewId": {
+      summary: RESIDENCE_REVIEW_DOCS.DELETE_SUMMARY,
+      description: RESIDENCE_REVIEW_DOCS.DELETE_DESCRIPTION,
+      responses: {
+        200: RESIDENCE_REVIEW_DOCS.DELETE_SUCCESS,
+        404: ERROR_CODES.RESIDENCE_REVIEW_NOT_FOUND.message,
+      },
+    },
+  },
+});

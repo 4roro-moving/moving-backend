@@ -170,6 +170,13 @@ export const ERROR_CODES = {
     message: "확정할 수 없는 견적입니다.",
   },
 
+  // 2026.08.17 김나연 - [추가] 거주후기 API 에러 코드
+  RESIDENCE_REVIEW_NOT_FOUND: {
+    status: 404,
+    code: "RESIDENCE_REVIEW_NOT_FOUND",
+    message: "거주후기를 찾을 수 없습니다.",
+  },
+
   // 2026.07.28 심현수 - [추가]관리자 공지사항
   NOTICE_NOT_FOUND: {
     status: 404,
