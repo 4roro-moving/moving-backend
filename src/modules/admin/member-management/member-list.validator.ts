@@ -44,6 +44,63 @@ export const memberListDateQuerySchema = z.iso
   .date("날짜는 YYYY-MM-DD 형식의 유효한 날짜여야 합니다.")
   .optional();
 
+export const memberListSortOrderSchema = z
+  .enum(["LATEST", "OLDEST"], {
+    error: "정렬 기준은 LATEST 또는 OLDEST여야 합니다.",
+  })
+  .default("LATEST");
+
+/**
+ * 목록 정렬 기준입니다. 반복 query의 전달 순서가 정렬 우선순위가 됩니다.
+ * 예: `sorts=CAREER_DESC&sorts=AVERAGE_RATING_DESC`
+ */
+export const MEMBER_LIST_SORTS = [
+  "PENDING_DESC",
+  "PENDING_ASC",
+  "CREATED_AT_DESC",
+  "CREATED_AT_ASC",
+] as const;
+
+export function createRepeatedSortsSchema<const T extends readonly [string, ...string[]]>(
+  values: T,
+) {
+  return z
+    .preprocess(
+      (value) => (typeof value === "string" ? [value] : value),
+      z
+        .array(z.enum(values, { error: "올바른 정렬 기준이 아닙니다." }))
+        .min(1, "정렬 기준은 하나 이상 지정해 주세요.")
+        .max(5, "정렬 기준은 최대 5개까지 지정할 수 있습니다.")
+        .superRefine((sorts, ctx) => {
+          const seenFields = new Set<string>();
+
+          for (const [index, sort] of sorts.entries()) {
+            const field = sort.replace(/_(ASC|DESC)$/, "");
+            if (seenFields.has(field)) {
+              ctx.addIssue({
+                code: "custom",
+                path: [index],
+                message: "같은 정렬 기준은 한 번만 지정할 수 있습니다.",
+              });
+            }
+            seenFields.add(field);
+          }
+        }),
+    )
+    .optional();
+}
+
+export const memberListSortsSchema = createRepeatedSortsSchema(MEMBER_LIST_SORTS);
+
+/** 미처리 피신고 건수 정렬은 지정할 때만 적용합니다. */
+export const memberPendingReportSortSchema = z
+  .enum(["PENDING_DESC", "PENDING_ASC"], {
+    error: "신고 정렬 기준은 PENDING_DESC 또는 PENDING_ASC여야 합니다.",
+  })
+  .optional();
+
+export type MemberPendingReportSort = z.infer<typeof memberPendingReportSortSchema>;
+
 export function validateMemberListDateRange(
   data: { fromDate?: string | undefined; toDate?: string | undefined },
   ctx: z.RefinementCtx,

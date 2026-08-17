@@ -1,13 +1,25 @@
-import { toMemberDetailAccount, toMemberSuspensionHistoryItem } from "../member.mapper";
+import {
+  toMemberDetailAccount,
+  toMemberListBase,
+  toMemberSuspensionHistoryItem,
+} from "../member.mapper";
 import type { memberRepository } from "../member.repository";
 import type {
   CustomerDetailRow,
+  CustomerListRow,
   EstimateHistoryRow,
   ReportHistoryRow,
   ReviewHistoryRow,
   customersRepository,
 } from "./customers.repository";
-import type { CustomerDetail } from "./customers.type";
+import type { CustomerDetail, CustomerListItem } from "./customers.type";
+
+export function toCustomerListItem(customer: CustomerListRow): CustomerListItem {
+  return {
+    ...toMemberListBase(customer),
+    authProvider: customer.authProvider,
+  };
+}
 
 function toEstimateHistoryItem(item: EstimateHistoryRow) {
   return {

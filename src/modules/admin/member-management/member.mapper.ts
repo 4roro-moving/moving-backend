@@ -13,6 +13,8 @@ export function toMemberListBase(member: {
   phone: string | null;
   isActive: boolean;
   isProfileCompleted: boolean;
+  receivedReportCount: number;
+  pendingReceivedReportCount: number;
   deletedAt: Date | null;
   createdAt: Date;
 }): MemberListBase {
@@ -23,6 +25,8 @@ export function toMemberListBase(member: {
     phone: member.phone,
     status: resolveMemberStatus(member),
     isProfileCompleted: member.isProfileCompleted,
+    receivedReportCount: member.receivedReportCount,
+    pendingReceivedReportCount: member.pendingReceivedReportCount,
     createdAt: member.createdAt,
   };
 }
