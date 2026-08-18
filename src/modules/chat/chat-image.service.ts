@@ -1,8 +1,15 @@
 import { randomUUID } from "node:crypto";
 
-import { HeadObjectCommand, PutObjectCommand, S3ServiceException } from "@aws-sdk/client-s3";
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3ServiceException,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { s3Client } from "../../lib/s3";
 import { CHAT_IMAGE_MAX_SIZE } from "./chat-image.type";
@@ -30,6 +37,8 @@ const getExtension = (contentType: CreateChatImageUploadUrlInput["contentType"])
   return extensionMap[contentType];
 };
 
+const getExtensionFromKey = (key: string): string => key.split(".").at(-1) ?? "jpg";
+
 const assertRoomParticipant = async (userId: string, roomId: number): Promise<void> => {
   const room = await chatRepository.findRoomById(roomId);
 
@@ -47,7 +56,7 @@ const assertRoomParticipant = async (userId: string, roomId: number): Promise<vo
 };
 
 const validateImageKeyOwnership = (userId: string, roomId: number, key: string): void => {
-  const expectedPrefix = `chats/${String(roomId)}/${userId}/`;
+  const expectedPrefix = `chats/${String(roomId)}/${userId}/staging/`;
 
   if (!key.startsWith(expectedPrefix)) {
     throw new AppError("FORBIDDEN", {
@@ -76,7 +85,7 @@ const createUploadUrl = async (
   await assertRoomParticipant(userId, roomId);
 
   const extension = getExtension(input.contentType);
-  const key = `chats/${String(roomId)}/${userId}/${randomUUID()}.${extension}`;
+  const key = `chats/${String(roomId)}/${userId}/staging/${randomUUID()}.${extension}`;
 
   const command = new PutObjectCommand({
     Bucket: bucketName,
@@ -84,9 +93,24 @@ const createUploadUrl = async (
     ContentType: input.contentType,
   });
 
-  const uploadUrl = await getSignedUrl(s3Client, command, {
-    expiresIn: CHAT_IMAGE_UPLOAD_URL_EXPIRES_IN,
-  });
+  let uploadUrl: string;
+
+  try {
+    uploadUrl = await getSignedUrl(s3Client, command, {
+      expiresIn: CHAT_IMAGE_UPLOAD_URL_EXPIRES_IN,
+    });
+  } catch (error) {
+    logger.error("Failed to create chat image upload URL.", {
+      error,
+      roomId,
+      userId,
+      key,
+    });
+
+    throw new AppError("INTERNAL_SERVER_ERROR", {
+      message: "채팅 이미지 업로드 URL을 발급하지 못했습니다.",
+    });
+  }
 
   return {
     uploadUrl,
@@ -95,13 +119,64 @@ const createUploadUrl = async (
   };
 };
 
-const validateUploadedImage = async (
+const deleteStagingImage = async (key: string): Promise<void> => {
+  try {
+    await s3Client.send(
+      new DeleteObjectCommand({
+        Bucket: bucketName,
+        Key: key,
+      }),
+    );
+  } catch (error) {
+    logger.error("Failed to delete staging chat image.", {
+      error,
+      key,
+    });
+  }
+};
+
+const copyToFinalImage = async (params: {
+  userId: string;
+  roomId: number;
+  sourceKey: string;
+}): Promise<string> => {
+  const extension = getExtensionFromKey(params.sourceKey);
+  const finalKey = `chats/${String(params.roomId)}/${params.userId}/messages/${randomUUID()}.${extension}`;
+
+  try {
+    await s3Client.send(
+      new CopyObjectCommand({
+        Bucket: bucketName,
+        CopySource: `${bucketName}/${params.sourceKey}`,
+        Key: finalKey,
+      }),
+    );
+  } catch (error) {
+    logger.error("Failed to copy chat image to final key.", {
+      error,
+      roomId: params.roomId,
+      userId: params.userId,
+      sourceKey: params.sourceKey,
+      finalKey,
+    });
+
+    throw new AppError("INTERNAL_SERVER_ERROR", {
+      message: "채팅 이미지를 저장하지 못했습니다.",
+    });
+  }
+
+  return finalKey;
+};
+
+const finalizeUploadedImage = async (
   userId: string,
   roomId: number,
   key: string | null | undefined,
-): Promise<void> => {
+): Promise<string> => {
   if (key === undefined || key === null) {
-    return;
+    throw new AppError("BAD_REQUEST", {
+      message: "이미지 Key를 입력해주세요.",
+    });
   }
 
   await assertRoomParticipant(userId, roomId);
@@ -143,11 +218,30 @@ const validateUploadedImage = async (
       });
     }
 
-    throw error;
+    logger.error("Failed to validate uploaded chat image.", {
+      error,
+      roomId,
+      userId,
+      key,
+    });
+
+    throw new AppError("INTERNAL_SERVER_ERROR", {
+      message: "업로드된 채팅 이미지를 검증하지 못했습니다.",
+    });
   }
+
+  const finalKey = await copyToFinalImage({
+    userId,
+    roomId,
+    sourceKey: key,
+  });
+
+  void deleteStagingImage(key);
+
+  return finalKey;
 };
 
 export const chatImageService = {
   createUploadUrl,
-  validateUploadedImage,
+  finalizeUploadedImage,
 };

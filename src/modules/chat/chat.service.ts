@@ -355,14 +355,14 @@ export const chatService = {
     }
 
     assertParticipant(room, senderId);
-    await chatImageService.validateUploadedImage(senderId, roomId, imageKey);
+    const finalImageKey = await chatImageService.finalizeUploadedImage(senderId, roomId, imageKey);
 
     const message = await runTransaction(async (tx) => {
       const createdMessage = await chatRepository.createImageMessage(
         {
           roomId,
           senderId,
-          imageUrl: imageKey,
+          imageUrl: finalImageKey,
         },
         tx,
       );
