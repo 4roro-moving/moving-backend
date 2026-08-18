@@ -4,6 +4,7 @@ import { getProfileImageUrl } from "../../../utils/image-url";
 import { buildPagination } from "../../../utils/pagination.util";
 import { runTransaction } from "../../../utils/transaction";
 import { notificationService } from "../../notification/notification.service";
+import { moverCalendarRepository } from "../../mover-calendar/mover-calendar.repository";
 import { mapDetailEstimate, mapListEstimate } from "./customer-estimate.mapper";
 import { assertConfirmableReceivedEstimate } from "./customer-estimate.policy";
 import { receivedEstimateRepository } from "./customer-estimate.repository";
@@ -231,6 +232,30 @@ export const receivedEstimateService = {
         requestStatus: estimate.estimateRequest.status,
         confirmedEstimateId: estimate.estimateRequest.confirmedEstimateId,
       });
+
+      //캘린더 검증 추가
+      //견적을 확정하기 전에 이사 날짜를 받아와서 날짜 단위로 정규화함
+      const moveDate = new Date(estimate.estimateRequest.moveDate);
+      moveDate.setUTCHours(0, 0, 0, 0);
+
+      //해당 기사와 날짜 잠금
+      await moverCalendarRepository.lockMoverDate(estimate.moverId, moveDate, tx);
+
+      //날짜 상태 병렬 조회
+      //잠금 획득 후 1. 기사가 해당 날짜 휴무로 등록했는지 2. 이미 확정된 이사가 있는지 확인
+      const [unavailableDate, confirmedMoveCount] = await Promise.all([
+        moverCalendarRepository.findUnavailableDate(estimate.moverId, moveDate, tx),
+        moverCalendarRepository.countConfirmedMoves(estimate.moverId, moveDate, tx),
+      ]);
+
+      //휴무일 검증
+      if (unavailableDate) {
+        throw new AppError("MOVER_DATE_OFF");
+      }
+      //예약 마감 검증
+      if (confirmedMoveCount > 0) {
+        throw new AppError("MOVER_DATE_FULL");
+      }
 
       const confirmedAt = new Date();
 

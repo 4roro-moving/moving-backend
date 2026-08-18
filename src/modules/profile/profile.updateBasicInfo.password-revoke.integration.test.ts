@@ -3,7 +3,12 @@ import { randomUUID } from "node:crypto";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
 import bcrypt from "bcrypt";
-import { AuthProvider, RefreshTokenSessionType, UserRole } from "@prisma/client";
+import {
+  AuthProvider,
+  RefreshTokenRevokedReason,
+  RefreshTokenSessionType,
+  UserRole,
+} from "@prisma/client";
 
 import "dotenv/config";
 
@@ -380,9 +385,15 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
             return originalUpdateUser(userId, data, tx);
           };
 
-          authRepository.revokeAllRefreshTokensByUserId = async (userId, sessionType, tx) => {
+          authRepository.revokeAllRefreshTokensByUserId = async (
+            userId,
+            sessionType,
+            revokedReason,
+            tx,
+          ) => {
+            assert.equal(revokedReason, RefreshTokenRevokedReason.FORCED);
             txRefs.push(tx);
-            return originalRevokeAll(userId, sessionType, tx);
+            return originalRevokeAll(userId, sessionType, revokedReason, tx);
           };
 
           try {

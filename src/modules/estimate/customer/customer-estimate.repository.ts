@@ -148,6 +148,7 @@ function getReceivedEstimateDetailSelect(customerId: string) {
 
 const receivedEstimateForConfirmSelect = {
   id: true,
+  moverId: true,
   status: true,
   estimateRequest: {
     select: {
