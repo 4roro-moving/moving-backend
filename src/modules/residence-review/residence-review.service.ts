@@ -39,6 +39,11 @@ function roundAverageRating(ratingSum: number, reviewCount: number): number {
   return Math.round((ratingSum / reviewCount) * factor) / factor;
 }
 
+/**
+ * 노출 중인(`isHidden=false`) 후기만 집계해 RegionReviewStatistic 을 갱신합니다.
+ * 관리자 숨김/해제에서 ResidenceReview.isHidden 을 바꿀 때도
+ * 같은 트랜잭션 안에서 반드시 호출해야 통계와 공개 목록이 일치합니다.
+ */
 async function refreshRegionReviewStatistic(regionId: number, db: DbClient): Promise<void> {
   const aggregated = await residenceReviewRepository.aggregateVisibleRatingByRegion(regionId, db);
   const reviewCount = aggregated._count._all;
@@ -255,4 +260,5 @@ export const residenceReviewService = {
   createResidenceReview,
   updateResidenceReview,
   deleteResidenceReview,
+  refreshRegionReviewStatistic,
 };
