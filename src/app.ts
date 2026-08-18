@@ -26,6 +26,7 @@ import favoriteRouter from "./modules/favorite/favorite.route";
 import moverRouter from "./modules/mover/mover.route";
 import { notificationRouter } from "./modules/notification/notification.route";
 import notificationSseRouter from "./modules/notification/notification-sse.route";
+import { giveawayRequestRouter, giveawayRouter } from "./modules/giveaway/giveaway.route";
 import { profileRouter } from "./modules/profile/profile.route";
 import reportRouter from "./modules/report/report.route";
 import reviewRouter from "./modules/review/review.route";
@@ -173,6 +174,8 @@ app.use("/api/chats", chatRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/notifications/sse", notificationSseRouter);
 app.use("/api/terms", publicTermsRouter);
+app.use("/api/giveaways", giveawayRouter);
+app.use("/api/giveaway-requests", giveawayRequestRouter);
 
 /*
  * 관리자 API
