@@ -370,10 +370,9 @@ async function updateGiveawayRequest(
     throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND");
   }
 
-  assertRequestOwner(request, requesterId);
-
   const giveaway = await findGiveawayOwnershipOrThrow(request.giveawayId);
 
+  assertRequestOwner(request, requesterId);
   assertRequestMessageEditable(request, giveaway);
 
   const updated = await giveawayRepository.updateRequestMessage({
@@ -393,10 +392,9 @@ async function cancelGiveawayRequest(requestId: number, requesterId: string) {
         throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND");
       }
 
-      assertRequestOwner(request, requesterId);
-
       const giveaway = await findGiveawayOwnershipOrThrow(request.giveawayId, tx);
 
+      assertRequestOwner(request, requesterId);
       assertRequestCancellable(request, giveaway);
 
       if (request.status === GIVEAWAY_REQUEST_STATUS.PENDING) {
