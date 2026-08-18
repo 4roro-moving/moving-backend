@@ -10,7 +10,6 @@ const residenceReviewSelect = {
   title: true,
   content: true,
   rating: true,
-  isHidden: true,
   createdAt: true,
   updatedAt: true,
   region: {
@@ -21,7 +20,6 @@ const residenceReviewSelect = {
   },
   author: {
     select: {
-      id: true,
       name: true,
     },
   },
@@ -35,6 +33,8 @@ const ownershipSelect = {
   id: true,
   authorId: true,
   regionId: true,
+  rating: true,
+  isHidden: true,
 } satisfies Prisma.ResidenceReviewSelect;
 
 export type ResidenceReviewOwnership = Prisma.ResidenceReviewGetPayload<{
@@ -74,13 +74,6 @@ function findOwnership(residenceReviewId: number, db: DbClient = prisma) {
   return db.residenceReview.findUnique({
     where: { id: residenceReviewId },
     select: ownershipSelect,
-  });
-}
-
-function findById(residenceReviewId: number, db: DbClient = prisma) {
-  return db.residenceReview.findUnique({
-    where: { id: residenceReviewId },
-    select: residenceReviewSelect,
   });
 }
 
@@ -201,7 +194,6 @@ function upsertRegionReviewStatistic(
 export const residenceReviewRepository = {
   findRegionById,
   findOwnership,
-  findById,
   findPublicById,
   findManyWithCount,
   createResidenceReview,

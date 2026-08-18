@@ -26,7 +26,6 @@ export type ListResidenceReviewQuery = z.infer<typeof listResidenceReviewQuerySc
 export type ListMyResidenceReviewQuery = z.infer<typeof listMyResidenceReviewQuerySchema>;
 
 export type ResidenceReviewAuthor = {
-  id: string;
   name: string;
 };
 
@@ -44,10 +43,6 @@ export type PublicResidenceReview = {
   author: ResidenceReviewAuthor;
   createdAt: Date;
   updatedAt: Date;
-};
-
-export type MyResidenceReview = PublicResidenceReview & {
-  isHidden: boolean;
 };
 
 export type RegionReviewStatistic = {
