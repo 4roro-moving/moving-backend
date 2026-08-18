@@ -17,6 +17,10 @@ import type { AdminLoginInput } from "./admin-auth.validator";
 import { AppError } from "../../../lib/app-error";
 import { createAccessToken, createRefreshToken, verifyRefreshToken } from "../../../utils/jwt";
 import { runRefreshTokenSingleFlight } from "../../../utils/refresh-token-single-flight";
+import {
+  handleRefreshTokenFamilyReuseDetection,
+  runRefreshTokenFamilyRotation,
+} from "../../../utils/refresh-token-family-coordination";
 import { tokenHash } from "../../../utils/tokenHash";
 import { runTransaction } from "../../../utils/transaction";
 
@@ -254,10 +258,15 @@ const executeAdminRefresh = async (
     storedRefreshToken.revokedReason === RefreshTokenRevokedReason.ROTATED &&
     storedRefreshToken.familyId !== null
   ) {
-    await authRepository.revokeRefreshTokenFamily(
-      storedRefreshToken.familyId,
+    await handleRefreshTokenFamilyReuseDetection(
       RefreshTokenSessionType.ADMIN,
-      RefreshTokenRevokedReason.REUSE_DETECTED,
+      storedRefreshToken.familyId,
+      () =>
+        authRepository.revokeRefreshTokenFamily(
+          storedRefreshToken.familyId!,
+          RefreshTokenSessionType.ADMIN,
+          RefreshTokenRevokedReason.REUSE_DETECTED,
+        ),
     );
 
     /**
@@ -349,52 +358,70 @@ const executeAdminRefresh = async (
     admin.role,
   );
 
-  /**
-   * 기존 Refresh Token 폐기와 신규 Refresh Token 저장을
-   * 하나의 트랜잭션으로 처리한다.
-   *
-   * 기존 Refresh Token은 ROTATED 사유로 폐기하고,
-   * 새 Refresh Token은 기존 Token Family의 familyId를 그대로 계승한다.
-   *
-   * 기존 마이그레이션 이전 Token은 familyId가 null일 수 있으며,
-   * 이 경우 임의로 새로운 Family를 생성하지 않고 null을 그대로 계승한다.
-   *
-   * SingleFlight가 정상적인 동시 요청의 중복 실행을 방지하고,
-   * revoke 결과 count 조건은 최종적인 DB 수준의 방어선 역할을 한다.
-   *
-   * 기존 세션 폐기와 신규 세션 저장 모두
-   * ADMIN 세션 범위 안에서만 처리한다.
-   */
-  await runTransaction(async (tx) => {
-    const revokeResult = await authRepository.revokeRefreshTokenByHash(
-      currentTokenHash,
-      RefreshTokenSessionType.ADMIN,
-      RefreshTokenRevokedReason.ROTATED,
-      tx,
-    );
+  const performRotation = async (): Promise<AdminRefreshResponse> => {
+    /**
+     * 기존 Refresh Token 폐기와 신규 Refresh Token 저장을
+     * 하나의 트랜잭션으로 처리한다.
+     *
+     * 기존 Refresh Token은 ROTATED 사유로 폐기하고,
+     * 새 Refresh Token은 기존 Token Family의 familyId를 그대로 계승한다.
+     *
+     * 기존 마이그레이션 이전 Token은 familyId가 null일 수 있으며,
+     * 이 경우 임의로 새로운 Family를 생성하지 않고 null을 그대로 계승한다.
+     *
+     * SingleFlight가 정상적인 동시 요청의 중복 실행을 방지하고,
+     * revoke 결과 count 조건은 최종적인 DB 수준의 방어선 역할을 한다.
+     *
+     * 기존 세션 폐기와 신규 세션 저장 모두
+     * ADMIN 세션 범위 안에서만 처리한다.
+     */
+    await runTransaction(async (tx) => {
+      const revokeResult = await authRepository.revokeRefreshTokenByHash(
+        currentTokenHash,
+        RefreshTokenSessionType.ADMIN,
+        RefreshTokenRevokedReason.ROTATED,
+        tx,
+      );
 
-    if (revokeResult.count !== 1) {
-      throw new AppError("UNAUTHORIZED", {
-        message: "이미 사용되었거나 유효하지 않은 관리자 Refresh Token입니다.",
-      });
-    }
+      if (revokeResult.count !== 1) {
+        throw new AppError("UNAUTHORIZED", {
+          message: "이미 사용되었거나 유효하지 않은 관리자 Refresh Token입니다.",
+        });
+      }
 
-    await authRepository.saveRefreshToken(
-      {
-        userId: admin.id,
-        tokenHash: tokenHash(refreshToken),
-        sessionType: RefreshTokenSessionType.ADMIN,
-        familyId: storedRefreshToken.familyId,
-        expiresAt: refreshTokenExpiresAt,
-      },
-      tx,
-    );
-  });
+      await authRepository.saveRefreshToken(
+        {
+          userId: admin.id,
+          tokenHash: tokenHash(refreshToken),
+          sessionType: RefreshTokenSessionType.ADMIN,
+          familyId: storedRefreshToken.familyId,
+          expiresAt: refreshTokenExpiresAt,
+        },
+        tx,
+      );
+    });
 
-  return {
-    accessToken,
-    refreshToken,
+    return {
+      accessToken,
+      refreshToken,
+    };
   };
+
+  if (storedRefreshToken.familyId !== null) {
+    return runRefreshTokenFamilyRotation(
+      RefreshTokenSessionType.ADMIN,
+      storedRefreshToken.familyId,
+      performRotation,
+      (issuedRefreshTokenHash) =>
+        authRepository.revokeRefreshTokenByHash(
+          issuedRefreshTokenHash,
+          RefreshTokenSessionType.ADMIN,
+          RefreshTokenRevokedReason.REUSE_DETECTED,
+        ),
+    );
+  }
+
+  return performRotation();
 };
 
 /**

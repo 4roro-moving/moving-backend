@@ -28,6 +28,10 @@ import { AppError } from "../../lib/app-error";
 import { createAccessToken, createRefreshToken, verifyRefreshToken } from "../../utils/jwt";
 
 import { runRefreshTokenSingleFlight } from "../../utils/refresh-token-single-flight";
+import {
+  handleRefreshTokenFamilyReuseDetection,
+  runRefreshTokenFamilyRotation,
+} from "../../utils/refresh-token-family-coordination";
 import { tokenHash } from "../../utils/tokenHash";
 import { runTransaction } from "../../utils/transaction";
 
@@ -640,10 +644,15 @@ const executeRefresh = async (
       storedRefreshToken.revokedReason === RefreshTokenRevokedReason.ROTATED &&
       storedRefreshToken.familyId !== null
     ) {
-      await authRepository.revokeRefreshTokenFamily(
-        storedRefreshToken.familyId,
+      await handleRefreshTokenFamilyReuseDetection(
         RefreshTokenSessionType.USER,
-        RefreshTokenRevokedReason.REUSE_DETECTED,
+        storedRefreshToken.familyId,
+        () =>
+          authRepository.revokeRefreshTokenFamily(
+            storedRefreshToken.familyId!,
+            RefreshTokenSessionType.USER,
+            RefreshTokenRevokedReason.REUSE_DETECTED,
+          ),
       );
     }
 
@@ -707,52 +716,70 @@ const executeRefresh = async (
 
   const { accessToken, refreshToken, refreshTokenExpiresAt } = createAuthTokens(user.id, user.role);
 
-  /*
-   * 기존 Refresh Token revoke와
-   * 새로운 Refresh Token 저장을 하나의 트랜잭션으로 처리한다.
-   *
-   * revoke 결과 count가 1인 요청만 성공하도록 하여
-   * DB 수준에서도 동일 Refresh Token이 중복 Rotation되는 것을 방지한다.
-   *
-   * SingleFlight가 정상적인 동시 요청의 중복 실행을 방지하고,
-   * 이 조건은 최종적인 DB 수준의 방어선 역할을 한다.
-   *
-   * Rotation으로 발급되는 새로운 Refresh Token은
-   * 기존 Token Family의 familyId를 그대로 계승한다.
-   *
-   * 기존 세션 폐기와 신규 세션 저장 모두
-   * USER 세션 범위 안에서만 처리한다.
-   */
-  await runTransaction(async (tx) => {
-    const revokeResult = await authRepository.revokeRefreshTokenByHash(
-      currentTokenHash,
-      RefreshTokenSessionType.USER,
-      RefreshTokenRevokedReason.ROTATED,
-      tx,
-    );
+  const performRotation = async (): Promise<RefreshResponse> => {
+    /*
+     * 기존 Refresh Token revoke와
+     * 새로운 Refresh Token 저장을 하나의 트랜잭션으로 처리한다.
+     *
+     * revoke 결과 count가 1인 요청만 성공하도록 하여
+     * DB 수준에서도 동일 Refresh Token이 중복 Rotation되는 것을 방지한다.
+     *
+     * SingleFlight가 정상적인 동시 요청의 중복 실행을 방지하고,
+     * 이 조건은 최종적인 DB 수준의 방어선 역할을 한다.
+     *
+     * Rotation으로 발급되는 새로운 Refresh Token은
+     * 기존 Token Family의 familyId를 그대로 계승한다.
+     *
+     * 기존 세션 폐기와 신규 세션 저장 모두
+     * USER 세션 범위 안에서만 처리한다.
+     */
+    await runTransaction(async (tx) => {
+      const revokeResult = await authRepository.revokeRefreshTokenByHash(
+        currentTokenHash,
+        RefreshTokenSessionType.USER,
+        RefreshTokenRevokedReason.ROTATED,
+        tx,
+      );
 
-    if (revokeResult.count !== 1) {
-      throw new AppError("UNAUTHORIZED", {
-        message: "이미 사용되었거나 유효하지 않은 Refresh Token입니다.",
-      });
-    }
+      if (revokeResult.count !== 1) {
+        throw new AppError("UNAUTHORIZED", {
+          message: "이미 사용되었거나 유효하지 않은 Refresh Token입니다.",
+        });
+      }
 
-    await authRepository.saveRefreshToken(
-      {
-        userId: user.id,
-        tokenHash: tokenHash(refreshToken),
-        sessionType: RefreshTokenSessionType.USER,
-        familyId: storedRefreshToken.familyId,
-        expiresAt: refreshTokenExpiresAt,
-      },
-      tx,
-    );
-  });
+      await authRepository.saveRefreshToken(
+        {
+          userId: user.id,
+          tokenHash: tokenHash(refreshToken),
+          sessionType: RefreshTokenSessionType.USER,
+          familyId: storedRefreshToken.familyId,
+          expiresAt: refreshTokenExpiresAt,
+        },
+        tx,
+      );
+    });
 
-  return {
-    accessToken,
-    refreshToken,
+    return {
+      accessToken,
+      refreshToken,
+    };
   };
+
+  if (storedRefreshToken.familyId !== null) {
+    return runRefreshTokenFamilyRotation(
+      RefreshTokenSessionType.USER,
+      storedRefreshToken.familyId,
+      performRotation,
+      (issuedRefreshTokenHash) =>
+        authRepository.revokeRefreshTokenByHash(
+          issuedRefreshTokenHash,
+          RefreshTokenSessionType.USER,
+          RefreshTokenRevokedReason.REUSE_DETECTED,
+        ),
+    );
+  }
+
+  return performRotation();
 };
 
 /*
