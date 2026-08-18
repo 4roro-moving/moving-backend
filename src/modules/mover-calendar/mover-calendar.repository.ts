@@ -99,9 +99,6 @@ export const moverCalendarRepository = {
   //동일 기사/ 동일 날짜에 들어오는 동시 요청을 순서대로 처리하기 위한 PostgreSQL 잠금
   lockMoverDate(moverId: string, date: Date, db: DbClient) {
     const key = `${moverId}:${date.toISOString().slice(0, 10)}`;
-    // pg_advisory_xact_lock returns PostgreSQL's `void` type, which Prisma cannot
-    // deserialize through $queryRaw. The lock's result is not needed; its effect
-    // is held for the surrounding transaction, so execute it as a command instead.
     return db.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
   },
 };
