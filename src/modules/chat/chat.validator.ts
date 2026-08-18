@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { CHAT_IMAGE_CONTENT_TYPES } from "./chat-image.type";
+import { CHAT_IMAGE_CONTENT_TYPES, CHAT_IMAGE_MAX_SIZE } from "./chat-image.type";
 
 export const chatRoomParamSchema = z.object({
   roomId: z.coerce.number().int().positive("유효하지 않은 채팅방 ID입니다."),
@@ -48,6 +48,19 @@ export const chatImageUploadUrlBodySchema = z.object({
   contentType: z.enum(CHAT_IMAGE_CONTENT_TYPES, {
     error: "지원하지 않는 이미지 형식입니다.",
   }),
+  size: z
+    .number({
+      error: "파일 크기는 숫자여야 합니다.",
+    })
+    .int({
+      error: "파일 크기는 정수여야 합니다.",
+    })
+    .positive({
+      error: "파일 크기는 0보다 커야 합니다.",
+    })
+    .max(CHAT_IMAGE_MAX_SIZE, {
+      error: "채팅 이미지는 25MB 이하여야 합니다.",
+    }),
 });
 
 export const sendChatImageMessagePayloadSchema = z.object({

@@ -5,6 +5,7 @@ import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 import { AppError } from "../../lib/app-error";
 import { s3Client } from "../../lib/s3";
+import { CHAT_IMAGE_MAX_SIZE } from "./chat-image.type";
 import { chatRepository } from "./chat.repository";
 
 import type { ChatImageUploadUrlResponse, CreateChatImageUploadUrlInput } from "./chat-image.type";
@@ -123,6 +124,12 @@ const validateUploadedImage = async (
     if (metadata.ContentLength === undefined || metadata.ContentLength <= 0) {
       throw new AppError("BAD_REQUEST", {
         message: "채팅 이미지 파일이 비어 있습니다.",
+      });
+    }
+
+    if (metadata.ContentLength > CHAT_IMAGE_MAX_SIZE) {
+      throw new AppError("BAD_REQUEST", {
+        message: "채팅 이미지는 25MB 이하만 사용할 수 있습니다.",
       });
     }
   } catch (error) {
