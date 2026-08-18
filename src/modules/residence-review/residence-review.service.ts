@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 
+import { ERROR_CODES } from "../../constants/error-code";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
@@ -67,7 +68,9 @@ async function assertRegionExists(regionId: number, db?: DbClient): Promise<void
   const region = await residenceReviewRepository.findRegionById(regionId, db);
 
   if (!region) {
-    throw new AppError("REGION_NOT_FOUND");
+    throw new AppError("REGION_NOT_FOUND", {
+      message: ERROR_CODES.REGION_NOT_FOUND.message,
+    });
   }
 }
 
@@ -79,11 +82,15 @@ async function findOwnedResidenceReviewOrThrow(
   const review = await residenceReviewRepository.findOwnership(residenceReviewId, db);
 
   if (!review) {
-    throw new AppError("RESIDENCE_REVIEW_NOT_FOUND");
+    throw new AppError("RESIDENCE_REVIEW_NOT_FOUND", {
+      message: ERROR_CODES.RESIDENCE_REVIEW_NOT_FOUND.message,
+    });
   }
 
   if (review.authorId !== authorId) {
-    throw new AppError("FORBIDDEN");
+    throw new AppError("FORBIDDEN", {
+      message: ERROR_CODES.FORBIDDEN.message,
+    });
   }
 
   return review;
@@ -113,7 +120,9 @@ async function getPublicResidenceReviewById(residenceReviewId: number) {
   const review = await residenceReviewRepository.findPublicById(residenceReviewId);
 
   if (!review) {
-    throw new AppError("RESIDENCE_REVIEW_NOT_FOUND");
+    throw new AppError("RESIDENCE_REVIEW_NOT_FOUND", {
+      message: ERROR_CODES.RESIDENCE_REVIEW_NOT_FOUND.message,
+    });
   }
 
   return toPublicResidenceReview(review);
@@ -123,7 +132,9 @@ async function getRegionReviewStatistic(regionId: number): Promise<RegionReviewS
   const region = await residenceReviewRepository.findRegionById(regionId);
 
   if (!region) {
-    throw new AppError("REGION_NOT_FOUND");
+    throw new AppError("REGION_NOT_FOUND", {
+      message: ERROR_CODES.REGION_NOT_FOUND.message,
+    });
   }
 
   const statistic = await residenceReviewRepository.findRegionReviewStatisticByRegionId(regionId);
