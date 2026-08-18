@@ -24,18 +24,21 @@ registerRouterDocs(giveawayRouter, {
     },
     "GET /me": {
       summary: "내가 작성한 나눔 목록",
-      description: "숨김 글을 포함합니다. status, regionId 로 필터할 수 있습니다.",
-      responses: { 200: "조회 성공" },
+      description:
+        "숨김 글은 제외합니다. status, regionId 로 필터할 수 있습니다. 없는 지역이면 400입니다.",
+      responses: { 200: "조회 성공", 400: "지원하지 않는 지역입니다." },
     },
     "GET /me/received": {
       summary: "내가 수령한 나눔 목록",
-      description: "선정되어 receiverId가 본인인 나눔 글 목록입니다.",
-      responses: { 200: "조회 성공" },
+      description:
+        "선정되어 receiverId가 본인인 나눔 글 목록입니다. 숨김 글은 제외합니다. 없는 지역이면 400입니다.",
+      responses: { 200: "조회 성공", 400: "지원하지 않는 지역입니다." },
     },
     "GET /": {
       summary: "나눔 목록",
-      description: "숨김 글은 제외합니다. status, regionId 로 필터할 수 있습니다.",
-      responses: { 200: "조회 성공" },
+      description:
+        "숨김 글은 제외합니다. status, regionId 로 필터할 수 있습니다. 없는 지역이면 400입니다.",
+      responses: { 200: "조회 성공", 400: "지원하지 않는 지역입니다." },
     },
     "POST /": {
       summary: "나눔 글 작성",
@@ -44,13 +47,13 @@ registerRouterDocs(giveawayRouter, {
     },
     "GET /:giveawayId": {
       summary: "나눔 글 상세",
-      description: "숨김 글은 404입니다. 작성자/수령자만 receiver를 볼 수 있습니다.",
+      description: "숨김 글은 작성자 포함 404입니다. 작성자/수령자만 receiver를 볼 수 있습니다.",
       responses: { 200: "조회 성공", 404: "나눔 글을 찾을 수 없습니다." },
     },
     "PATCH /:giveawayId": {
       summary: "나눔 글 수정",
       description:
-        "작성자만, AVAILABLE 상태에서만 가능합니다. imageKeys를 보내면 이미지를 교체합니다.",
+        "작성자만, AVAILABLE 상태에서만 가능합니다. 숨김 글은 404입니다. imageKeys를 보내면 이미지를 교체합니다.",
       responses: {
         200: "수정 성공",
         403: "작성자가 아닙니다.",
@@ -61,7 +64,7 @@ registerRouterDocs(giveawayRouter, {
     "DELETE /:giveawayId": {
       summary: "나눔 글 삭제",
       description:
-        "작성자만, AVAILABLE 상태에서만 가능합니다. 이미지와 신청은 Cascade로 함께 삭제됩니다.",
+        "작성자만, AVAILABLE 상태에서만 가능합니다. 숨김 글은 404입니다. 이미지와 신청은 Cascade로 함께 삭제됩니다.",
       responses: {
         200: "삭제 성공",
         403: "작성자가 아닙니다.",
@@ -71,7 +74,7 @@ registerRouterDocs(giveawayRouter, {
     },
     "POST /:giveawayId/complete": {
       summary: "나눔 완료",
-      description: "작성자만 IN_PROGRESS 나눔을 COMPLETED로 변경합니다.",
+      description: "작성자만 IN_PROGRESS 나눔을 COMPLETED로 변경합니다. 숨김 글은 404입니다.",
       responses: {
         200: "완료 성공",
         403: "작성자가 아닙니다.",
@@ -81,7 +84,7 @@ registerRouterDocs(giveawayRouter, {
     },
     "GET /:giveawayId/requests": {
       summary: "나눔 신청 목록",
-      description: "작성자만 해당 글의 신청 목록을 조회합니다.",
+      description: "작성자만 해당 글의 신청 목록을 조회합니다. 숨김 글은 404입니다.",
       responses: {
         200: "조회 성공",
         403: "작성자가 아닙니다.",
@@ -140,16 +143,17 @@ registerRouterDocs(giveawayRequestRouter, {
   endpoints: {
     "GET /me": {
       summary: "내 나눔 신청 목록",
-      description: "status로 필터할 수 있습니다.",
+      description: "숨김 글의 신청은 제외합니다. status로 필터할 수 있습니다.",
       responses: { 200: "조회 성공" },
     },
     "PATCH /:requestId": {
       summary: "신청 메시지 수정",
-      description: "신청자 본인만, PENDING 상태에서만 가능합니다.",
+      description:
+        "신청자 본인만, PENDING 상태에서만 가능합니다. 완료되었거나 숨김된 나눔은 수정할 수 없습니다.",
       responses: {
         200: "수정 성공",
-        404: "나눔 신청을 찾을 수 없습니다.",
-        409: "대기 중인 신청이 아닙니다.",
+        404: "나눔 글 또는 신청을 찾을 수 없습니다.",
+        409: "대기 중인 신청이 아니거나 완료된 나눔입니다.",
       },
     },
     "POST /:requestId/cancel": {
@@ -157,7 +161,7 @@ registerRouterDocs(giveawayRequestRouter, {
       description: [
         "PENDING은 CANCELLED로만 변경합니다.",
         "SELECTED 취소 시 같은 트랜잭션에서 receiverId를 비우고 글 상태를 AVAILABLE로 되돌립니다.",
-        "COMPLETED 이후 SELECTED 취소는 허용하지 않습니다.",
+        "COMPLETED이거나 숨김된 나눔의 신청은 취소할 수 없습니다.",
       ].join("\n"),
       responses: {
         200: "취소 성공",

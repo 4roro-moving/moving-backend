@@ -100,9 +100,7 @@ async function findGiveawayOwnershipOrThrow(
 ): Promise<GiveawayOwnershipRow> {
   const giveaway = await giveawayRepository.findGiveawayOwnership(giveawayId, db);
 
-  if (!giveaway) {
-    throw new AppError("GIVEAWAY_NOT_FOUND");
-  }
+  assertGiveawayVisible(giveaway);
 
   return giveaway;
 }
@@ -126,6 +124,8 @@ async function getGiveawayDetail(giveawayId: number, viewerId: string) {
 }
 
 async function listGiveaways(query: ListGiveawayQuery) {
+  await assertRegionExists(query.regionId);
+
   const where: Prisma.GiveawayWhereInput = {
     isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
   };
@@ -151,7 +151,12 @@ async function listGiveaways(query: ListGiveawayQuery) {
 }
 
 async function listMyGiveaways(authorId: string, query: ListMyGiveawayQuery) {
-  const where: Prisma.GiveawayWhereInput = { authorId };
+  await assertRegionExists(query.regionId);
+
+  const where: Prisma.GiveawayWhereInput = {
+    authorId,
+    isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
+  };
 
   if (query.status !== undefined) {
     where.status = query.status;
@@ -174,6 +179,8 @@ async function listMyGiveaways(authorId: string, query: ListMyGiveawayQuery) {
 }
 
 async function listReceivedGiveaways(receiverId: string, query: ListMyGiveawayQuery) {
+  await assertRegionExists(query.regionId);
+
   const where: Prisma.GiveawayWhereInput = {
     receiverId,
     isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
@@ -253,12 +260,8 @@ async function updateGiveaway(giveawayId: number, authorId: string, input: Updat
     }
 
     const giveaway = await giveawayRepository.updateGiveaway(giveawayId, updateData, tx);
-    const myRequest = await giveawayRepository.findRequestByGiveawayAndRequester(
-      { giveawayId, requesterId: authorId },
-      tx,
-    );
 
-    return toGiveawayDetail(giveaway, { id: authorId }, myRequest);
+    return toGiveawayDetail(giveaway, { id: authorId }, null);
   });
 }
 
@@ -368,7 +371,10 @@ async function updateGiveawayRequest(
   }
 
   assertRequestOwner(request, requesterId);
-  assertRequestMessageEditable(request);
+
+  const giveaway = await findGiveawayOwnershipOrThrow(request.giveawayId);
+
+  assertRequestMessageEditable(request, giveaway);
 
   const updated = await giveawayRepository.updateRequestMessage({
     requestId,
@@ -560,7 +566,12 @@ async function rejectGiveawayRequest(giveawayId: number, requestId: number, auth
 }
 
 async function listMyGiveawayRequests(requesterId: string, query: ListGiveawayRequestQuery) {
-  const where: Prisma.GiveawayRequestWhereInput = { requesterId };
+  const where: Prisma.GiveawayRequestWhereInput = {
+    requesterId,
+    giveaway: {
+      isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
+    },
+  };
 
   if (query.status !== undefined) {
     where.status = query.status;

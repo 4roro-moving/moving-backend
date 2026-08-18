@@ -52,7 +52,16 @@ export function assertRequestOwner(request: GiveawayRequestRow, requesterId: str
   }
 }
 
-export function assertRequestMessageEditable(request: GiveawayRequestRow) {
+export function assertRequestMessageEditable(
+  request: GiveawayRequestRow,
+  giveaway: GiveawayOwnershipRow,
+) {
+  if (giveaway.status === GIVEAWAY_STATUS.COMPLETED) {
+    throw new AppError("GIVEAWAY_REQUEST_NOT_EDITABLE", {
+      message: "완료된 나눔의 신청은 수정할 수 없습니다.",
+    });
+  }
+
   if (request.status !== GIVEAWAY_REQUEST_STATUS.PENDING) {
     throw new AppError("GIVEAWAY_REQUEST_NOT_EDITABLE");
   }
@@ -62,6 +71,12 @@ export function assertRequestCancellable(
   request: GiveawayRequestRow,
   giveaway: GiveawayOwnershipRow,
 ) {
+  if (giveaway.status === GIVEAWAY_STATUS.COMPLETED) {
+    throw new AppError("GIVEAWAY_REQUEST_CANCEL_NOT_ALLOWED", {
+      message: "완료된 나눔의 신청은 취소할 수 없습니다.",
+    });
+  }
+
   if (
     request.status !== GIVEAWAY_REQUEST_STATUS.PENDING &&
     request.status !== GIVEAWAY_REQUEST_STATUS.SELECTED
@@ -106,6 +121,8 @@ export function assertRequestRejectable(
   giveaway: GiveawayOwnershipRow,
   request: GiveawayRequestRow,
 ) {
+  assertGiveawayVisible(giveaway);
+
   if (request.giveawayId !== giveaway.id) {
     throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND", {
       message: "해당 나눔 글의 신청을 찾을 수 없습니다.",
