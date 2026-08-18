@@ -1,4 +1,4 @@
-import type { NextFunction, Request, Response } from "express";
+import type { Request, Response } from "express";
 
 import { AppError } from "../../lib/app-error";
 import { residenceReviewService } from "./residence-review.service";
@@ -19,8 +19,8 @@ function getCustomerId(req: Request): string {
   return req.user.id;
 }
 
-async function getPublicResidenceReviewList(_req: Request, res: Response, next: NextFunction) {
-  try {
+export const residenceReviewController = {
+  getPublicResidenceReviewList: async (_req: Request, res: Response) => {
     const query = res.locals.query as ListResidenceReviewQuery;
     const result = await residenceReviewService.getPublicResidenceReviewList(query);
 
@@ -29,13 +29,9 @@ async function getPublicResidenceReviewList(_req: Request, res: Response, next: 
       data: result.reviews,
       pagination: result.pagination,
     });
-  } catch (error) {
-    next(error);
-  }
-}
+  },
 
-async function getPublicResidenceReviewById(_req: Request, res: Response, next: NextFunction) {
-  try {
+  getPublicResidenceReviewById: async (_req: Request, res: Response) => {
     const { residenceReviewId } = res.locals.params as ResidenceReviewIdParam;
     const review = await residenceReviewService.getPublicResidenceReviewById(residenceReviewId);
 
@@ -43,13 +39,9 @@ async function getPublicResidenceReviewById(_req: Request, res: Response, next: 
       success: true,
       data: review,
     });
-  } catch (error) {
-    next(error);
-  }
-}
+  },
 
-async function getRegionReviewStatistic(_req: Request, res: Response, next: NextFunction) {
-  try {
+  getRegionReviewStatistic: async (_req: Request, res: Response) => {
     const { regionId } = res.locals.params as RegionIdParam;
     const statistic = await residenceReviewService.getRegionReviewStatistic(regionId);
 
@@ -57,13 +49,9 @@ async function getRegionReviewStatistic(_req: Request, res: Response, next: Next
       success: true,
       data: statistic,
     });
-  } catch (error) {
-    next(error);
-  }
-}
+  },
 
-async function getMyResidenceReviewList(req: Request, res: Response, next: NextFunction) {
-  try {
+  getMyResidenceReviewList: async (req: Request, res: Response) => {
     const query = res.locals.query as ListMyResidenceReviewQuery;
     const result = await residenceReviewService.getMyResidenceReviewList(getCustomerId(req), query);
 
@@ -72,13 +60,9 @@ async function getMyResidenceReviewList(req: Request, res: Response, next: NextF
       data: result.reviews,
       pagination: result.pagination,
     });
-  } catch (error) {
-    next(error);
-  }
-}
+  },
 
-async function createResidenceReview(req: Request, res: Response, next: NextFunction) {
-  try {
+  createResidenceReview: async (req: Request, res: Response) => {
     const review = await residenceReviewService.createResidenceReview(
       getCustomerId(req),
       req.body as CreateResidenceReviewInput,
@@ -88,13 +72,9 @@ async function createResidenceReview(req: Request, res: Response, next: NextFunc
       success: true,
       data: review,
     });
-  } catch (error) {
-    next(error);
-  }
-}
+  },
 
-async function updateResidenceReview(req: Request, res: Response, next: NextFunction) {
-  try {
+  updateResidenceReview: async (req: Request, res: Response) => {
     const { residenceReviewId } = res.locals.params as ResidenceReviewIdParam;
     const review = await residenceReviewService.updateResidenceReview(
       residenceReviewId,
@@ -106,13 +86,9 @@ async function updateResidenceReview(req: Request, res: Response, next: NextFunc
       success: true,
       data: review,
     });
-  } catch (error) {
-    next(error);
-  }
-}
+  },
 
-async function deleteResidenceReview(req: Request, res: Response, next: NextFunction) {
-  try {
+  deleteResidenceReview: async (req: Request, res: Response) => {
     const { residenceReviewId } = res.locals.params as ResidenceReviewIdParam;
     const result = await residenceReviewService.deleteResidenceReview(
       residenceReviewId,
@@ -123,17 +99,5 @@ async function deleteResidenceReview(req: Request, res: Response, next: NextFunc
       success: true,
       data: result,
     });
-  } catch (error) {
-    next(error);
-  }
-}
-
-export const residenceReviewController = {
-  getPublicResidenceReviewList,
-  getPublicResidenceReviewById,
-  getRegionReviewStatistic,
-  getMyResidenceReviewList,
-  createResidenceReview,
-  updateResidenceReview,
-  deleteResidenceReview,
+  },
 };
