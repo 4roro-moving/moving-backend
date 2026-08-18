@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { AppError } from "../../../lib/app-error";
+import { getAuthenticatedUserId } from "../../../utils/request-auth.util";
 
 import { contentsService } from "./contents.service";
 import type {
@@ -9,14 +9,6 @@ import type {
   ReviewIdParam,
   UnhideContentBody,
 } from "./contents.type";
-
-function getAdminId(req: Request): string {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED");
-  }
-
-  return req.user.id;
-}
 
 export const contentsController = {
   // GET /api/admin/reviews
@@ -37,7 +29,7 @@ export const contentsController = {
     const input = req.body as HideContentBody;
 
     const review = await contentsService.hideReview({
-      adminId: getAdminId(req),
+      adminId: getAuthenticatedUserId(req),
       reviewId,
       input,
     });
@@ -55,7 +47,7 @@ export const contentsController = {
     const input = req.body as UnhideContentBody;
 
     const review = await contentsService.unhideReview({
-      adminId: getAdminId(req),
+      adminId: getAuthenticatedUserId(req),
       reviewId,
       input,
     });

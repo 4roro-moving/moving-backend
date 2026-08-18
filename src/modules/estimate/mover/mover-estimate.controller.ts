@@ -1,6 +1,6 @@
-import type { Request, RequestHandler } from "express";
+import type { RequestHandler } from "express";
 
-import { AppError } from "../../../lib/app-error";
+import { getAuthenticatedUserId } from "../../../utils/request-auth.util";
 import { moverEstimateRequestService, moverSentEstimateService } from "./mover-estimate.service";
 import type {
   MoverEstimateRequestListQuery,
@@ -19,19 +19,11 @@ import type {
 // =============================================================================
 // 인증 사용자 ID 조회
 // =============================================================================
-function getMoverId(req: Request) {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED");
-  }
-
-  return req.user.id;
-}
-
 // =============================================================================
 // 기사: 고객의 견적 요청 목록 조회
 // =============================================================================
 const getList: RequestHandler = async (req, res) => {
-  const moverId = getMoverId(req);
+  const moverId = getAuthenticatedUserId(req);
   const query = res.locals.query as MoverEstimateRequestListQuery;
   const result = await moverEstimateRequestService.getList(moverId, query);
 
@@ -44,7 +36,10 @@ const getList: RequestHandler = async (req, res) => {
 //기사 견적 반려 내역 조회
 const getRejections: RequestHandler = async (req, res) => {
   const query = res.locals.query as MoverEstimateRejectionListQuery;
-  const result = await moverEstimateRequestService.getRejections(getMoverId(req), query);
+  const result = await moverEstimateRequestService.getRejections(
+    getAuthenticatedUserId(req),
+    query,
+  );
 
   res.status(200).json({
     success: true,
@@ -55,7 +50,7 @@ const getRejections: RequestHandler = async (req, res) => {
 //기사 보낸 견적 조회
 const getSentEstimates: RequestHandler = async (req, res) => {
   const query = res.locals.query as MoverSentEstimateListQuery;
-  const result = await moverSentEstimateService.getList(getMoverId(req), query);
+  const result = await moverSentEstimateService.getList(getAuthenticatedUserId(req), query);
 
   res.status(200).json({
     success: true,
@@ -67,7 +62,7 @@ const getSentEstimates: RequestHandler = async (req, res) => {
 //기사 견적 상세
 const getSentEstimateDetail: RequestHandler = async (req, res) => {
   const { estimateId } = res.locals.params as MoverSentEstimateIdParam;
-  const result = await moverSentEstimateService.getDetail(getMoverId(req), estimateId);
+  const result = await moverSentEstimateService.getDetail(getAuthenticatedUserId(req), estimateId);
 
   res.status(200).json({
     success: true,
@@ -77,7 +72,7 @@ const getSentEstimateDetail: RequestHandler = async (req, res) => {
 
 const completeSentEstimate: RequestHandler = async (req, res) => {
   const { estimateId } = res.locals.params as MoverSentEstimateIdParam;
-  const result = await moverSentEstimateService.complete(getMoverId(req), estimateId);
+  const result = await moverSentEstimateService.complete(getAuthenticatedUserId(req), estimateId);
 
   res.status(200).json({
     success: true,
@@ -92,7 +87,7 @@ const sendEstimate: RequestHandler = async (req, res) => {
 
   const estimate = await moverEstimateRequestService.sendEstimate({
     estimateRequestId,
-    moverId: getMoverId(req),
+    moverId: getAuthenticatedUserId(req),
     input,
   });
 
@@ -109,7 +104,7 @@ const rejectEstimate: RequestHandler = async (req, res) => {
 
   const rejection = await moverEstimateRequestService.rejectEstimate({
     estimateRequestId,
-    moverId: getMoverId(req),
+    moverId: getAuthenticatedUserId(req),
     input,
   });
 

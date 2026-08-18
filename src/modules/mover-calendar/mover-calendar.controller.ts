@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { AppError } from "../../lib/app-error";
+import { assertAuthenticated } from "../../utils/request-auth.util";
 import { sendResponse } from "../../utils/response.util";
 import { moverCalendarService } from "./mover-calendar.service";
 import type {
@@ -23,7 +23,7 @@ export const moverCalendarController = {
   },
 
   updateMyCalendarDay: async (req: Request, res: Response) => {
-    if (!req.user) throw new AppError("UNAUTHORIZED");
+    assertAuthenticated(req);
     const { date } = res.locals.params as CalendarDateParam;
     const { status } = req.body as UpdateCalendarDayInput;
     const result = await moverCalendarService.updateDay({ moverId: req.user.id, date, status });

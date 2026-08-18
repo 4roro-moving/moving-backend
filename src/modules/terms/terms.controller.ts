@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { AppError } from "../../lib/app-error";
+import { getAuthenticatedUserId } from "../../utils/request-auth.util";
 import { termsService } from "./terms.service";
 import type {
   CreateTermsInput,
@@ -10,19 +10,11 @@ import type {
 } from "./terms.type";
 import type { TermsTypeParam } from "./terms.validator";
 
-function getAdminId(req: Request): string {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED");
-  }
-
-  return req.user.id;
-}
-
 export const termsController = {
   // POST /api/admin/terms
   createTerms: async (req: Request, res: Response) => {
     const terms = await termsService.createTerms({
-      authorId: getAdminId(req),
+      authorId: getAuthenticatedUserId(req),
       input: req.body as CreateTermsInput,
     });
 

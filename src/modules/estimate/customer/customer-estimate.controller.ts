@@ -1,6 +1,6 @@
-import type { Request, RequestHandler } from "express";
+import type { RequestHandler } from "express";
 
-import { AppError } from "../../../lib/app-error";
+import { getAuthenticatedUserId } from "../../../utils/request-auth.util";
 import { receivedEstimateService } from "./customer-estimate.service";
 import type {
   ConfirmReceivedEstimateParam,
@@ -17,14 +17,6 @@ import type {
 
 // 2026.07.24 정슬기 - [수정] dev pull 충돌 병합 (섹션 주석·패널/estimateId API 모두 유지)
 
-function getCustomerId(req: Request) {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED");
-  }
-
-  return req.user.id;
-}
-
 // =============================================================================
 // 고객: 기사에게 받은 견적 목록·상세 조회 및 견적 확정
 // =============================================================================
@@ -34,7 +26,7 @@ function getCustomerId(req: Request) {
 const getPendingEstimateRequests: RequestHandler = async (req, res) => {
   const query = res.locals.query as PendingEstimateQuery;
   const result = await receivedEstimateService.getPendingEstimateRequests(
-    getCustomerId(req),
+    getAuthenticatedUserId(req),
     query,
   );
 
@@ -48,7 +40,9 @@ const getPendingEstimateRequests: RequestHandler = async (req, res) => {
 // 2026.07.24 정슬기 - [추가] 받은 견적 패널 목록 요청 처리
 const getReceivedEstimatePanels: RequestHandler = async (req, res, next) => {
   try {
-    const result = await receivedEstimateService.getReceivedEstimatePanels(getCustomerId(req));
+    const result = await receivedEstimateService.getReceivedEstimatePanels(
+      getAuthenticatedUserId(req),
+    );
 
     res.status(200).json({
       success: true,
@@ -68,7 +62,7 @@ const getReceivedEstimateList: RequestHandler = async (req, res, next) => {
 
     const result = await receivedEstimateService.getReceivedEstimateList({
       estimateRequestId,
-      customerId: getCustomerId(req),
+      customerId: getAuthenticatedUserId(req),
     });
 
     res.status(200).json({
@@ -90,7 +84,7 @@ const getReceivedEstimateDetail: RequestHandler = async (req, res, next) => {
     const result = await receivedEstimateService.getReceivedEstimateDetail({
       estimateRequestId,
       estimateId,
-      customerId: getCustomerId(req),
+      customerId: getAuthenticatedUserId(req),
     });
 
     res.status(200).json({
@@ -109,7 +103,7 @@ const getReceivedEstimateDetailById: RequestHandler = async (req, res, next) => 
 
     const result = await receivedEstimateService.getReceivedEstimateDetailById(
       estimateId,
-      getCustomerId(req),
+      getAuthenticatedUserId(req),
     );
 
     res.status(200).json({
@@ -131,7 +125,7 @@ const confirmReceivedEstimate: RequestHandler = async (req, res, next) => {
     const result = await receivedEstimateService.confirmReceivedEstimate({
       estimateRequestId,
       estimateId,
-      customerId: getCustomerId(req),
+      customerId: getAuthenticatedUserId(req),
     });
 
     res.status(200).json({
@@ -150,7 +144,7 @@ const confirmReceivedEstimateById: RequestHandler = async (req, res, next) => {
 
     const result = await receivedEstimateService.confirmReceivedEstimateById(
       estimateId,
-      getCustomerId(req),
+      getAuthenticatedUserId(req),
     );
 
     res.status(200).json({

@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { AppError } from "../../lib/app-error";
+import { getAuthenticatedUserId } from "../../utils/request-auth.util";
 import { estimateRequestService } from "./estimateRequest.service";
 import type {
   CancelDesignatedMoverParam,
@@ -11,20 +11,12 @@ import type {
   UpdateEstimateRequestInput,
 } from "./estimateRequest.type";
 
-function getCustomerId(req: Request): string {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED");
-  }
-
-  return req.user.id;
-}
-
 export const estimateRequestController = {
   //POST /api/estimate-requests
 
   createEstimateRequest: async (req: Request, res: Response) => {
     const estimateRequest = await estimateRequestService.createEstimateRequest({
-      customerId: getCustomerId(req),
+      customerId: getAuthenticatedUserId(req),
       input: req.body as CreateEstimateRequestInput,
     });
 
@@ -38,7 +30,7 @@ export const estimateRequestController = {
 
   getActiveEstimateRequest: async (req: Request, res: Response) => {
     const estimateRequest = await estimateRequestService.getActiveEstimateRequest(
-      getCustomerId(req),
+      getAuthenticatedUserId(req),
     );
 
     res.status(200).json({
@@ -52,7 +44,10 @@ export const estimateRequestController = {
   getMyEstimateRequestList: async (req: Request, res: Response) => {
     const query = res.locals.query as ListEstimateRequestQuery;
 
-    const result = await estimateRequestService.getMyEstimateRequestList(getCustomerId(req), query);
+    const result = await estimateRequestService.getMyEstimateRequestList(
+      getAuthenticatedUserId(req),
+      query,
+    );
 
     res.status(200).json({
       success: true,
@@ -68,7 +63,7 @@ export const estimateRequestController = {
 
     const estimateRequest = await estimateRequestService.getEstimateRequestById(
       estimateRequestId,
-      getCustomerId(req),
+      getAuthenticatedUserId(req),
     );
 
     res.status(200).json({
@@ -84,7 +79,7 @@ export const estimateRequestController = {
 
     const estimateRequest = await estimateRequestService.updateEstimateRequest({
       estimateRequestId,
-      customerId: getCustomerId(req),
+      customerId: getAuthenticatedUserId(req),
       input: req.body as UpdateEstimateRequestInput,
     });
 
@@ -104,7 +99,7 @@ export const estimateRequestController = {
 
     const estimateRequest = await estimateRequestService.cancelEstimateRequest(
       estimateRequestId,
-      getCustomerId(req),
+      getAuthenticatedUserId(req),
     );
 
     res.status(200).json({
@@ -122,7 +117,7 @@ export const estimateRequestController = {
 
     const estimateRequest = await estimateRequestService.designateMover({
       estimateRequestId,
-      customerId: getCustomerId(req),
+      customerId: getAuthenticatedUserId(req),
       moverId,
     });
 
@@ -141,7 +136,7 @@ export const estimateRequestController = {
 
     const estimateRequest = await estimateRequestService.cancelDesignatedMover({
       estimateRequestId,
-      customerId: getCustomerId(req),
+      customerId: getAuthenticatedUserId(req),
       moverId,
     });
 

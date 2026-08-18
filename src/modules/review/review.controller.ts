@@ -1,6 +1,6 @@
-import type { Request, RequestHandler } from "express";
+import type { RequestHandler } from "express";
 
-import { AppError } from "../../lib/app-error";
+import { getAuthenticatedUserId } from "../../utils/request-auth.util";
 import type { MoverIdParam } from "../mover/mover.type";
 import { reviewService } from "./review.service";
 import type {
@@ -8,14 +8,6 @@ import type {
   ListMoverReviewQuery,
   ListMyReviewQuery,
 } from "./review.validator";
-
-function getCustomerId(req: Request): string {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED");
-  }
-
-  return req.user.id;
-}
 
 export const reviewController = {
   /**
@@ -52,7 +44,7 @@ export const reviewController = {
   getMyReviewList: (async (req, res) => {
     const query = res.locals.query as ListMyReviewQuery;
     const result = await reviewService.getMyReviewList({
-      customerId: getCustomerId(req),
+      customerId: getAuthenticatedUserId(req),
       page: query.page,
       limit: query.limit,
     });
@@ -72,7 +64,7 @@ export const reviewController = {
   getReviewableEstimateList: (async (req, res, next) => {
     try {
       const result = await reviewService.getReviewableEstimateList({
-        customerId: getCustomerId(req),
+        customerId: getAuthenticatedUserId(req),
       });
 
       res.status(200).json({
@@ -94,7 +86,7 @@ export const reviewController = {
       const { estimateId, rating, content } = req.body as CreateReviewInput;
 
       const result = await reviewService.createReview({
-        customerId: getCustomerId(req),
+        customerId: getAuthenticatedUserId(req),
         estimateId,
         rating,
         content,

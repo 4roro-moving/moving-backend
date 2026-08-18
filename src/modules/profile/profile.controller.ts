@@ -2,6 +2,7 @@ import { UserRole } from "@prisma/client";
 import type { RequestHandler } from "express";
 
 import { AppError } from "../../lib/app-error";
+import { assertAuthenticated } from "../../utils/request-auth.util";
 
 import { profileService as customerProfileService } from "./customer/profile.service";
 import { profileService as moverProfileService } from "./mover/profile.service";
@@ -14,11 +15,7 @@ import { profileImageService } from "./profile-image.service";
  * 프로필 이미지 업로드에 사용할 URL 정보를 반환한다.
  */
 const createProfileImageUploadUrl: RequestHandler = async (req, res) => {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED", {
-      message: "인증이 필요합니다.",
-    });
-  }
+  assertAuthenticated(req);
 
   const data = await profileImageService.createUploadUrl(req.user.id, req.body);
 
@@ -36,11 +33,7 @@ const createProfileImageUploadUrl: RequestHandler = async (req, res) => {
  * 고객 또는 무버 프로필 Service를 호출한다.
  */
 const createProfile: RequestHandler = async (req, res) => {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED", {
-      message: "인증이 필요합니다.",
-    });
-  }
+  assertAuthenticated(req);
 
   if (req.user.role === UserRole.CUSTOMER) {
     const data = await customerProfileService.createProfile(req.user.id, req.body);
@@ -78,11 +71,7 @@ const createProfile: RequestHandler = async (req, res) => {
  * 고객 또는 무버 프로필을 조회한다.
  */
 const getMyProfile: RequestHandler = async (req, res) => {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED", {
-      message: "인증이 필요합니다.",
-    });
-  }
+  assertAuthenticated(req);
 
   if (req.user.role === UserRole.CUSTOMER) {
     const data = await customerProfileService.getMyProfile(req.user.id);
@@ -120,11 +109,7 @@ const getMyProfile: RequestHandler = async (req, res) => {
  * 실제 프로필 존재 여부를 Service에서 확인한다.
  */
 const getProfileStatus: RequestHandler = async (req, res) => {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED", {
-      message: "인증이 필요합니다.",
-    });
-  }
+  assertAuthenticated(req);
 
   if (req.user.role === UserRole.CUSTOMER) {
     const data = await customerProfileService.getProfileStatus(req.user.id);
@@ -162,11 +147,7 @@ const getProfileStatus: RequestHandler = async (req, res) => {
  * 고객 또는 무버의 이름, 전화번호, 비밀번호를 수정한다.
  */
 const updateBasicInfo: RequestHandler = async (req, res) => {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED", {
-      message: "인증이 필요합니다.",
-    });
-  }
+  assertAuthenticated(req);
 
   if (req.user.role === UserRole.CUSTOMER) {
     const data = await customerProfileService.updateBasicInfo(req.user.id, req.body);
@@ -204,11 +185,7 @@ const updateBasicInfo: RequestHandler = async (req, res) => {
  * 고객 또는 무버 프로필을 수정한다.
  */
 const updateProfile: RequestHandler = async (req, res) => {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED", {
-      message: "인증이 필요합니다.",
-    });
-  }
+  assertAuthenticated(req);
 
   if (req.user.role === UserRole.CUSTOMER) {
     const data = await customerProfileService.updateProfile(req.user.id, req.body);

@@ -1,22 +1,14 @@
 import type { Request, Response } from "express";
 
-import { AppError } from "../../../lib/app-error";
+import { getAuthenticatedUserId } from "../../../utils/request-auth.util";
 import { faqService } from "./faq.service";
 import type { CreateFaqInput, FaqIdParam, ListFaqQuery, UpdateFaqInput } from "./faq.type";
-
-function getAdminId(req: Request): string {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED");
-  }
-
-  return req.user.id;
-}
 
 export const faqController = {
   // POST /api/admin/faqs
   createFaq: async (req: Request, res: Response) => {
     const faq = await faqService.createFaq({
-      authorId: getAdminId(req),
+      authorId: getAuthenticatedUserId(req),
       input: req.body as CreateFaqInput,
     });
 

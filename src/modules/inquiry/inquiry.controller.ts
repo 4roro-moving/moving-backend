@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { AppError } from "../../lib/app-error";
+import { getAuthenticatedUserId } from "../../utils/request-auth.util";
 import { adminInquiryService, inquiryService } from "./inquiry.service";
 import type {
   AdminListInquiryQuery,
@@ -10,14 +10,6 @@ import type {
   ListInquiryQuery,
 } from "./inquiry.type";
 
-function getUserId(req: Request): string {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED");
-  }
-
-  return req.user.id;
-}
-
 // ============================================================================
 // 사용자 컨트롤러
 // ============================================================================
@@ -26,7 +18,7 @@ export const inquiryController = {
   // POST /api/inquiries
   createInquiry: async (req: Request, res: Response) => {
     const inquiry = await inquiryService.createInquiry(
-      getUserId(req),
+      getAuthenticatedUserId(req),
       req.body as CreateInquiryInput,
     );
 
@@ -37,7 +29,7 @@ export const inquiryController = {
   getMyInquiryList: async (req: Request, res: Response) => {
     const query = res.locals.query as ListInquiryQuery;
 
-    const result = await inquiryService.getMyInquiryList(getUserId(req), query);
+    const result = await inquiryService.getMyInquiryList(getAuthenticatedUserId(req), query);
 
     res.status(200).json({
       success: true,
@@ -50,7 +42,7 @@ export const inquiryController = {
   getMyInquiryById: async (req: Request, res: Response) => {
     const { inquiryId } = res.locals.params as InquiryIdParam;
 
-    const inquiry = await inquiryService.getMyInquiryById(inquiryId, getUserId(req));
+    const inquiry = await inquiryService.getMyInquiryById(inquiryId, getAuthenticatedUserId(req));
 
     res.status(200).json({ success: true, data: inquiry });
   },
@@ -61,7 +53,7 @@ export const inquiryController = {
 
     const inquiry = await inquiryService.addUserMessage(
       inquiryId,
-      getUserId(req),
+      getAuthenticatedUserId(req),
       req.body as CreateMessageInput,
     );
 
@@ -72,7 +64,7 @@ export const inquiryController = {
   closeInquiry: async (req: Request, res: Response) => {
     const { inquiryId } = res.locals.params as InquiryIdParam;
 
-    const inquiry = await inquiryService.closeByUser(inquiryId, getUserId(req));
+    const inquiry = await inquiryService.closeByUser(inquiryId, getAuthenticatedUserId(req));
 
     res.status(200).json({ success: true, data: inquiry });
   },
@@ -111,7 +103,7 @@ export const adminInquiryController = {
 
     const inquiry = await adminInquiryService.answer(
       inquiryId,
-      getUserId(req),
+      getAuthenticatedUserId(req),
       req.body as CreateMessageInput,
     );
 

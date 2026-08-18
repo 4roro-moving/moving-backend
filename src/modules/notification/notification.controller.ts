@@ -1,6 +1,6 @@
 import type { RequestHandler } from "express";
 
-import { AppError } from "../../lib/app-error";
+import { assertAuthenticated } from "../../utils/request-auth.util";
 
 import { notificationService } from "./notification.service";
 
@@ -13,11 +13,7 @@ import type { NotificationIdParam, NotificationListQuery } from "./notification.
  * res.locals.query에서 조회하여 Service로 전달한다.
  */
 const getNotifications: RequestHandler = async (req, res) => {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED", {
-      message: "인증이 필요합니다.",
-    });
-  }
+  assertAuthenticated(req);
 
   const { page, limit } = res.locals.query as NotificationListQuery;
 
@@ -35,11 +31,7 @@ const getNotifications: RequestHandler = async (req, res) => {
  * 읽지 않은 알림 개수를 조회한다.
  */
 const getUnreadCount: RequestHandler = async (req, res) => {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED", {
-      message: "인증이 필요합니다.",
-    });
-  }
+  assertAuthenticated(req);
 
   const data = await notificationService.getUnreadCount(req.user.id);
 
@@ -58,11 +50,7 @@ const getUnreadCount: RequestHandler = async (req, res) => {
  * res.locals.params에서 조회하여 Service로 전달한다.
  */
 const readNotification: RequestHandler = async (req, res) => {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED", {
-      message: "인증이 필요합니다.",
-    });
-  }
+  assertAuthenticated(req);
 
   const { notificationId } = res.locals.params as NotificationIdParam;
 
@@ -80,11 +68,7 @@ const readNotification: RequestHandler = async (req, res) => {
  * 모든 미읽음 알림을 읽음 처리한다.
  */
 const readAllNotifications: RequestHandler = async (req, res) => {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED", {
-      message: "인증이 필요합니다.",
-    });
-  }
+  assertAuthenticated(req);
 
   const data = await notificationService.readAllNotifications(req.user.id);
 

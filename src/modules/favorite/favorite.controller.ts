@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 
-import { AppError } from "../../lib/app-error";
+import { getAuthenticatedUserId } from "../../utils/request-auth.util";
 import { sendResponse } from "../../utils/response.util";
 import { favoriteService } from "./favorite.service";
 import type {
@@ -9,21 +9,13 @@ import type {
   ListFavoriteMoverQuery,
 } from "./favorite.type";
 
-function getCustomerId(req: Request): string {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED");
-  }
-
-  return req.user.id;
-}
-
 export const favoriteController = {
   // GET /api/favorites/movers
   getFavoriteMoverList: async (req: Request, res: Response) => {
     const query = res.locals.query as ListFavoriteMoverQuery;
 
     const result = await favoriteService.getFavoriteMoverList({
-      customerId: getCustomerId(req),
+      customerId: getAuthenticatedUserId(req),
       cursor: query.cursor,
       limit: query.limit,
     });
@@ -38,7 +30,7 @@ export const favoriteController = {
     const body = req.body as BulkDeleteFavoriteMoversBody;
 
     const result = await favoriteService.deleteFavoriteMovers({
-      customerId: getCustomerId(req),
+      customerId: getAuthenticatedUserId(req),
       moverIds: body.moverIds,
       all: body.all,
       excludedIds: body.excludedIds,
@@ -52,7 +44,7 @@ export const favoriteController = {
     const { moverId } = res.locals.params as FavoriteMoverParam;
 
     const { isNew, ...favoriteMover } = await favoriteService.createFavoriteMover({
-      customerId: getCustomerId(req),
+      customerId: getAuthenticatedUserId(req),
       moverId,
     });
 
@@ -65,7 +57,7 @@ export const favoriteController = {
     const { moverId } = res.locals.params as FavoriteMoverParam;
 
     const favoriteMover = await favoriteService.deleteFavoriteMover({
-      customerId: getCustomerId(req),
+      customerId: getAuthenticatedUserId(req),
       moverId,
     });
 

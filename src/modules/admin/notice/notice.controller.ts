@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { AppError } from "../../../lib/app-error";
+import { getAuthenticatedUserId } from "../../../utils/request-auth.util";
 import { noticeService } from "./notice.service";
 import type {
   CreateNoticeInput,
@@ -8,19 +8,11 @@ import type {
   UpdateNoticeInput,
 } from "./notice.type";
 
-function getAdminId(req: Request): string {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED");
-  }
-
-  return req.user.id;
-}
-
 export const noticeController = {
   // POST /api/admin/notices
   createNotice: async (req: Request, res: Response) => {
     const notice = await noticeService.createNotice({
-      authorId: getAdminId(req),
+      authorId: getAuthenticatedUserId(req),
       input: req.body as CreateNoticeInput,
     });
 
