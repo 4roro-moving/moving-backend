@@ -63,7 +63,10 @@ type RegionReviewStatisticValues = {
 function findRegionById(regionId: number, db: DbClient = prisma) {
   return db.region.findUnique({
     where: { id: regionId },
-    select: { id: true },
+    select: {
+      id: true,
+      name: true,
+    },
   });
 }
 
@@ -156,6 +159,23 @@ function aggregateVisibleRatingByRegion(regionId: number, db: DbClient = prisma)
   });
 }
 
+function findRegionReviewStatisticByRegionId(regionId: number, db: DbClient = prisma) {
+  return db.regionReviewStatistic.findUnique({
+    where: { regionId },
+    select: {
+      ratingSum: true,
+      reviewCount: true,
+      averageRating: true,
+      region: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    },
+  });
+}
+
 function upsertRegionReviewStatistic(
   { regionId, ratingSum, reviewCount, averageRating }: RegionReviewStatisticValues,
   db: DbClient = prisma,
@@ -188,5 +208,6 @@ export const residenceReviewRepository = {
   updateResidenceReview,
   deleteResidenceReview,
   aggregateVisibleRatingByRegion,
+  findRegionReviewStatisticByRegionId,
   upsertRegionReviewStatistic,
 };

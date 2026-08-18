@@ -111,6 +111,13 @@ export const residenceReviewIdParamSchema = z.object({
     .positive(VALIDATION_MESSAGE.REVIEW_ID_POSITIVE),
 });
 
+export const regionIdParamSchema = z.object({
+  regionId: z.coerce
+    .number({ error: VALIDATION_MESSAGE.REGION_ID_NUMBER })
+    .int(VALIDATION_MESSAGE.REGION_ID_INT)
+    .positive(VALIDATION_MESSAGE.REGION_ID_POSITIVE),
+});
+
 export const listResidenceReviewQuerySchema = z.object({
   page: pageSchema,
   limit: limitSchema,

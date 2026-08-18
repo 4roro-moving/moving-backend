@@ -9,6 +9,7 @@ import {
   createResidenceReviewSchema,
   listMyResidenceReviewQuerySchema,
   listResidenceReviewQuerySchema,
+  regionIdParamSchema,
   residenceReviewIdParamSchema,
   updateResidenceReviewSchema,
 } from "./residence-review.validator";
@@ -25,6 +26,12 @@ publicResidenceReviewRouter.get(
   "/",
   validate({ query: listResidenceReviewQuerySchema }),
   asyncHandler(residenceReviewController.getPublicResidenceReviewList),
+);
+
+publicResidenceReviewRouter.get(
+  "/statistics/:regionId",
+  validate({ params: regionIdParamSchema }),
+  asyncHandler(residenceReviewController.getRegionReviewStatistic),
 );
 
 publicResidenceReviewRouter.get(

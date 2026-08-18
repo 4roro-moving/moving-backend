@@ -4,6 +4,7 @@ import type {
   createResidenceReviewSchema,
   listMyResidenceReviewQuerySchema,
   listResidenceReviewQuerySchema,
+  regionIdParamSchema,
   residenceReviewIdParamSchema,
   updateResidenceReviewSchema,
 } from "./residence-review.validator";
@@ -17,14 +18,10 @@ export const REGION_REVIEW_STATISTIC = {
   AVERAGE_DECIMAL_PLACES: 2,
 } as const;
 
-export const HTTP_STATUS = {
-  OK: 200,
-  CREATED: 201,
-} as const;
-
 export type CreateResidenceReviewInput = z.infer<typeof createResidenceReviewSchema>;
 export type UpdateResidenceReviewInput = z.infer<typeof updateResidenceReviewSchema>;
 export type ResidenceReviewIdParam = z.infer<typeof residenceReviewIdParamSchema>;
+export type RegionIdParam = z.infer<typeof regionIdParamSchema>;
 export type ListResidenceReviewQuery = z.infer<typeof listResidenceReviewQuerySchema>;
 export type ListMyResidenceReviewQuery = z.infer<typeof listMyResidenceReviewQuerySchema>;
 
@@ -51,4 +48,11 @@ export type PublicResidenceReview = {
 
 export type MyResidenceReview = PublicResidenceReview & {
   isHidden: boolean;
+};
+
+export type RegionReviewStatistic = {
+  region: ResidenceReviewRegion;
+  ratingSum: number;
+  reviewCount: number;
+  averageRating: number;
 };

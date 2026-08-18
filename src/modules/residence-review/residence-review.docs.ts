@@ -20,6 +20,15 @@ const RESIDENCE_REVIEW_DOCS = {
   ].join("\n"),
   PUBLIC_DETAIL_SUMMARY: "거주후기 상세 (공개)",
   PUBLIC_DETAIL_DESCRIPTION: "숨김 처리된 후기는 조회할 수 없습니다.",
+  STATISTIC_SUMMARY: "지역 거주후기 통계 (공개)",
+  STATISTIC_DESCRIPTION: [
+    "인증 없이 접근 가능합니다.",
+    "",
+    "- 해당 지역의 노출 중인(`isHidden=false`) 후기 평점 합계, 후기 수, 평균 평점을 조회합니다.",
+    "- 숨김 처리된 후기는 통계에 포함되지 않습니다.",
+    "- 후기가 없는 지역은 평점 합계 0, 후기 수 0, 평균 0으로 응답합니다.",
+    "- 평균 평점은 소수 둘째 자리까지 반올림된 값입니다.",
+  ].join("\n"),
   MY_LIST_SUMMARY: "내 거주후기 목록",
   MY_LIST_DESCRIPTION:
     "로그인한 고객이 작성한 후기를 최신순으로 조회합니다. 숨김 후기도 포함됩니다.",
@@ -50,6 +59,14 @@ registerRouterDocs(publicResidenceReviewRouter, {
       summary: RESIDENCE_REVIEW_DOCS.PUBLIC_LIST_SUMMARY,
       description: RESIDENCE_REVIEW_DOCS.PUBLIC_LIST_DESCRIPTION,
       responses: { 200: RESIDENCE_REVIEW_DOCS.LIST_SUCCESS },
+    },
+    "GET /statistics/:regionId": {
+      summary: RESIDENCE_REVIEW_DOCS.STATISTIC_SUMMARY,
+      description: RESIDENCE_REVIEW_DOCS.STATISTIC_DESCRIPTION,
+      responses: {
+        200: RESIDENCE_REVIEW_DOCS.LIST_SUCCESS,
+        400: ERROR_CODES.REGION_NOT_FOUND.message,
+      },
     },
     "GET /:residenceReviewId": {
       summary: RESIDENCE_REVIEW_DOCS.PUBLIC_DETAIL_SUMMARY,

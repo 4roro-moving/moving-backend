@@ -13,6 +13,7 @@ import type {
   ListResidenceReviewQuery,
   MyResidenceReview,
   PublicResidenceReview,
+  RegionReviewStatistic,
   UpdateResidenceReviewInput,
 } from "./residence-review.type";
 
@@ -118,6 +119,32 @@ async function getPublicResidenceReviewById(residenceReviewId: number) {
   return toPublicResidenceReview(review);
 }
 
+async function getRegionReviewStatistic(regionId: number): Promise<RegionReviewStatistic> {
+  const region = await residenceReviewRepository.findRegionById(regionId);
+
+  if (!region) {
+    throw new AppError("REGION_NOT_FOUND");
+  }
+
+  const statistic = await residenceReviewRepository.findRegionReviewStatisticByRegionId(regionId);
+
+  if (!statistic) {
+    return {
+      region,
+      ratingSum: 0,
+      reviewCount: 0,
+      averageRating: 0,
+    };
+  }
+
+  return {
+    region: statistic.region,
+    ratingSum: statistic.ratingSum,
+    reviewCount: statistic.reviewCount,
+    averageRating: Number(statistic.averageRating),
+  };
+}
+
 async function getMyResidenceReviewList(authorId: string, query: ListMyResidenceReviewQuery) {
   const { page, limit } = query;
 
@@ -215,6 +242,7 @@ async function deleteResidenceReview(residenceReviewId: number, authorId: string
 export const residenceReviewService = {
   getPublicResidenceReviewList,
   getPublicResidenceReviewById,
+  getRegionReviewStatistic,
   getMyResidenceReviewList,
   createResidenceReview,
   updateResidenceReview,
