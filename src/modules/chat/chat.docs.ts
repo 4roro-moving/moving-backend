@@ -53,5 +53,19 @@ registerRouterDocs(chatRouter, {
         200: "채팅 메시지 목록 조회 성공",
       },
     },
+    "POST /rooms/:roomId/images/upload-url": {
+      summary: "채팅 이미지 업로드 URL 발급",
+      description: [
+        "채팅 이미지 파일을 S3에 직접 업로드할 수 있는 Presigned URL을 발급합니다.",
+        "",
+        "- 로그인한 사용자가 참여 중인 채팅방에만 발급할 수 있습니다.",
+        "- 지원 형식은 image/jpeg, image/png, image/webp입니다.",
+        "- 반환된 key는 업로드용 staging key이며 이미지 메시지 전송 시 `chat:image:send` 이벤트의 `imageKey`로 사용합니다.",
+        "- 서버는 검증 후 staging 객체를 불변 final key로 복사하고 final key만 메시지에 저장합니다.",
+      ].join("\n"),
+      responses: {
+        200: "채팅 이미지 업로드 URL 발급 성공",
+      },
+    },
   },
 });
