@@ -18,13 +18,23 @@ export function assertGiveawayAuthor(giveaway: GiveawayOwnershipRow, userId: str
   }
 }
 
+export function assertGiveawayNotCompleted(giveaway: GiveawayOwnershipRow) {
+  if (giveaway.status === GIVEAWAY_STATUS.COMPLETED) {
+    throw new AppError("GIVEAWAY_ALREADY_COMPLETED");
+  }
+}
+
 export function assertGiveawayEditable(giveaway: GiveawayOwnershipRow) {
+  assertGiveawayNotCompleted(giveaway);
+
   if (giveaway.status !== GIVEAWAY_STATUS.AVAILABLE) {
     throw new AppError("GIVEAWAY_NOT_EDITABLE");
   }
 }
 
 export function assertGiveawayDeletable(giveaway: GiveawayOwnershipRow) {
+  assertGiveawayNotCompleted(giveaway);
+
   if (giveaway.status !== GIVEAWAY_STATUS.AVAILABLE) {
     throw new AppError("GIVEAWAY_NOT_DELETABLE");
   }
@@ -32,6 +42,7 @@ export function assertGiveawayDeletable(giveaway: GiveawayOwnershipRow) {
 
 export function assertCanRequestGiveaway(giveaway: GiveawayOwnershipRow, requesterId: string) {
   assertGiveawayVisible(giveaway);
+  assertGiveawayNotCompleted(giveaway);
 
   if (giveaway.authorId === requesterId) {
     throw new AppError("GIVEAWAY_SELF_REQUEST_NOT_ALLOWED");
@@ -56,11 +67,7 @@ export function assertRequestMessageEditable(
   request: GiveawayRequestRow,
   giveaway: GiveawayOwnershipRow,
 ) {
-  if (giveaway.status === GIVEAWAY_STATUS.COMPLETED) {
-    throw new AppError("GIVEAWAY_REQUEST_NOT_EDITABLE", {
-      message: "완료된 나눔의 신청은 수정할 수 없습니다.",
-    });
-  }
+  assertGiveawayNotCompleted(giveaway);
 
   if (request.status !== GIVEAWAY_REQUEST_STATUS.PENDING) {
     throw new AppError("GIVEAWAY_REQUEST_NOT_EDITABLE");
@@ -71,11 +78,7 @@ export function assertRequestCancellable(
   request: GiveawayRequestRow,
   giveaway: GiveawayOwnershipRow,
 ) {
-  if (giveaway.status === GIVEAWAY_STATUS.COMPLETED) {
-    throw new AppError("GIVEAWAY_REQUEST_CANCEL_NOT_ALLOWED", {
-      message: "완료된 나눔의 신청은 취소할 수 없습니다.",
-    });
-  }
+  assertGiveawayNotCompleted(giveaway);
 
   if (
     request.status !== GIVEAWAY_REQUEST_STATUS.PENDING &&
@@ -101,6 +104,7 @@ export function assertRequestSelectable(
   request: GiveawayRequestRow,
 ) {
   assertGiveawayVisible(giveaway);
+  assertGiveawayNotCompleted(giveaway);
 
   if (giveaway.status !== GIVEAWAY_STATUS.AVAILABLE) {
     throw new AppError("GIVEAWAY_RECEIVER_ALREADY_SELECTED");
@@ -122,6 +126,7 @@ export function assertRequestRejectable(
   request: GiveawayRequestRow,
 ) {
   assertGiveawayVisible(giveaway);
+  assertGiveawayNotCompleted(giveaway);
 
   if (request.giveawayId !== giveaway.id) {
     throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND", {

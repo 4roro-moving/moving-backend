@@ -110,22 +110,24 @@ registerRouterDocs(giveawayRouter, {
         "작성자가 PENDING 신청자를 선정합니다.",
         "같은 트랜잭션에서 신청을 SELECTED로, 글의 receiverId와 status를 IN_PROGRESS로 맞춥니다.",
         "다른 PENDING 신청은 그대로 둡니다.",
+        "완료된 나눔은 변경할 수 없습니다.",
       ].join("\n"),
       responses: {
         200: "선정 성공",
         403: "작성자가 아닙니다.",
         404: "나눔 글 또는 신청을 찾을 수 없습니다.",
-        409: "이미 선정되었거나 대기 중인 신청이 아닙니다.",
+        409: "이미 선정되었거나 완료된 나눔입니다.",
       },
     },
     "POST /:giveawayId/requests/:requestId/reject": {
       summary: "신청 거절",
-      description: "작성자가 PENDING 신청을 REJECTED로 변경합니다.",
+      description:
+        "작성자가 PENDING 신청을 REJECTED로 변경합니다. 완료된 나눔은 거절할 수 없습니다.",
       responses: {
         200: "거절 성공",
         403: "작성자가 아닙니다.",
         404: "나눔 글 또는 신청을 찾을 수 없습니다.",
-        409: "대기 중인 신청이 아닙니다.",
+        409: "대기 중인 신청이 아니거나 완료된 나눔입니다.",
       },
     },
   },
@@ -161,7 +163,7 @@ registerRouterDocs(giveawayRequestRouter, {
       description: [
         "PENDING은 CANCELLED로만 변경합니다.",
         "SELECTED 취소 시 같은 트랜잭션에서 receiverId를 비우고 글 상태를 AVAILABLE로 되돌립니다.",
-        "COMPLETED이거나 숨김된 나눔의 신청은 취소할 수 없습니다.",
+        "완료되었거나 숨김된 나눔의 신청은 취소할 수 없습니다.",
       ].join("\n"),
       responses: {
         200: "취소 성공",

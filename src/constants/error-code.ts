@@ -322,6 +322,11 @@ export const ERROR_CODES = {
     code: "GIVEAWAY_NOT_COMPLETABLE",
     message: "진행 중인 나눔만 완료할 수 있습니다.",
   },
+  GIVEAWAY_ALREADY_COMPLETED: {
+    status: 409,
+    code: "GIVEAWAY_ALREADY_COMPLETED",
+    message: "완료된 나눔은 변경할 수 없습니다.",
+  },
   GIVEAWAY_RECEIVER_ALREADY_SELECTED: {
     status: 409,
     code: "GIVEAWAY_RECEIVER_ALREADY_SELECTED",
