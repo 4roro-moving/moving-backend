@@ -130,6 +130,8 @@ function createSaveRefreshTokenStub() {
       userId: data.userId,
       tokenHash: data.tokenHash,
       sessionType: data.sessionType ?? RefreshTokenSessionType.USER,
+      familyId: data.familyId ?? null,
+      revokedReason: null,
       expiresAt: data.expiresAt instanceof Date ? data.expiresAt : new Date(data.expiresAt),
       revokedAt: null,
       createdAt: new Date(),

@@ -24,6 +24,7 @@ import estimateRequestRouter from "./modules/estimate-request/estimateRequest.ro
 import estimateRouter from "./modules/estimate/estimate.route";
 import favoriteRouter from "./modules/favorite/favorite.route";
 import moverRouter from "./modules/mover/mover.route";
+import { moverCalendarRouter } from "./modules/mover-calendar/mover-calendar.route";
 import { notificationRouter } from "./modules/notification/notification.route";
 import notificationSseRouter from "./modules/notification/notification-sse.route";
 import { profileRouter } from "./modules/profile/profile.route";
@@ -169,6 +170,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/profiles", profileRouter);
 app.use("/api/estimate-requests", estimateRequestRouter);
 app.use("/api/movers", moverRouter);
+app.use("/api/movers", moverCalendarRouter);
 app.use("/api/estimates", estimateRouter);
 app.use("/api/reviews", reviewRouter);
 app.use("/api/reports", reportRouter);
