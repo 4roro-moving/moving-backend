@@ -7,8 +7,10 @@ import {
 
 import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
+import { getImageUrl } from "../../utils/image-url";
 import { runTransaction } from "../../utils/transaction";
 import { notificationService } from "../notification/notification.service";
+import { chatImageService } from "./chat-image.service";
 import { chatRepository, type ChatMessageRow, type ChatRoomRow } from "./chat.repository";
 import type { ChatMessageResponse, ChatRoomSummary, MissedChatMessagesResponse } from "./chat.type";
 
@@ -58,6 +60,7 @@ function mapRoom(room: ChatRoomRow): ChatRoomSummary {
 
 function mapMessage(message: ChatMessageRow): ChatMessageResponse {
   const isSystemMessage = message.type === "SYSTEM";
+  const imageUrl = message.type === "IMAGE" ? getImageUrl(message.imageUrl) : message.imageUrl;
 
   return {
     id: message.id,
@@ -66,7 +69,7 @@ function mapMessage(message: ChatMessageRow): ChatMessageResponse {
     senderId: isSystemMessage ? null : message.senderId,
     type: message.type,
     content: message.content,
-    imageUrl: message.imageUrl,
+    imageUrl,
     isRead: message.isRead,
     readAt: message.readAt,
     createdAt: message.createdAt,
@@ -329,6 +332,37 @@ export const chatService = {
           roomId,
           senderId,
           content,
+        },
+        tx,
+      );
+
+      await chatRepository.updateRoomLastMessageAt(roomId, createdMessage.createdAt, tx);
+
+      return createdMessage;
+    });
+
+    return mapMessage(message);
+  },
+
+  async createImageMessageForJoinedRoom(senderId: string, roomId: number, imageKey: string) {
+    // 소켓의 chat:room:join에서 이미 권한 검증이 끝난 전송 경로입니다.
+    const room = await chatRepository.findRoomById(roomId);
+
+    if (!room) {
+      throw new AppError("NOT_FOUND", {
+        message: "채팅방을 찾을 수 없습니다.",
+      });
+    }
+
+    assertParticipant(room, senderId);
+    await chatImageService.validateUploadedImage(senderId, roomId, imageKey);
+
+    const message = await runTransaction(async (tx) => {
+      const createdMessage = await chatRepository.createImageMessage(
+        {
+          roomId,
+          senderId,
+          imageUrl: imageKey,
         },
         tx,
       );

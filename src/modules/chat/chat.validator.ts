@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { CHAT_IMAGE_CONTENT_TYPES } from "./chat-image.type";
+
 export const chatRoomParamSchema = z.object({
   roomId: z.coerce.number().int().positive("유효하지 않은 채팅방 ID입니다."),
 });
@@ -34,6 +36,23 @@ export const sendChatMessagePayloadSchema = z.object({
     .trim()
     .min(1, "메시지를 입력해주세요.")
     .max(1000, "메시지는 최대 1000자까지 입력할 수 있습니다."),
+  clientMessageId: z
+    .string()
+    .trim()
+    .min(1, "클라이언트 메시지 ID는 비어 있을 수 없습니다.")
+    .max(100, "클라이언트 메시지 ID는 최대 100자까지 입력할 수 있습니다.")
+    .optional(),
+});
+
+export const chatImageUploadUrlBodySchema = z.object({
+  contentType: z.enum(CHAT_IMAGE_CONTENT_TYPES, {
+    error: "지원하지 않는 이미지 형식입니다.",
+  }),
+});
+
+export const sendChatImageMessagePayloadSchema = z.object({
+  roomId: z.number().int().positive("유효하지 않은 채팅방 ID입니다."),
+  imageKey: z.string().trim().min(1, "이미지 Key를 입력해주세요."),
   clientMessageId: z
     .string()
     .trim()

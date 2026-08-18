@@ -192,6 +192,26 @@ export const chatRepository = {
     });
   },
 
+  createImageMessage(
+    data: {
+      roomId: number;
+      senderId: string;
+      imageUrl: string;
+    },
+    db: DbClient = prisma,
+  ) {
+    return db.chatMessage.create({
+      data: {
+        roomId: data.roomId,
+        senderId: data.senderId,
+        type: "IMAGE",
+        content: null,
+        imageUrl: data.imageUrl,
+      },
+      select: chatMessageSelect,
+    });
+  },
+
   updateRoomLastMessageAt(roomId: number, lastMessageAt: Date, db: DbClient = prisma) {
     return db.chatRoom.update({
       where: { id: roomId },

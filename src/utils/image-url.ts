@@ -1,6 +1,6 @@
 import { AppError } from "../lib/app-error";
 
-export const getProfileImageUrl = (key: string | null): string | null => {
+export const getImageUrl = (key: string | null): string | null => {
   if (!key) {
     return null;
   }
@@ -24,3 +24,5 @@ export const getProfileImageUrl = (key: string | null): string | null => {
 
   return `${normalizedDomain}/${key}`;
 };
+
+export const getProfileImageUrl = getImageUrl;

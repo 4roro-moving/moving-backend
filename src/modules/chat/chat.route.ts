@@ -5,6 +5,7 @@ import { validate } from "../../middlewares/validate";
 import { asyncHandler } from "../../utils/async-handler.util";
 import { chatController } from "./chat.controller";
 import {
+  chatImageUploadUrlBodySchema,
   chatMessageListQuerySchema,
   chatRoomParamSchema,
   createChatRoomBodySchema,
@@ -33,4 +34,13 @@ chatRouter.get(
     query: chatMessageListQuerySchema,
   }),
   asyncHandler(chatController.getMessages),
+);
+
+chatRouter.post(
+  "/rooms/:roomId/images/upload-url",
+  validate({
+    params: chatRoomParamSchema,
+    body: chatImageUploadUrlBodySchema,
+  }),
+  asyncHandler(chatController.getImageUploadUrl),
 );
