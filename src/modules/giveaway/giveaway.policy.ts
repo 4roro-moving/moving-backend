@@ -6,9 +6,7 @@ export function assertGiveawayVisible<T extends { isHidden: boolean }>(
   giveaway: T | null,
 ): asserts giveaway is T {
   if (!giveaway || giveaway.isHidden === GIVEAWAY_VISIBILITY.HIDDEN) {
-    throw new AppError("GIVEAWAY_NOT_FOUND", {
-      message: "나눔 글을 찾을 수 없습니다.",
-    });
+    throw new AppError("GIVEAWAY_NOT_FOUND");
   }
 }
 
@@ -22,17 +20,13 @@ export function assertGiveawayAuthor(giveaway: GiveawayOwnershipRow, userId: str
 
 export function assertGiveawayEditable(giveaway: GiveawayOwnershipRow) {
   if (giveaway.status !== GIVEAWAY_STATUS.AVAILABLE) {
-    throw new AppError("GIVEAWAY_NOT_EDITABLE", {
-      message: "신청 가능 상태의 나눔 글만 수정할 수 있습니다.",
-    });
+    throw new AppError("GIVEAWAY_NOT_EDITABLE");
   }
 }
 
 export function assertGiveawayDeletable(giveaway: GiveawayOwnershipRow) {
   if (giveaway.status !== GIVEAWAY_STATUS.AVAILABLE) {
-    throw new AppError("GIVEAWAY_NOT_DELETABLE", {
-      message: "신청 가능 상태의 나눔 글만 삭제할 수 있습니다.",
-    });
+    throw new AppError("GIVEAWAY_NOT_DELETABLE");
   }
 }
 
@@ -40,9 +34,7 @@ export function assertCanRequestGiveaway(giveaway: GiveawayOwnershipRow, request
   assertGiveawayVisible(giveaway);
 
   if (giveaway.authorId === requesterId) {
-    throw new AppError("GIVEAWAY_SELF_REQUEST_NOT_ALLOWED", {
-      message: "본인이 작성한 나눔 글에는 신청할 수 없습니다.",
-    });
+    throw new AppError("GIVEAWAY_SELF_REQUEST_NOT_ALLOWED");
   }
 
   if (giveaway.status !== GIVEAWAY_STATUS.AVAILABLE) {
@@ -62,9 +54,7 @@ export function assertRequestOwner(request: GiveawayRequestRow, requesterId: str
 
 export function assertRequestMessageEditable(request: GiveawayRequestRow) {
   if (request.status !== GIVEAWAY_REQUEST_STATUS.PENDING) {
-    throw new AppError("GIVEAWAY_REQUEST_NOT_EDITABLE", {
-      message: "대기 중인 신청만 메시지를 수정할 수 있습니다.",
-    });
+    throw new AppError("GIVEAWAY_REQUEST_NOT_EDITABLE");
   }
 }
 
@@ -98,9 +88,7 @@ export function assertRequestSelectable(
   assertGiveawayVisible(giveaway);
 
   if (giveaway.status !== GIVEAWAY_STATUS.AVAILABLE) {
-    throw new AppError("GIVEAWAY_RECEIVER_ALREADY_SELECTED", {
-      message: "이미 수령자가 선정된 나눔입니다.",
-    });
+    throw new AppError("GIVEAWAY_RECEIVER_ALREADY_SELECTED");
   }
 
   if (request.giveawayId !== giveaway.id) {
@@ -110,9 +98,7 @@ export function assertRequestSelectable(
   }
 
   if (request.status !== GIVEAWAY_REQUEST_STATUS.PENDING) {
-    throw new AppError("GIVEAWAY_REQUEST_NOT_SELECTABLE", {
-      message: "대기 중인 신청만 선정할 수 있습니다.",
-    });
+    throw new AppError("GIVEAWAY_REQUEST_NOT_SELECTABLE");
   }
 }
 
@@ -127,16 +113,12 @@ export function assertRequestRejectable(
   }
 
   if (request.status !== GIVEAWAY_REQUEST_STATUS.PENDING) {
-    throw new AppError("GIVEAWAY_REQUEST_NOT_REJECTABLE", {
-      message: "대기 중인 신청만 거절할 수 있습니다.",
-    });
+    throw new AppError("GIVEAWAY_REQUEST_NOT_REJECTABLE");
   }
 }
 
 export function assertGiveawayCompletable(giveaway: GiveawayOwnershipRow) {
   if (giveaway.status !== GIVEAWAY_STATUS.IN_PROGRESS || !giveaway.receiverId) {
-    throw new AppError("GIVEAWAY_NOT_COMPLETABLE", {
-      message: "진행 중인 나눔만 완료할 수 있습니다.",
-    });
+    throw new AppError("GIVEAWAY_NOT_COMPLETABLE");
   }
 }

@@ -44,5 +44,3 @@ export const createGiveawayImageUploadUrlSchema = z.strictObject({
       error: `나눔 이미지는 ${String(GIVEAWAY_IMAGE.MAX_SIZE / (1024 * 1024))}MB 이하여야 합니다.`,
     }),
 });
-
-export type CreateGiveawayImageUploadUrlBody = z.infer<typeof createGiveawayImageUploadUrlSchema>;
