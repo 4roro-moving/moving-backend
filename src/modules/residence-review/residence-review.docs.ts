@@ -62,6 +62,9 @@ const RESIDENCE_REVIEW_DOCS = {
 registerRouterDocs(publicResidenceReviewRouter, {
   basePath: "/api/residence-reviews",
   tag: RESIDENCE_REVIEW_DOCS.TAG_PUBLIC,
+  commonResponses: {
+    422: ERROR_CODES.VALIDATION_ERROR.message,
+  },
   endpoints: {
     "GET /": {
       summary: RESIDENCE_REVIEW_DOCS.PUBLIC_LIST_SUMMARY,
