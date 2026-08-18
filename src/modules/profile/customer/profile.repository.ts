@@ -19,6 +19,29 @@ interface UpdateCustomerProfileData {
   imageUrl?: string | null;
 }
 
+const profileInclude = {
+  user: {
+    select: {
+      name: true,
+      email: true,
+      phone: true,
+    },
+  },
+  serviceAreas: {
+    include: {
+      region: true,
+    },
+    orderBy: {
+      regionId: "asc",
+    },
+  },
+  serviceTypes: {
+    orderBy: {
+      id: "asc",
+    },
+  },
+} as const;
+
 const findUserById = async (userId: string, db: DbClient = prisma) => {
   return db.user.findUnique({
     where: {
@@ -56,6 +79,19 @@ const findUserWithPasswordById = async (userId: string, db: DbClient = prisma) =
   });
 };
 
+const hasPasswordByUserId = async (userId: string, db: DbClient = prisma): Promise<boolean> => {
+  const user = await db.user.findUnique({
+    where: {
+      id: userId,
+    },
+    select: {
+      password: true,
+    },
+  });
+
+  return user?.password !== null;
+};
+
 const findUserByPhoneExcludingUser = async (
   phone: string,
   userId: string,
@@ -79,29 +115,7 @@ const findProfileByUserId = async (userId: string, db: DbClient = prisma) => {
     where: {
       userId,
     },
-    include: {
-      user: {
-        select: {
-          name: true,
-          email: true,
-          phone: true,
-          password: true,
-        },
-      },
-      serviceAreas: {
-        include: {
-          region: true,
-        },
-        orderBy: {
-          regionId: "asc",
-        },
-      },
-      serviceTypes: {
-        orderBy: {
-          id: "asc",
-        },
-      },
-    },
+    include: profileInclude,
   });
 };
 
@@ -140,29 +154,7 @@ const createProfile = async (
         })),
       },
     },
-    include: {
-      user: {
-        select: {
-          name: true,
-          email: true,
-          phone: true,
-          password: true,
-        },
-      },
-      serviceAreas: {
-        include: {
-          region: true,
-        },
-        orderBy: {
-          regionId: "asc",
-        },
-      },
-      serviceTypes: {
-        orderBy: {
-          id: "asc",
-        },
-      },
-    },
+    include: profileInclude,
   });
 };
 
@@ -256,6 +248,7 @@ const markProfileCompleted = async (userId: string, db: DbClient = prisma) => {
 export const profileRepository = {
   findUserById,
   findUserWithPasswordById,
+  hasPasswordByUserId,
   findUserByPhoneExcludingUser,
   findProfileByUserId,
   countRegionsByIds,

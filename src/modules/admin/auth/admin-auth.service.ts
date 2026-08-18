@@ -12,6 +12,8 @@ import { createAccessToken, createRefreshToken, verifyRefreshToken } from "../..
 import { tokenHash } from "../../../utils/tokenHash";
 import { runTransaction } from "../../../utils/transaction";
 
+const DUMMY_PASSWORD_HASH = "$2b$10$CxtIUUg2JDRWy.TYdu0y0e9bahGlNcJg2F78GaW9lRboxNL/OZpE6";
+
 /**
  * Access Token과 Refresh Token을 발급하고,
  * Refresh Token의 만료 시각을 계산한다.
@@ -62,11 +64,15 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
   const user = await adminAuthRepository.findByEmailForLogin(email);
 
   /*
-   * 존재하지 않는 이메일, 일반 사용자 계정,
-   * OAuth 계정, 잘못된 비밀번호에는 동일한 메시지를 사용하여
-   * 관리자 계정 존재 여부 노출을 줄인다.
+   * 존재하지 않는 이메일도 실제 비밀번호 검증과 유사한
+   * bcrypt 연산 비용을 발생시키도록 Dummy Hash를 비교한다.
+   *
+   * 존재하지 않는 계정과 잘못된 비밀번호 요청 사이의
+   * 응답 시간 차이를 완화하여 계정 존재 여부 추측을 어렵게 한다.
    */
   if (!user) {
+    await bcrypt.compare(input.password, DUMMY_PASSWORD_HASH);
+
     throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
     });
@@ -74,9 +80,14 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
 
   /*
    * 일반 사용자 계정으로 관리자 로그인 API를 호출하더라도
-   * 관리자 계정 여부가 드러나지 않도록 동일한 401 응답을 반환한다.
+   * 관리자 계정 여부가 드러나지 않도록 동일한 401을 반환한다.
+   *
+   * 이 경우에도 Dummy Hash 비교를 수행하여
+   * 실제 관리자 비밀번호 검증과의 Timing 차이를 완화한다.
    */
   if (user.role !== UserRole.ADMIN) {
+    await bcrypt.compare(input.password, DUMMY_PASSWORD_HASH);
+
     throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
     });
@@ -99,8 +110,13 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
    *
    * OAuth 계정 여부가 노출되지 않도록
    * 잘못된 인증 정보와 동일한 응답을 반환한다.
+   *
+   * bcrypt 연산 여부에 따른 Timing 차이를 줄이기 위해
+   * Dummy Hash를 대상으로 비교 연산을 수행한다.
    */
   if (user.authProvider !== AuthProvider.LOCAL || !user.password) {
+    await bcrypt.compare(input.password, DUMMY_PASSWORD_HASH);
+
     throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
     });

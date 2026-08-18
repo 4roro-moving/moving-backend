@@ -12,6 +12,12 @@ export const ERROR_CODES = {
     message: "인증이 필요합니다.",
   },
 
+  AUTH_ROLE_MISMATCH: {
+    status: 403,
+    code: "AUTH_ROLE_MISMATCH",
+    message: "선택한 회원 유형과 계정의 회원 유형이 일치하지 않습니다.",
+  },
+
   FORBIDDEN: {
     status: 403,
     code: "FORBIDDEN",
@@ -34,6 +40,12 @@ export const ERROR_CODES = {
     status: 409,
     code: "CONFLICT",
     message: "이미 존재하는 데이터입니다.",
+  },
+
+  TOO_MANY_REQUESTS: {
+    status: 429,
+    code: "TOO_MANY_REQUESTS",
+    message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
   },
 
   INTERNAL_SERVER_ERROR: {
@@ -113,6 +125,18 @@ export const ERROR_CODES = {
     status: 409,
     code: "MOVER_PROFILE_REQUIRED",
     message: "프로필 정보가 없는 기사의 견적은 확정할 수 없습니다.",
+  },
+
+  MOVER_DATE_OFF: {
+    status: 409,
+    code: "MOVER_DATE_OFF",
+    message: "기사가 휴무로 지정한 날짜입니다.",
+  },
+
+  MOVER_DATE_FULL: {
+    status: 409,
+    code: "MOVER_DATE_FULL",
+    message: "이미 확정된 일정이 있는 날짜입니다.",
   },
 
   ALREADY_DESIGNATED: {
@@ -261,6 +285,16 @@ export const ERROR_CODES = {
     status: 409,
     code: "CUSTOMER_STATUS_ALREADY_PROCESSED",
     message: "이미 요청한 상태로 처리된 회원입니다.",
+  },
+  DESIGNATION_ALREADY_REJECTED: {
+    status: 409,
+    code: "DESIGNATION_ALREADY_REJECTED",
+    message: "이미 해당 견적 요청을 반려한 기사님입니다.",
+  },
+  ADMIN_ESTIMATE_CANCEL_NOT_ALLOWED: {
+    status: 409,
+    code: "ADMIN_ESTIMATE_CANCEL_NOT_ALLOWED",
+    message: "확정된 진행 거래만 관리자가 취소할 수 있습니다.",
   },
 } as const;
 

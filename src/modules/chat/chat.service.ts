@@ -5,8 +5,10 @@ import {
   type UserRole,
 } from "@prisma/client";
 
+import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { runTransaction } from "../../utils/transaction";
+import { notificationService } from "../notification/notification.service";
 import { chatRepository, type ChatMessageRow, type ChatRoomRow } from "./chat.repository";
 import type { ChatMessageResponse, ChatRoomSummary, MissedChatMessagesResponse } from "./chat.type";
 
@@ -55,17 +57,20 @@ function mapRoom(room: ChatRoomRow): ChatRoomSummary {
 }
 
 function mapMessage(message: ChatMessageRow): ChatMessageResponse {
+  const isSystemMessage = message.type === "SYSTEM";
+
   return {
     id: message.id,
     roomId: message.roomId,
-    senderId: message.senderId,
+    // 이전 데이터에 관리자 senderId가 남아 있더라도 SYSTEM 응답은 발신자 없이 통일합니다.
+    senderId: isSystemMessage ? null : message.senderId,
     type: message.type,
     content: message.content,
     imageUrl: message.imageUrl,
     isRead: message.isRead,
     readAt: message.readAt,
     createdAt: message.createdAt,
-    sender: toParticipant(message.sender),
+    sender: isSystemMessage || !message.sender ? null : toParticipant(message.sender),
   };
 }
 
@@ -95,6 +100,30 @@ function isChatRoomUniqueError(error: unknown): boolean {
   return hasEstimateId || (hasEstimateRequestId && hasMoverId);
 }
 
+function isNotificationUniqueError(error: unknown): boolean {
+  if (!(error instanceof Prisma.PrismaClientKnownRequestError)) {
+    return false;
+  }
+
+  if (error.code !== "P2002") {
+    return false;
+  }
+
+  const target = error.meta?.target;
+
+  if (!Array.isArray(target)) {
+    return false;
+  }
+
+  const normalizedTarget = target.map(String);
+
+  const hasUserId = normalizedTarget.includes("userId") || normalizedTarget.includes("user_id");
+  const hasSourceId =
+    normalizedTarget.includes("sourceId") || normalizedTarget.includes("source_id");
+
+  return hasUserId && normalizedTarget.includes("type") && hasSourceId;
+}
+
 function assertChatRoomCreatable(estimate: {
   status: EstimateStatus;
   estimateRequest: {
@@ -112,6 +141,27 @@ function assertChatRoomCreatable(estimate: {
       message: "종료된 견적 요청은 채팅방을 생성할 수 없습니다.",
     });
   }
+}
+
+function getMessageNotificationContext(
+  room: Pick<ChatRoomRow, "estimateId" | "customerId" | "moverId" | "customer" | "mover">,
+  senderId: string,
+) {
+  assertParticipant(room, senderId);
+
+  if (room.customerId === senderId) {
+    return {
+      receiverId: room.moverId,
+      senderName: room.customer.name,
+      linkUrl: `/estimate/sent/${String(room.estimateId)}?chat=open`,
+    };
+  }
+
+  return {
+    receiverId: room.customerId,
+    senderName: room.mover.moverProfile?.nickname ?? room.mover.name,
+    linkUrl: `/estimates/pending/${String(room.estimateId)}?chat=open`,
+  };
 }
 
 export const chatService = {
@@ -263,6 +313,15 @@ export const chatService = {
 
   async createTextMessageForJoinedRoom(senderId: string, roomId: number, content: string) {
     // 소켓의 chat:room:join에서 이미 권한 검증이 끝난 전송 경로입니다.
+    const room = await chatRepository.findRoomById(roomId);
+
+    if (!room) {
+      throw new AppError("NOT_FOUND", {
+        message: "채팅방을 찾을 수 없습니다.",
+      });
+    }
+
+    assertParticipant(room, senderId);
 
     const message = await runTransaction(async (tx) => {
       const createdMessage = await chatRepository.createTextMessage(
@@ -280,5 +339,58 @@ export const chatService = {
     });
 
     return mapMessage(message);
+  },
+
+  async createMessageReceivedNotification(params: {
+    roomId: number;
+    senderId: string;
+    messageId: number;
+    skip: boolean;
+  }): Promise<void> {
+    if (params.skip) {
+      return;
+    }
+
+    try {
+      const room = await chatRepository.findRoomById(params.roomId);
+
+      if (!room) {
+        logger.error("Failed to create CHAT_MESSAGE_RECEIVED notification.", {
+          reason: "CHAT_ROOM_NOT_FOUND",
+          roomId: params.roomId,
+          messageId: params.messageId,
+          senderId: params.senderId,
+        });
+        return;
+      }
+
+      const { receiverId, senderName, linkUrl } = getMessageNotificationContext(
+        room,
+        params.senderId,
+      );
+
+      const notification = await notificationService.createNotification({
+        userId: receiverId,
+        type: "CHAT_MESSAGE_RECEIVED",
+        title: "새 메시지",
+        content: senderName,
+        linkUrl,
+        sourceId: `chat-message:${params.messageId}`,
+        expiresAt: null,
+      });
+
+      notificationService.sendNotification(receiverId, notification);
+    } catch (error) {
+      if (isNotificationUniqueError(error)) {
+        return;
+      }
+
+      logger.error("Failed to create CHAT_MESSAGE_RECEIVED notification.", {
+        error,
+        roomId: params.roomId,
+        messageId: params.messageId,
+        senderId: params.senderId,
+      });
+    }
   },
 };

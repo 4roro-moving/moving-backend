@@ -1,0 +1,103 @@
+import {
+  toMemberDetailAccount,
+  toMemberListBase,
+  toMemberSuspensionHistoryItem,
+} from "../member.mapper";
+import type { memberRepository } from "../member.repository";
+import type {
+  CustomerDetailRow,
+  CustomerListRow,
+  EstimateHistoryRow,
+  ReportHistoryRow,
+  ReviewHistoryRow,
+  customersRepository,
+} from "./customers.repository";
+import type { CustomerDetail, CustomerListItem } from "./customers.type";
+
+export function toCustomerListItem(customer: CustomerListRow): CustomerListItem {
+  return {
+    ...toMemberListBase(customer),
+    authProvider: customer.authProvider,
+  };
+}
+
+function toEstimateHistoryItem(item: EstimateHistoryRow) {
+  return {
+    id: item.id,
+    moveType: item.moveType,
+    status: item.status,
+    moveDate: item.moveDate,
+    createdAt: item.createdAt,
+  };
+}
+
+function toReviewHistoryItem(item: ReviewHistoryRow) {
+  return {
+    id: item.id,
+    moverId: item.moverId,
+    moverNickname: item.mover.moverProfile?.nickname ?? item.mover.name,
+    rating: item.rating,
+    content: item.content,
+    isHidden: item.isHidden,
+    createdAt: item.createdAt,
+  };
+}
+
+function toReportHistoryItem(item: ReportHistoryRow) {
+  return {
+    id: item.id,
+    targetType: item.targetType,
+    targetId: item.targetId,
+    reason: item.reason,
+    status: item.status,
+    createdAt: item.createdAt,
+  };
+}
+
+type CustomerDetailHistories = {
+  estimateHistory: Awaited<ReturnType<typeof customersRepository.findEstimateHistory>>;
+  reviewHistory: Awaited<ReturnType<typeof customersRepository.findReviewHistory>>;
+  filedReports: Awaited<ReturnType<typeof customersRepository.findFiledReportHistory>>;
+  receivedReports: Awaited<ReturnType<typeof customersRepository.findReceivedReportHistory>>;
+  suspensionHistory: Awaited<ReturnType<typeof memberRepository.findSuspensionHistory>>;
+};
+
+export function toCustomerDetail(
+  customer: CustomerDetailRow,
+  histories: CustomerDetailHistories,
+): CustomerDetail {
+  // 프로필을 등록하지 않은 고객은 null/빈 배열로 반환
+  const profile = customer.customerProfile;
+
+  return {
+    account: toMemberDetailAccount(customer),
+    profile: {
+      imageUrl: profile?.imageUrl ?? null,
+      serviceAreas: profile?.serviceAreas.map((area) => area.region.name) ?? [],
+      serviceTypes: profile?.serviceTypes.map((type) => type.moveType) ?? [],
+    },
+    estimateHistory: {
+      totalCount: histories.estimateHistory.totalCount,
+      items: histories.estimateHistory.items.map(toEstimateHistoryItem),
+    },
+    reviewHistory: {
+      totalCount: histories.reviewHistory.totalCount,
+      items: histories.reviewHistory.items.map(toReviewHistoryItem),
+    },
+    reportHistory: {
+      // filed: 고객이 신고한 내역, received: 고객이 작성한 리뷰가 신고된 내역
+      filed: {
+        totalCount: histories.filedReports.totalCount,
+        items: histories.filedReports.items.map(toReportHistoryItem),
+      },
+      received: {
+        totalCount: histories.receivedReports.totalCount,
+        items: histories.receivedReports.items.map(toReportHistoryItem),
+      },
+    },
+    suspensionHistory: {
+      totalCount: histories.suspensionHistory.totalCount,
+      items: histories.suspensionHistory.items.map(toMemberSuspensionHistoryItem),
+    },
+  };
+}

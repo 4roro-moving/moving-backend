@@ -4,6 +4,7 @@ import app from "./app.js";
 import { env } from "./config/env";
 import logger from "./config/logger";
 import { startNotificationCleanupJob } from "./jobs/notification-cleanup.job";
+import { startRefreshTokenCleanupJob } from "./jobs/refresh-token-cleanup.job";
 import { prisma } from "./lib/prisma";
 import { notificationSseService } from "./modules/notification/notification-sse.service";
 import { closeSocketServer, initializeSocket } from "./socket";
@@ -84,6 +85,14 @@ async function bootstrap() {
        * 만료 후 90일이 지난 알림을 영구 삭제한다.
        */
       startNotificationCleanupJob();
+
+      /*
+       * 만료 Refresh Token 정리 배치 작업을 등록한다.
+       *
+       * 매일 새벽 3시(KST)에 실행되어
+       * 만료 후 30일이 지난 Refresh Token을 영구 삭제한다.
+       */
+      startRefreshTokenCleanupJob();
     });
 
     initializeSocket(server);

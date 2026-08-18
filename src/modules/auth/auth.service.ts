@@ -24,6 +24,10 @@ import { tokenHash } from "../../utils/tokenHash";
 import { runTransaction } from "../../utils/transaction";
 
 const PASSWORD_SALT_ROUNDS = 10;
+const REFRESH_TOKEN_RETENTION_DAYS = 30;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+const DUMMY_PASSWORD_HASH = "$2b$10$CxtIUUg2JDRWy.TYdu0y0e9bahGlNcJg2F78GaW9lRboxNL/OZpE6";
 
 const getAuthProviderName = (provider: AuthProvider): string => {
   const providerNames: Record<AuthProvider, string> = {
@@ -217,28 +221,30 @@ const signUpMover = async (input: SignUpInput): Promise<AuthResponse> => {
   return createLocalUser(input, UserRole.MOVER);
 };
 
-/*
+/**
  * 로컬 로그인
  */
 const login = async (input: LoginInput): Promise<AuthResponse> => {
-  /*
+  /**
    * 회원가입과 동일한 방식으로 이메일을 정규화한다.
    */
   const email = input.email.trim().toLowerCase();
 
   const user = await authRepository.findByEmail(email);
 
-  /*
+  /**
    * 존재하지 않는 이메일과 잘못된 비밀번호에
    * 동일한 메시지를 사용하여 계정 존재 여부 노출을 줄인다.
    */
   if (!user) {
+    await bcrypt.compare(input.password, DUMMY_PASSWORD_HASH);
+
     throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
     });
   }
 
-  /*
+  /**
    * 비활성화되었거나 탈퇴 처리된 사용자는
    * 새로운 로그인 세션을 생성할 수 없다.
    */
@@ -252,11 +258,13 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
     });
   }
 
-  /*
+  /**
    * OAuth로 가입한 사용자는 로컬 비밀번호 로그인을
    * 사용할 수 없도록 막는다.
    */
   if (user.authProvider !== AuthProvider.LOCAL || !user.password) {
+    await bcrypt.compare(input.password, DUMMY_PASSWORD_HASH);
+
     throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
     });
@@ -270,9 +278,23 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
     });
   }
 
+  /**
+   * 이메일과 비밀번호 인증이 정상적으로 완료된 이후
+   * 요청한 로그인 역할과 DB의 실제 사용자 역할을 검증한다.
+   *
+   * 클라이언트가 전달한 role은 로그인 경로의 기대 역할을
+   * 확인하기 위한 값으로만 사용한다.
+   *
+   * 실제 권한 및 JWT에 포함되는 role은
+   * DB의 user.role을 기준으로 한다.
+   */
+  if (user.role !== input.role) {
+    throw new AppError("AUTH_ROLE_MISMATCH");
+  }
+
   const { accessToken, refreshToken, refreshTokenExpiresAt } = createAuthTokens(user.id, user.role);
 
-  /*
+  /**
    * 다중 로그인을 허용하므로 기존 Refresh Token을
    * 덮어쓰지 않고 새로운 로그인 세션을 추가한다.
    *
@@ -314,7 +336,10 @@ type OAuthUser = NonNullable<
   Awaited<ReturnType<typeof authRepository.findByProviderAndProviderId>>
 >;
 
-const createOAuthLoginResponse = async (user: OAuthUser): Promise<AuthResponse> => {
+const createOAuthLoginResponse = async (
+  user: OAuthUser,
+  requestedRole: SignUpRole,
+): Promise<AuthResponse> => {
   if (!user.isActive && user.deletedAt === null) {
     throw new AppError("ACCOUNT_SUSPENDED");
   }
@@ -323,6 +348,17 @@ const createOAuthLoginResponse = async (user: OAuthUser): Promise<AuthResponse> 
     throw new AppError("FORBIDDEN", {
       message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
     });
+  }
+
+  /*
+   * OAuth Provider 인증이 완료된 기존 회원에 대해서도
+   * 요청한 로그인 역할과 DB의 실제 사용자 역할을 검증한다.
+   *
+   * 역할이 일치하지 않으면 토큰을 발급하지 않는다.
+   * 실제 권한 및 JWT에 포함되는 role은 DB의 user.role을 기준으로 한다.
+   */
+  if (user.role !== requestedRole) {
+    throw new AppError("AUTH_ROLE_MISMATCH");
   }
 
   const { accessToken, refreshToken, refreshTokenExpiresAt } = createAuthTokens(user.id, user.role);
@@ -369,10 +405,10 @@ const loginWithOAuth = async (
 
   /*
    * 이미 OAuth 계정이 존재하는 경우
-   * 요청으로 전달받은 role은 무시하고 DB에 저장된 role을 사용한다.
+   * 요청 role과 DB의 실제 role이 일치하는지 확인한 뒤 로그인한다.
    */
   if (existingOAuthUser) {
-    return createOAuthLoginResponse(existingOAuthUser);
+    return createOAuthLoginResponse(existingOAuthUser, requestedRole);
   }
 
   const email = profile.email.trim().toLowerCase();
@@ -453,7 +489,7 @@ const loginWithOAuth = async (
       );
 
       if (concurrentOAuthUser) {
-        return createOAuthLoginResponse(concurrentOAuthUser);
+        return createOAuthLoginResponse(concurrentOAuthUser, requestedRole);
       }
 
       /*
@@ -659,6 +695,21 @@ const refresh = async (currentRefreshToken: string): Promise<RefreshResponse> =>
 };
 
 /*
+ * 만료 후 보존 기간이 지난 Refresh Token 세션을 영구 삭제한다.
+ *
+ * 삭제 기준은 revokedAt이 아니라 expiresAt을 사용한다.
+ * 폐기된 토큰도 원래 만료 시점 이후 일정 기간 보존하여
+ * 추후 Refresh Token 재사용 탐지에 활용할 수 있도록 한다.
+ */
+const cleanupExpiredRefreshTokens = async (): Promise<number> => {
+  const cutoff = new Date(Date.now() - REFRESH_TOKEN_RETENTION_DAYS * DAY_MS);
+
+  const result = await authRepository.deleteRefreshTokensExpiredBefore(cutoff);
+
+  return result.count;
+};
+
+/*
  * 현재 로그인 세션 로그아웃
  *
  * 다중 로그인을 허용하므로 사용자의 모든 Refresh Token을
@@ -690,4 +741,5 @@ export const authService = {
   loginWithNaver,
   refresh,
   logout,
+  cleanupExpiredRefreshTokens,
 };

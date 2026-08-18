@@ -1,10 +1,12 @@
-import { EstimateRequestStatus, EstimateStatus, Prisma } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
 import { notificationService } from "../notification/notification.service";
+import { mapMoverReview, mapMyReview, mapReviewableEstimate } from "./review.mapper";
+import { assertReviewCreatable } from "./review.policy";
 import { reviewRepository } from "./review.repository";
 
 type GetMyReviewListParams = {
@@ -30,21 +32,6 @@ type CreateReviewParams = {
   rating: number;
   content: string;
 };
-
-// 리뷰 작성자 이메일 로컬 파트 마스킹
-function maskEmailLocalPart(email: string) {
-  const localPart = email.split("@")[0] ?? "";
-
-  if (localPart.length <= 1) {
-    return `${localPart}*`;
-  }
-
-  if (localPart.length === 2) {
-    return `${localPart[0]}*`;
-  }
-
-  return `${localPart.slice(0, 2)}${"*".repeat(localPart.length - 2)}`;
-}
 
 function isReviewEstimateUniqueConstraintError(
   error: unknown,
@@ -81,26 +68,7 @@ export const reviewService = {
     ]);
 
     return {
-      reviews: reviews.map((review) => {
-        const estimateRequest = review.estimate.estimateRequest;
-
-        return {
-          id: review.id,
-          rating: review.rating,
-          content: review.content,
-          createdAt: review.createdAt,
-          customer: {
-            id: review.customer.id,
-            displayName: maskEmailLocalPart(review.customer.email),
-            imageUrl: review.customer.customerProfile?.imageUrl ?? null,
-          },
-          estimateRequest: {
-            id: estimateRequest.id,
-            moveType: estimateRequest.moveType,
-            moveDate: estimateRequest.moveDate,
-          },
-        };
-      }),
+      reviews: reviews.map(mapMoverReview),
       pagination: buildPagination(totalCount, page, limit),
     };
   },
@@ -114,33 +82,7 @@ export const reviewService = {
     ]);
 
     return {
-      reviews: reviews.map((review) => {
-        const moverProfile = review.mover.moverProfile;
-        const estimateRequest = review.estimate.estimateRequest;
-
-        return {
-          id: review.id,
-          estimateId: review.estimateId,
-          rating: review.rating,
-          content: review.content,
-          createdAt: review.createdAt,
-          price: review.estimate.price,
-          estimateRequest: {
-            id: estimateRequest.id,
-            moveType: estimateRequest.moveType,
-            moveDate: estimateRequest.moveDate,
-            fromAddress: estimateRequest.fromAddress,
-            toAddress: estimateRequest.toAddress,
-          },
-          mover: {
-            id: review.mover.id,
-            name: review.mover.name,
-            nickname: moverProfile?.nickname ?? null,
-            imageUrl: moverProfile?.imageUrl ?? null,
-            shortIntro: moverProfile?.shortIntro ?? null,
-          },
-        };
-      }),
+      reviews: reviews.map(mapMyReview),
       pagination: buildPagination(totalCount, page, limit),
     };
   },
@@ -149,36 +91,7 @@ export const reviewService = {
     const estimates = await reviewRepository.findReviewableEstimatesByCustomerId(customerId);
 
     return {
-      reviewableEstimates: estimates.map((estimate) => {
-        const moverProfile = estimate.mover.moverProfile;
-
-        return {
-          estimateId: estimate.id,
-          price: estimate.price,
-          confirmedAt: estimate.confirmedAt,
-          estimateRequest: {
-            id: estimate.estimateRequest.id,
-            moveType: estimate.estimateRequest.moveType,
-            moveDate: estimate.estimateRequest.moveDate,
-            fromAddress: estimate.estimateRequest.fromAddress,
-            toAddress: estimate.estimateRequest.toAddress,
-            status: estimate.estimateRequest.status,
-          },
-          mover: {
-            id: estimate.mover.id,
-
-            // 프로필이 없는 경우 실제 0 값과 구분할 수 있도록 null을 반환
-            nickname: moverProfile?.nickname ?? null,
-            imageUrl: moverProfile?.imageUrl ?? null,
-            career: moverProfile?.career ?? null,
-
-            // Prisma Decimal은 API 응답에서 다루기 쉽도록 number로 변환
-            averageRating: moverProfile ? Number(moverProfile.averageRating) : null,
-
-            reviewCount: moverProfile?.reviewCount ?? null,
-          },
-        };
-      }),
+      reviewableEstimates: estimates.map(mapReviewableEstimate),
     };
   },
 
@@ -191,37 +104,14 @@ export const reviewService = {
       });
     }
 
-    if (estimate.estimateRequest.customerId !== customerId) {
-      throw new AppError("FORBIDDEN", {
-        message: "본인의 견적에만 리뷰를 작성할 수 있습니다.",
-      });
-    }
-
-    if (estimate.status !== EstimateStatus.CONFIRMED) {
-      throw new AppError("BAD_REQUEST", {
-        message: "확정된 견적에만 리뷰를 작성할 수 있습니다.",
-      });
-    }
-
-    if (estimate.estimateRequest.status !== EstimateRequestStatus.COMPLETED) {
-      throw new AppError("BAD_REQUEST", {
-        message: "서비스 이용이 완료된 견적에만 리뷰를 작성할 수 있습니다.",
-      });
-    }
-
-    if (estimate.review) {
-      throw new AppError("CONFLICT", {
-        message: "이미 리뷰를 작성한 견적입니다.",
-      });
-    }
-
-    const moverProfileId = estimate.mover.moverProfile;
-
-    if (!moverProfileId) {
-      throw new AppError("BAD_REQUEST", {
-        message: "기사님 프로필이 없어 리뷰를 작성할 수 없습니다.",
-      });
-    }
+    assertReviewCreatable({
+      customerId,
+      estimateRequestCustomerId: estimate.estimateRequest.customerId,
+      estimateStatus: estimate.status,
+      estimateRequestStatus: estimate.estimateRequest.status,
+      hasReview: estimate.review !== null,
+      hasMoverProfile: estimate.mover.moverProfile !== null,
+    });
 
     try {
       // 리뷰 생성과 기사님 리뷰 통계 갱신은 하나의 작성 유스케이스이므로 Service에서 트랜잭션 경계를 관리

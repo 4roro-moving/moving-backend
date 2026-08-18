@@ -1,14 +1,9 @@
 import type { EstimateRequestStatus, MoveType, Prisma, PrismaClient } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
+import { CANCELABLE_ESTIMATE_REQUEST_STATUSES } from "./estimateRequest.constants";
 
 type Db = PrismaClient | Prisma.TransactionClient;
-
-/**
- * soft cancel 허용 상태 (service assertCancelable 와 claimCancel where 가 동일 소스를 사용)
- * // 2026.08.03 정슬기 - [추가]
- */
-export const CANCELABLE_ESTIMATE_REQUEST_STATUSES: EstimateRequestStatus[] = ["PENDING", "OPEN"];
 
 /**
  * 견적 요청 조회에 공통으로 사용하는 select
@@ -50,6 +45,25 @@ const estimateRequestDetailSelect = {
       },
     },
   },
+
+  // 2026.08.10 정슬기 - [추가]
+  // 고객이 지정한 기사님의 반려 여부·사유를 상세 응답에서 조합하기 위한 내부 조회
+  rejections: {
+    select: {
+      moverId: true,
+      reason: true,
+      createdAt: true,
+    },
+  },
+
+  // 2026.08.11 정슬기 - [추가]
+  // 지정 기사별 견적 응답 여부를 조합하기 위한 내부 조회
+  estimates: {
+    select: {
+      moverId: true,
+    },
+  },
+
   _count: {
     select: { estimates: true },
   },
@@ -250,6 +264,24 @@ export const estimateRequestRepository = {
         estimateRequestId_moverId: { estimateRequestId, moverId },
       },
       select: { id: true },
+    });
+  },
+
+  findRejection(
+    estimateRequestId: number,
+    moverId: string,
+    db: Db = prisma,
+  ): Promise<{ id: number } | null> {
+    return db.estimateRequestRejection.findUnique({
+      where: {
+        estimateRequestId_moverId: {
+          estimateRequestId,
+          moverId,
+        },
+      },
+      select: {
+        id: true,
+      },
     });
   },
 

@@ -37,12 +37,7 @@ const addressSchema = z.object({
     .optional(),
 });
 
-const moveDateSchema = z
-  .string({ error: "이사 예정일은 문자열이어야 합니다." })
-  .regex(/^\d{4}-\d{2}-\d{2}$/, "이사 예정일은 YYYY-MM-DD 형식이어야 합니다.")
-  .refine((value) => !Number.isNaN(new Date(`${value}T00:00:00.000Z`).getTime()), {
-    message: "존재하지 않는 날짜입니다.",
-  });
+const moveDateSchema = z.iso.date("이사 예정일은 YYYY-MM-DD 형식의 유효한 날짜여야 합니다.");
 
 export const createEstimateRequestSchema = z.object({
   moveType: z.enum(["SMALL", "HOME", "OFFICE"], {

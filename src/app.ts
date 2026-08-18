@@ -14,7 +14,9 @@ import errorHandler from "./middlewares/error-handler";
 import notFoundHandler from "./middlewares/not-found-handler";
 
 import { adminReviewRouter } from "./modules/admin/contents/contents.route";
+import adminEstimateRouter from "./modules/admin/estimates/estimates.route";
 import adminCustomerRouter from "./modules/admin/member-management/customers/customers.route";
+import adminMoverRouter from "./modules/admin/member-management/movers/movers.route";
 import noticeRouter from "./modules/admin/notice/notice.route";
 import { authRouter } from "./modules/auth/auth.route";
 import { chatRouter } from "./modules/chat/chat.route";
@@ -22,6 +24,7 @@ import estimateRequestRouter from "./modules/estimate-request/estimateRequest.ro
 import estimateRouter from "./modules/estimate/estimate.route";
 import favoriteRouter from "./modules/favorite/favorite.route";
 import moverRouter from "./modules/mover/mover.route";
+import { moverCalendarRouter } from "./modules/mover-calendar/mover-calendar.route";
 import { notificationRouter } from "./modules/notification/notification.route";
 import notificationSseRouter from "./modules/notification/notification-sse.route";
 import { profileRouter } from "./modules/profile/profile.route";
@@ -38,6 +41,14 @@ import { adminTermsRouter, publicTermsRouter } from "./modules/terms/terms.route
 // import swaggerUi from "swagger-ui-express";
 
 const app = express();
+
+/*
+ * Nginx 1단계 Reverse Proxy를 신뢰한다.
+ *
+ * Nginx가 전달하는 X-Forwarded-For를 기반으로
+ * Express의 req.ip가 실제 클라이언트 IP를 사용하도록 한다.
+ */
+app.set("trust proxy", 1);
 
 app.use(
   helmet({
@@ -155,6 +166,7 @@ app.use("/api/auth", authRouter);
 app.use("/api/profiles", profileRouter);
 app.use("/api/estimate-requests", estimateRequestRouter);
 app.use("/api/movers", moverRouter);
+app.use("/api/movers", moverCalendarRouter);
 app.use("/api/estimates", estimateRouter);
 app.use("/api/reviews", reviewRouter);
 app.use("/api/reports", reportRouter);
@@ -170,7 +182,9 @@ app.use("/api/terms", publicTermsRouter);
 app.use("/api/admin/auth", adminAuthRouter);
 app.use("/api/admin/notices", noticeRouter);
 app.use("/api/admin/reviews", adminReviewRouter);
+app.use("/api/admin/estimates", adminEstimateRouter);
 app.use("/api/admin/users", adminCustomerRouter); // 관리자 고객(회원) 라우터
+app.use("/api/admin/movers", adminMoverRouter); // 관리자 기사님 라우터
 app.use("/api/admin/faqs", adminFaqRouter); //  관리자 FAQ 라우터
 app.use("/api/faqs", publicFaqRouter); // 일반 사용자 FAQ 라우터
 app.use("/api/inquiries", inquiryRouter); // 사용자 1:1 문의 라우터

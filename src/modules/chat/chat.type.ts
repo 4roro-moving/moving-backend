@@ -34,14 +34,15 @@ export type ChatRoomSummary = {
 export type ChatMessageResponse = {
   id: number;
   roomId: number;
-  senderId: string;
+  // SYSTEM 메시지는 특정 사용자가 보낸 메시지가 아니므로 null입니다.
+  senderId: string | null;
   type: "TEXT" | "IMAGE" | "SYSTEM" | "ESTIMATE_REVISION";
   content: string | null;
   imageUrl: string | null;
   isRead: boolean;
   readAt: Date | null;
   createdAt: Date;
-  sender: ChatParticipant;
+  sender: ChatParticipant | null;
 };
 
 export type MissedChatMessagesResponse = {

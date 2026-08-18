@@ -9,55 +9,37 @@ import type {
 } from "@prisma/client";
 import type { z } from "zod";
 
+import type { MEMBER_STATUS, MemberStatus } from "../member-status.constants";
+import type {
+  HistorySummary,
+  MemberDetailAccount,
+  MemberListBase,
+  MemberSuspensionHistoryItem,
+} from "../member.type";
 import type {
   customerIdParamSchema,
-  customerStatusSchema,
   listCustomerQuerySchema,
   updateCustomerStatusBodySchema,
 } from "./customers.validator";
 
-export type CustomerStatus = z.infer<typeof customerStatusSchema>;
 export type ListCustomerQuery = z.infer<typeof listCustomerQuerySchema>;
 export type CustomerIdParam = z.infer<typeof customerIdParamSchema>;
 export type UpdateCustomerStatusBody = z.infer<typeof updateCustomerStatusBodySchema>;
 
 export type UpdateCustomerStatusResponse = {
   id: string;
-  status: "ACTIVE" | "SUSPENDED";
+  status: Exclude<MemberStatus, typeof MEMBER_STATUS.WITHDRAWN>;
   suspension: {
     id: number;
-    action: "SUSPEND" | "RELEASE";
+    action: SuspensionAction;
     reason: string;
     adminId: string;
     createdAt: Date;
   };
 };
 
-export type CustomerListItem = {
-  id: string;
-  email: string;
-  name: string;
-  phone: string | null;
-  status: CustomerStatus;
-  isProfileCompleted: boolean;
-  createdAt: Date;
-};
-
-export type HistorySummary<T> = {
-  totalCount: number;
-  items: T[];
-};
-
-export type CustomerDetailAccount = {
-  id: string;
-  email: string;
-  name: string;
-  phone: string | null;
+export type CustomerListItem = MemberListBase & {
   authProvider: AuthProvider;
-  status: CustomerStatus;
-  isProfileCompleted: boolean;
-  createdAt: Date;
-  updatedAt: Date;
 };
 
 export type CustomerDetailProfile = {
@@ -93,15 +75,8 @@ export type CustomerReportHistoryItem = {
   createdAt: Date;
 };
 
-export type CustomerSuspensionHistoryItem = {
-  id: number;
-  action: SuspensionAction;
-  reason: string;
-  createdAt: Date;
-};
-
 export type CustomerDetail = {
-  account: CustomerDetailAccount;
+  account: MemberDetailAccount;
   profile: CustomerDetailProfile;
   estimateHistory: HistorySummary<CustomerEstimateHistoryItem>;
   reviewHistory: HistorySummary<CustomerReviewHistoryItem>;
@@ -109,5 +84,5 @@ export type CustomerDetail = {
     filed: HistorySummary<CustomerReportHistoryItem>;
     received: HistorySummary<CustomerReportHistoryItem>;
   };
-  suspensionHistory: HistorySummary<CustomerSuspensionHistoryItem>;
+  suspensionHistory: HistorySummary<MemberSuspensionHistoryItem>;
 };

@@ -38,6 +38,10 @@ const reviewableEstimateSelect = {
   },
 } satisfies PrismaType.EstimateSelect;
 
+export type ReviewableEstimateRow = PrismaType.EstimateGetPayload<{
+  select: typeof reviewableEstimateSelect;
+}>;
+
 // 리뷰 작성 대상 견적 조회 시 필요한 필드만 선택
 const reviewTargetEstimateSelect = {
   id: true,
@@ -64,6 +68,10 @@ const reviewTargetEstimateSelect = {
     },
   },
 } satisfies PrismaType.EstimateSelect;
+
+export type ReviewTargetEstimateRow = PrismaType.EstimateGetPayload<{
+  select: typeof reviewTargetEstimateSelect;
+}>;
 
 const myReviewSelect = {
   id: true,
@@ -100,6 +108,10 @@ const myReviewSelect = {
   },
 } satisfies PrismaType.ReviewSelect;
 
+export type MyReviewRow = PrismaType.ReviewGetPayload<{
+  select: typeof myReviewSelect;
+}>;
+
 // 기사님 상세 화면의 리뷰 목록에 필요한 필드만 선택
 const moverReviewSelect = {
   id: true,
@@ -129,6 +141,10 @@ const moverReviewSelect = {
     },
   },
 } satisfies PrismaType.ReviewSelect;
+
+export type MoverReviewRow = PrismaType.ReviewGetPayload<{
+  select: typeof moverReviewSelect;
+}>;
 
 type CreateReviewData = {
   customerId: string;

@@ -1,21 +1,14 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, ReportTargetType, UserRole } from "@prisma/client";
+import type { AuthProvider } from "@prisma/client";
 
 import { prisma } from "../../../../lib/prisma";
+import { kstDayEnd, kstDayStart, parseDateMarker } from "../../../../utils/kst";
 import type { DbClient } from "../../../../utils/transaction";
+import type { MemberReceivedReportCounts } from "../member.type";
+import type { ListCustomerQuery } from "./customers.type";
 
+/** 고객 상세 응답에서 각 이력 항목별로 제공하는 기본 최신 건수입니다. */
 export const CUSTOMER_HISTORY_LIMIT = 5;
-
-/** 고객 목록 조회에 공통으로 사용하는 select */
-const customerListSelect = {
-  id: true,
-  email: true,
-  name: true,
-  phone: true,
-  isActive: true,
-  isProfileCompleted: true,
-  deletedAt: true,
-  createdAt: true,
-} satisfies Prisma.UserSelect;
 
 const customerDetailSelect = {
   id: true,
@@ -81,28 +74,29 @@ const reportHistorySelect = {
   createdAt: true,
 } satisfies Prisma.ReportSelect;
 
-const suspensionHistorySelect = {
-  id: true,
-  action: true,
-  reason: true,
-  createdAt: true,
-} satisfies Prisma.UserSuspensionSelect;
-
-export type CustomerListRow = Prisma.UserGetPayload<{ select: typeof customerListSelect }>;
+export type CustomerListRow = MemberReceivedReportCounts & {
+  id: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  authProvider: AuthProvider;
+  isActive: boolean;
+  isProfileCompleted: boolean;
+  deletedAt: Date | null;
+  createdAt: Date;
+};
 export type CustomerDetailRow = Prisma.UserGetPayload<{ select: typeof customerDetailSelect }>;
 export type EstimateHistoryRow = Prisma.EstimateRequestGetPayload<{
   select: typeof estimateHistorySelect;
 }>;
 export type ReviewHistoryRow = Prisma.ReviewGetPayload<{ select: typeof reviewHistorySelect }>;
 export type ReportHistoryRow = Prisma.ReportGetPayload<{ select: typeof reportHistorySelect }>;
-export type SuspensionHistoryRow = Prisma.UserSuspensionGetPayload<{
-  select: typeof suspensionHistorySelect;
-}>;
 
 type ListParams = {
   skip: number;
   take: number;
-  where: Prisma.UserWhereInput;
+  sorts: string[];
+  filters: ListCustomerQuery;
 };
 
 type HistoryParams = {
@@ -110,32 +104,165 @@ type HistoryParams = {
   take?: number;
 };
 
-export const customersRepository = {
-  async findManyWithCount({ skip, take, where }: ListParams, db: DbClient = prisma) {
-    const [customers, totalCount] = await Promise.all([
-      db.user.findMany({
-        where,
-        select: customerListSelect,
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-        skip,
-        take,
-      }),
-      db.user.count({ where }),
-    ]);
+/** raw SQL 쿼리 전용 응답 DTO 타입 */
+type CustomerListRawRow = {
+  id: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  authProvider: AuthProvider;
+  isActive: boolean;
+  isProfileCompleted: boolean;
+  deletedAt: Date | null;
+  createdAt: Date;
+  receivedReportCount: number;
+  pendingReceivedReportCount: number;
+  totalCount: bigint;
+};
 
-    return { customers, totalCount };
+/**
+ * `sorts` 파라미터로 받은 정렬 기준들을 순서대로 SQL ORDER BY 절로 변환합니다.
+ *
+ * `CREATED_AT_DESC` 또는 `CREATED_AT_ASC`가 없는 경우,
+ * `createdAt DESC`, `id ASC`를 보조 정렬로 붙여 페이지 순서를 고정합니다.
+ */
+function buildCustomerReportOrderBy(sorts: string[]): Prisma.Sql {
+  const columns: Record<string, Prisma.Sql> = {
+    PENDING_DESC: Prisma.sql`"pendingReceivedReportCount" DESC`,
+    PENDING_ASC: Prisma.sql`"pendingReceivedReportCount" ASC`,
+    CREATED_AT_DESC: Prisma.sql`u."createdAt" DESC`,
+    CREATED_AT_ASC: Prisma.sql`u."createdAt" ASC`,
+  };
+
+  const orderBy = sorts.flatMap((sort) => (columns[sort] ? [columns[sort]] : []));
+
+  if (!sorts.some((sort) => sort.startsWith("CREATED_AT_"))) {
+    orderBy.push(Prisma.sql`u."createdAt" DESC`);
+  }
+  orderBy.push(Prisma.sql`u.id ASC`);
+
+  return Prisma.join(orderBy, ", ");
+}
+
+/** 고객 목록의 요청받은 필터를 raw SQL WHERE 절로 만듭니다. */
+function buildCustomerListWhereSql(filters: ListCustomerQuery): Prisma.Sql {
+  const conditions: Prisma.Sql[] = [Prisma.sql`u.role = ${UserRole.CUSTOMER}::"UserRole"`];
+
+  if (filters.status === "ACTIVE") {
+    conditions.push(Prisma.sql`u."deletedAt" IS NULL AND u."isActive" = TRUE`);
+  } else if (filters.status === "SUSPENDED") {
+    conditions.push(Prisma.sql`u."deletedAt" IS NULL AND u."isActive" = FALSE`);
+  } else if (filters.status === "WITHDRAWN") {
+    conditions.push(Prisma.sql`u."deletedAt" IS NOT NULL`);
+  } else {
+    conditions.push(Prisma.sql`u."deletedAt" IS NULL`);
+  }
+
+  if (filters.isProfileCompleted !== undefined) {
+    conditions.push(Prisma.sql`u."isProfileCompleted" = ${filters.isProfileCompleted}`);
+  }
+
+  if (filters.authProvider) {
+    conditions.push(Prisma.sql`u."authProvider" = ${filters.authProvider}::"AuthProvider"`);
+  }
+
+  if (filters.keyword) {
+    const pattern = `%${filters.keyword}%`;
+    conditions.push(Prisma.sql`(u.name ILIKE ${pattern} OR u.email ILIKE ${pattern})`);
+  }
+
+  if (filters.fromDate) {
+    const marker = parseDateMarker(filters.fromDate);
+    if (!marker) throw new Error("Validated customer-list fromDate could not be parsed.");
+    conditions.push(Prisma.sql`u."createdAt" >= ${kstDayStart(marker)}`);
+  }
+  if (filters.toDate) {
+    const marker = parseDateMarker(filters.toDate);
+    if (!marker) throw new Error("Validated customer-list toDate could not be parsed.");
+    conditions.push(Prisma.sql`u."createdAt" <= ${kstDayEnd(marker)}`);
+  }
+
+  return Prisma.join(conditions, " AND ");
+}
+
+export const customersRepository = {
+  /** 고객 목록과 리뷰 기반 피신고 건수를 함께 조회합니다. */
+  async findManyWithCount({ skip, take, sorts, filters }: ListParams, db: DbClient = prisma) {
+    const whereSql = buildCustomerListWhereSql(filters);
+
+    /**
+     * 필터·리뷰 기반 신고 집계·다중 정렬을 적용한 전체 결과에서 LIMIT/OFFSET을 적용해 현재 페이지 행만 조회합니다.
+     */
+    const rows = await db.$queryRaw<CustomerListRawRow[]>(Prisma.sql`
+        SELECT
+          u.id,
+          u.email,
+          u.name,
+          u.phone,
+          u."authProvider",
+          u."isActive",
+          u."isProfileCompleted",
+          u."deletedAt",
+          u."createdAt",
+          COUNT(rp.id)::int AS "receivedReportCount",
+          COUNT(rp.id) FILTER (WHERE rp.status = ${"PENDING"}::"ReportStatus")::int
+            AS "pendingReceivedReportCount",
+          COUNT(*) OVER()::bigint AS "totalCount"
+        FROM "User" AS u
+        LEFT JOIN reviews AS rv ON rv.customer_id = u.id
+        LEFT JOIN reports AS rp
+          ON rp.target_type = ${ReportTargetType.REVIEW}::"ReportTargetType"
+          AND rp.target_id = rv.id::text
+        WHERE ${whereSql}
+        GROUP BY
+          u.id,
+          u.email,
+          u.name,
+          u.phone,
+          u."authProvider",
+          u."isActive",
+          u."isProfileCompleted",
+          u."deletedAt",
+          u."createdAt"
+        ORDER BY ${buildCustomerReportOrderBy(sorts)}
+        LIMIT ${take} OFFSET ${skip}
+    `);
+
+    const firstRow = rows[0];
+    const countRows = firstRow
+      ? undefined
+      : await db.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+          SELECT COUNT(*)::bigint AS count
+          FROM "User" AS u
+          WHERE ${whereSql}
+        `);
+    // 페이지 범위를 벗어나 행이 없을 때만 같은 raw SQL 필터로 count를 다시 조회
+    const totalCount = firstRow ? Number(firstRow.totalCount) : Number(countRows?.[0]?.count ?? 0);
+
+    return {
+      customers: rows.map(({ totalCount: _totalCount, ...customer }) => customer),
+      totalCount,
+    };
   },
 
+  /**
+   * ID와 CUSTOMER 역할이 일치하는 고객 상세를 조회합니다.
+   * 탈퇴 회원도 관리자 상세 조회 대상이므로 deletedAt으로 제한하지 않습니다.
+   */
   findCustomerById(customerId: string, db: DbClient = prisma) {
     return db.user.findFirst({
       where: {
         id: customerId,
-        role: "CUSTOMER",
+        role: UserRole.CUSTOMER,
       },
       select: customerDetailSelect,
     });
   },
 
+  /**
+   * 고객이 생성한 견적 요청 이력의 최신 일부와 전체 건수를 조회합니다.
+   * 상세 화면은 최신 이력만 표시하되, 전체 건수도 함께 보여줍니다.
+   */
   async findEstimateHistory(
     { customerId, take = CUSTOMER_HISTORY_LIMIT }: HistoryParams,
     db: DbClient = prisma,
@@ -155,6 +282,10 @@ export const customersRepository = {
     return { items, totalCount };
   },
 
+  /**
+   * 고객이 작성한 리뷰 이력의 최신 일부와 전체 건수를 조회합니다.
+   * 기사 프로필 닉네임이 없을 때 mapper가 기사 실명으로 대체할 수 있도록 함께 조회합니다.
+   */
   async findReviewHistory(
     { customerId, take = CUSTOMER_HISTORY_LIMIT }: HistoryParams,
     db: DbClient = prisma,
@@ -174,6 +305,9 @@ export const customersRepository = {
     return { items, totalCount };
   },
 
+  /**
+   * 고객이 신고자로 등록된 신고 이력(신고한 내역)의 최신 일부와 전체 건수를 조회합니다.
+   */
   async findFiledReportHistory(
     { customerId, take = CUSTOMER_HISTORY_LIMIT }: HistoryParams,
     db: DbClient = prisma,
@@ -194,13 +328,14 @@ export const customersRepository = {
   },
 
   /**
-   * 고객이 작성한 리뷰가 신고된 내역(피신고)을 조회합니다.
-   * Customer는 ReportTargetType 상 직접 신고 대상이 될 수 없습니다.
+   * 고객이 작성한 리뷰가 신고된 내역(피신고)의 최신 일부와 전체 건수를 조회합니다.
+   * Customer는 ReportTargetType 상 직접 신고 대상이 될 수 없어, 먼저 고객 리뷰 ID를 찾습니다.
    */
   async findReceivedReportHistory(
     { customerId, take = CUSTOMER_HISTORY_LIMIT }: HistoryParams,
     db: DbClient = prisma,
   ) {
+    // Report.targetId는 문자열이므로 리뷰의 숫자 ID를 문자열로 변환해 IN 조건에 사용
     const reviewIds = await db.review.findMany({
       where: { customerId },
       select: { id: true },
@@ -211,7 +346,7 @@ export const customersRepository = {
     }
 
     const where: Prisma.ReportWhereInput = {
-      targetType: "REVIEW",
+      targetType: ReportTargetType.REVIEW,
       targetId: { in: reviewIds.map((review) => String(review.id)) },
     };
 
@@ -226,182 +361,5 @@ export const customersRepository = {
     ]);
 
     return { items, totalCount };
-  },
-
-  async findSuspensionHistory(
-    { customerId, take = CUSTOMER_HISTORY_LIMIT }: HistoryParams,
-    db: DbClient = prisma,
-  ) {
-    const where: Prisma.UserSuspensionWhereInput = { userId: customerId };
-
-    const [items, totalCount] = await Promise.all([
-      db.userSuspension.findMany({
-        where,
-        select: suspensionHistorySelect,
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-        take,
-      }),
-      db.userSuspension.count({ where }),
-    ]);
-
-    return { items, totalCount };
-  },
-
-  findCustomerForStatusChange(customerId: string, db: DbClient = prisma) {
-    return db.user.findFirst({
-      where: { id: customerId, role: "CUSTOMER", deletedAt: null },
-      select: { id: true, isActive: true },
-    });
-  },
-
-  updateCustomerIsActiveIfCurrent(
-    { customerId, isActive }: { customerId: string; isActive: boolean },
-    db: DbClient = prisma,
-  ) {
-    return db.user.updateMany({
-      where: {
-        id: customerId,
-        role: "CUSTOMER",
-        deletedAt: null,
-        isActive: !isActive,
-      },
-      data: { isActive },
-    });
-  },
-
-  /** 고객 정지 시 취소 가능한 견적 요청(PENDING/OPEN)을 잠금 처리합니다. */
-  async lockCancelableRequestsForSuspension(
-    customerId: string,
-    db: Prisma.TransactionClient,
-  ): Promise<number[]> {
-    const rows = await db.$queryRaw<Array<{ id: number }>>(
-      Prisma.sql`
-        SELECT id
-        FROM estimate_requests
-        WHERE customer_id = ${customerId}::uuid
-          AND is_active = true
-          AND status IN ('PENDING', 'OPEN')
-        FOR UPDATE
-      `,
-    );
-
-    return rows.map((row) => row.id);
-  },
-
-  findCancelableRequestsForSuspension(requestIds: number[], db: DbClient = prisma) {
-    return db.estimateRequest.findMany({
-      where: { id: { in: requestIds }, status: { in: ["PENDING", "OPEN"] }, isActive: true },
-      select: {
-        id: true,
-        status: true,
-        isActive: true,
-        estimates: { where: { status: "SENT" }, select: { moverId: true } },
-        designatedMovers: { select: { moverId: true } },
-        chatRooms: { select: { id: true } },
-      },
-    });
-  },
-
-  cancelSentEstimates(requestIds: number[], canceledAt: Date, db: DbClient = prisma) {
-    return db.estimate.updateMany({
-      where: { estimateRequestId: { in: requestIds }, status: "SENT" },
-      data: { status: "CANCELED", canceledAt },
-    });
-  },
-
-  cancelPendingEstimateRevisions(requestIds: number[], db: DbClient = prisma) {
-    return db.estimateRevision.updateMany({
-      where: { status: "PENDING", estimate: { estimateRequestId: { in: requestIds } } },
-      data: { status: "CANCELED" },
-    });
-  },
-
-  cancelPendingOrOpenEstimateRequests(
-    requestIds: number[],
-    canceledAt: Date,
-    db: DbClient = prisma,
-  ) {
-    return db.$queryRaw<Array<{ id: number }>>(
-      Prisma.sql`
-        UPDATE estimate_requests
-        SET status = 'CANCELED', is_active = false, canceled_at = ${canceledAt}
-        WHERE id IN (${Prisma.join(requestIds)})
-          AND status IN ('PENDING', 'OPEN')
-          AND is_active = true
-        RETURNING id
-      `,
-    );
-  },
-
-  createEstimateRequestHistories(
-    data: Prisma.EstimateRequestHistoryCreateManyInput[],
-    db: DbClient = prisma,
-  ) {
-    return db.estimateRequestHistory.createMany({ data });
-  },
-
-  createSystemMessages(data: Prisma.ChatMessageCreateManyInput[], db: DbClient = prisma) {
-    return db.chatMessage.createMany({ data });
-  },
-
-  createNotifications(data: Prisma.NotificationCreateManyInput[], db: DbClient = prisma) {
-    return db.notification.createMany({ data, skipDuplicates: true });
-  },
-
-  createCustomerSuspension(
-    {
-      customerId,
-      adminId,
-      action,
-      reason,
-      internalNote,
-    }: {
-      customerId: string;
-      adminId: string;
-      action: "SUSPEND" | "RELEASE";
-      reason: string;
-      internalNote?: string;
-    },
-    db: DbClient = prisma,
-  ) {
-    return db.userSuspension.create({
-      data: {
-        userId: customerId,
-        adminId,
-        action,
-        reason,
-        ...(internalNote !== undefined ? { internalNote } : {}),
-      },
-      select: { id: true, action: true, reason: true, adminId: true, createdAt: true },
-    });
-  },
-
-  createCustomerStatusActivityLog(
-    {
-      customerId,
-      adminId,
-      action,
-      reason,
-      createdAt,
-    }: {
-      customerId: string;
-      adminId: string;
-      action: "SUSPEND" | "RELEASE";
-      reason: string;
-      createdAt: Date;
-    },
-    db: DbClient = prisma,
-  ) {
-    return db.activityLog.create({
-      data: {
-        actorId: adminId,
-        actorRole: "ADMIN",
-        action: "UPDATE",
-        targetType: "USER",
-        targetId: customerId,
-        memo: `${action}: ${reason}`,
-        createdAt,
-      },
-    });
   },
 };

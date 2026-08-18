@@ -1,62 +1,22 @@
 import bcrypt from "bcrypt";
-import { Prisma, UserRole } from "@prisma/client";
+import { RefreshTokenSessionType } from "@prisma/client";
 
+import { authRepository } from "../../auth/auth.repository";
 import { AppError } from "../../../lib/app-error";
 import { runTransaction } from "../../../utils/transaction";
 
 import { profileImageService } from "../profile-image.service";
+import { hasUniqueConstraintField, PASSWORD_SALT_ROUNDS } from "../profile.shared";
+import { mapProfileResponse } from "./profile.mapper";
+import { assertActiveCustomer } from "./profile.policy";
 import { profileRepository } from "./profile.repository";
+
 import type {
   CreateProfileInput,
   ProfileResponse,
   UpdateBasicInfoInput,
   UpdateProfileInput,
 } from "./profile.type";
-
-import { getProfileImageUrl } from "../../../utils/image-url";
-
-type CustomerProfileWithRelations = NonNullable<
-  Awaited<ReturnType<typeof profileRepository.findProfileByUserId>>
->;
-
-const PASSWORD_SALT_ROUNDS = 10;
-
-const isUniqueConstraintError = (error: unknown): error is Prisma.PrismaClientKnownRequestError => {
-  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
-};
-
-/*
- * 고객 계정이 존재하며 활성 상태인지 확인한다.
- */
-const validateActiveCustomer = <
-  T extends {
-    isActive: boolean;
-    deletedAt: Date | null;
-    role: UserRole;
-  },
->(
-  user: T | null,
-): T => {
-  if (!user) {
-    throw new AppError("NOT_FOUND", {
-      message: "사용자를 찾을 수 없습니다.",
-    });
-  }
-
-  if (!user.isActive || user.deletedAt !== null) {
-    throw new AppError("FORBIDDEN", {
-      message: "비활성화된 사용자입니다.",
-    });
-  }
-
-  if (user.role !== UserRole.CUSTOMER) {
-    throw new AppError("FORBIDDEN", {
-      message: "일반 사용자만 이용할 수 있습니다.",
-    });
-  }
-
-  return user;
-};
 
 /*
  * 요청에 포함된 지역 ID가 모두 존재하는지 확인한다.
@@ -72,36 +32,6 @@ const validateRegions = async (regionIds: number[]): Promise<void> => {
 };
 
 /*
- * Repository 조회 결과를 고객 프로필 응답 형식으로 변환한다.
- *
- * 비밀번호 해시 자체는 응답에 포함하지 않고,
- * 비밀번호 보유 여부만 hasPassword 값으로 반환한다.
- */
-const mapProfileResponse = (profile: CustomerProfileWithRelations): ProfileResponse => {
-  return {
-    id: profile.id,
-    userId: profile.userId,
-
-    name: profile.user.name,
-    email: profile.user.email,
-    phone: profile.user.phone,
-    hasPassword: profile.user.password !== null,
-
-    imageUrl: getProfileImageUrl(profile.imageUrl),
-
-    regions: profile.serviceAreas.map(({ region }) => ({
-      id: region.id,
-      name: region.name,
-    })),
-
-    serviceTypes: profile.serviceTypes.map(({ moveType }) => moveType),
-
-    createdAt: profile.createdAt,
-    updatedAt: profile.updatedAt,
-  };
-};
-
-/*
  * 고객 프로필을 생성한다.
  *
  * 기존 User.phone이 없는 경우 프로필 생성 요청의
@@ -111,7 +41,7 @@ const createProfile = async (
   userId: string,
   input: CreateProfileInput,
 ): Promise<ProfileResponse> => {
-  const user = validateActiveCustomer(await profileRepository.findUserById(userId));
+  const user = assertActiveCustomer(await profileRepository.findUserById(userId));
 
   /*
    * 이미지가 전달된 경우 현재 로그인한 사용자의 Key인지 확인하고,
@@ -193,18 +123,15 @@ const createProfile = async (
       return createdProfile;
     });
 
-    return mapProfileResponse(profile);
+    return mapProfileResponse(profile, await profileRepository.hasPasswordByUserId(user.id));
   } catch (error) {
-    if (isUniqueConstraintError(error)) {
-      const target = error.meta?.target;
-      const fields = Array.isArray(target) ? target.map(String) : [String(target)];
+    if (hasUniqueConstraintField(error, "phone")) {
+      throw new AppError("CONFLICT", {
+        message: "이미 사용 중인 전화번호입니다.",
+      });
+    }
 
-      if (fields.some((field) => field.includes("phone"))) {
-        throw new AppError("CONFLICT", {
-          message: "이미 사용 중인 전화번호입니다.",
-        });
-      }
-
+    if (hasUniqueConstraintField(error, "userId")) {
       throw new AppError("CONFLICT", {
         message: "이미 등록된 프로필 정보입니다.",
       });
@@ -218,7 +145,7 @@ const createProfile = async (
  * 현재 로그인한 고객의 프로필을 조회한다.
  */
 const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
-  const user = validateActiveCustomer(await profileRepository.findUserById(userId));
+  const user = assertActiveCustomer(await profileRepository.findUserById(userId));
 
   const profile = await profileRepository.findProfileByUserId(user.id);
 
@@ -228,7 +155,7 @@ const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
     });
   }
 
-  return mapProfileResponse(profile);
+  return mapProfileResponse(profile, await profileRepository.hasPasswordByUserId(user.id));
 };
 
 /*
@@ -241,7 +168,7 @@ const getProfileStatus = async (
   isProfileCompleted: boolean;
   hasPhone: boolean;
 }> => {
-  const user = validateActiveCustomer(await profileRepository.findUserById(userId));
+  const user = assertActiveCustomer(await profileRepository.findUserById(userId));
 
   const profile = await profileRepository.findProfileByUserId(user.id);
 
@@ -258,12 +185,18 @@ const getProfileStatus = async (
  * - name
  * - phone
  * - password
+ *
+ * 비밀번호가 변경되는 경우 기존 USER Refresh Token 세션을
+ * 모두 폐기하여 재로그인을 요구한다.
+ *
+ * 비밀번호 변경과 Refresh Token 세션 폐기는
+ * 하나의 트랜잭션으로 처리한다.
  */
 const updateBasicInfo = async (
   userId: string,
   input: UpdateBasicInfoInput,
 ): Promise<ProfileResponse> => {
-  const user = validateActiveCustomer(await profileRepository.findUserById(userId));
+  const user = assertActiveCustomer(await profileRepository.findUserById(userId));
 
   const existingProfile = await profileRepository.findProfileByUserId(user.id);
 
@@ -311,7 +244,7 @@ const updateBasicInfo = async (
       });
     }
 
-    const userWithPassword = validateActiveCustomer(
+    const userWithPassword = assertActiveCustomer(
       await profileRepository.findUserWithPasswordById(user.id),
     );
 
@@ -348,6 +281,10 @@ const updateBasicInfo = async (
       });
     }
 
+    /*
+     * bcrypt 해시는 DB 작업이 아니므로
+     * 트랜잭션 밖에서 처리하여 커넥션 점유 시간을 줄인다.
+     */
     hashedPassword = await bcrypt.hash(input.newPassword, PASSWORD_SALT_ROUNDS);
   }
 
@@ -373,6 +310,23 @@ const updateBasicInfo = async (
         await profileRepository.updateUser(user.id, userUpdateData, tx);
       }
 
+      /*
+       * 비밀번호가 실제로 변경된 경우
+       * 해당 사용자의 기존 USER Refresh Token 세션을
+       * 모두 폐기한다.
+       *
+       * password UPDATE와 세션 revoke를 동일한
+       * 트랜잭션으로 묶어 둘 중 하나만 반영되는
+       * 상태를 방지한다.
+       */
+      if (hashedPassword !== undefined) {
+        await authRepository.revokeAllRefreshTokensByUserId(
+          user.id,
+          RefreshTokenSessionType.USER,
+          tx,
+        );
+      }
+
       const profile = await profileRepository.findProfileByUserId(user.id, tx);
 
       if (!profile) {
@@ -384,20 +338,14 @@ const updateBasicInfo = async (
       return profile;
     });
 
-    return mapProfileResponse(updatedProfile);
+    const hasPassword =
+      hashedPassword !== undefined ? true : await profileRepository.hasPasswordByUserId(user.id);
+
+    return mapProfileResponse(updatedProfile, hasPassword);
   } catch (error) {
-    if (isUniqueConstraintError(error)) {
-      const target = error.meta?.target;
-      const fields = Array.isArray(target) ? target.map(String) : [String(target)];
-
-      if (fields.some((field) => field.includes("phone"))) {
-        throw new AppError("CONFLICT", {
-          message: "이미 사용 중인 전화번호입니다.",
-        });
-      }
-
+    if (hasUniqueConstraintField(error, "phone")) {
       throw new AppError("CONFLICT", {
-        message: "이미 사용 중인 정보입니다.",
+        message: "이미 사용 중인 전화번호입니다.",
       });
     }
 
@@ -419,7 +367,7 @@ const updateProfile = async (
   userId: string,
   input: UpdateProfileInput,
 ): Promise<ProfileResponse> => {
-  const user = validateActiveCustomer(await profileRepository.findUserById(userId));
+  const user = assertActiveCustomer(await profileRepository.findUserById(userId));
 
   /*
    * 새 이미지 Key가 전달된 경우 현재 로그인한 사용자의 Key인지 확인하고,
@@ -482,7 +430,7 @@ const updateProfile = async (
       });
     }
 
-    return mapProfileResponse(updatedProfile);
+    return mapProfileResponse(updatedProfile, await profileRepository.hasPasswordByUserId(user.id));
   });
 };
 

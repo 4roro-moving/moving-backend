@@ -50,6 +50,23 @@ const update = async (id: string, data: Prisma.UserUpdateInput, db: DbClient = p
 };
 
 /**
+ * 기준 시각보다 오래 전에 만료된
+ * Refresh Token 세션을 영구 삭제한다.
+ */
+const deleteRefreshTokensExpiredBefore = async (
+  cutoff: Date,
+  db: DbClient = prisma,
+): Promise<Prisma.BatchPayload> => {
+  return db.refreshToken.deleteMany({
+    where: {
+      expiresAt: {
+        lt: cutoff,
+      },
+    },
+  });
+};
+
+/**
  * Refresh Token 세션을 저장한다.
  *
  * sessionType은 호출부에서 USER 또는 ADMIN으로 지정한다.
@@ -135,4 +152,5 @@ export const authRepository = {
   findRefreshTokenByHash,
   revokeRefreshTokenByHash,
   revokeAllRefreshTokensByUserId,
+  deleteRefreshTokensExpiredBefore,
 };

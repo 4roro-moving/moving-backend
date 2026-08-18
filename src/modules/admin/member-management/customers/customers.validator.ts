@@ -1,67 +1,56 @@
+import { AuthProvider, SuspensionAction } from "@prisma/client";
 import { z } from "zod";
 
-const MAX_PAGE = 10000;
-const MAX_LIMIT = 100;
+import {
+  memberListDateQuerySchema,
+  memberListKeywordSchema,
+  memberListLimitSchema,
+  memberListPageSchema,
+  memberProfileCompletedSchema,
+  memberStatusSchema,
+  validateMemberListDateRange,
+  memberListSortsSchema,
+} from "../member-list.validator";
 
-const dateQuerySchema = z.iso.date("날짜는 YYYY-MM-DD 형식의 유효한 날짜여야 합니다.").optional();
-
-/**
- * 고객 상태 (DB 컬럼이 아닌 isActive + deletedAt 조합으로 계산).
- */
-export const customerStatusSchema = z.enum(["ACTIVE", "SUSPENDED", "WITHDRAWN"], {
-  error: "회원 상태는 ACTIVE, SUSPENDED, WITHDRAWN 중 하나여야 합니다.",
-});
+const MAX_STATUS_REASON_LENGTH = 500;
+const MAX_STATUS_INTERNAL_NOTE_LENGTH = 1_000;
 
 export const customerIdParamSchema = z.object({
   id: z.uuid("올바른 회원 ID가 아닙니다."),
 });
 
 export const updateCustomerStatusBodySchema = z.object({
-  action: z.enum(["SUSPEND", "RELEASE"], {
+  action: z.enum(SuspensionAction, {
     error: "처리 동작은 SUSPEND 또는 RELEASE여야 합니다.",
   }),
   reason: z
     .string()
     .trim()
     .min(1, "처리 사유를 입력해 주세요.")
-    .max(500, "처리 사유는 500자 이하여야 합니다."),
-  internalNote: z.string().trim().max(1000, "내부 메모는 1000자 이하여야 합니다.").optional(),
+    .max(
+      MAX_STATUS_REASON_LENGTH,
+      `처리 사유는 ${String(MAX_STATUS_REASON_LENGTH)}자 이하여야 합니다.`,
+    ),
+  internalNote: z
+    .string()
+    .trim()
+    .max(
+      MAX_STATUS_INTERNAL_NOTE_LENGTH,
+      `내부 메모는 ${String(MAX_STATUS_INTERNAL_NOTE_LENGTH)}자 이하여야 합니다.`,
+    )
+    .optional(),
 });
 
-/**
- * 관리자 고객 목록 조회 쿼리.
- * status 미지정 시 ACTIVE + SUSPENDED 만 조회 (WITHDRAWN 제외).
- */
 export const listCustomerQuerySchema = z
   .object({
-    page: z.coerce
-      .number()
-      .int("페이지 번호는 정수여야 합니다.")
-      .positive("페이지 번호는 1 이상이어야 합니다.")
-      .max(MAX_PAGE, `페이지 번호는 ${String(MAX_PAGE)} 이하여야 합니다.`)
-      .default(1),
-    limit: z.coerce
-      .number()
-      .int("조회 개수는 정수여야 합니다.")
-      .positive("조회 개수는 1 이상이어야 합니다.")
-      .max(MAX_LIMIT, `조회 개수는 ${String(MAX_LIMIT)} 이하여야 합니다.`)
-      .default(20),
-    keyword: z
-      .string()
-      .trim()
-      .min(1, "검색어를 입력해 주세요.")
-      .max(100, "검색어는 100자 이하여야 합니다.")
-      .optional(),
-    status: customerStatusSchema.optional(),
-    fromDate: dateQuerySchema,
-    toDate: dateQuerySchema,
+    page: memberListPageSchema,
+    limit: memberListLimitSchema,
+    keyword: memberListKeywordSchema,
+    status: memberStatusSchema.optional(),
+    authProvider: z.enum(AuthProvider, { error: "올바른 가입 방식이 아닙니다." }).optional(),
+    isProfileCompleted: memberProfileCompletedSchema,
+    fromDate: memberListDateQuerySchema,
+    toDate: memberListDateQuerySchema,
+    sorts: memberListSortsSchema,
   })
-  .superRefine((data, ctx) => {
-    if (data.fromDate && data.toDate && data.fromDate > data.toDate) {
-      ctx.addIssue({
-        code: "custom",
-        path: ["fromDate"],
-        message: "시작일(fromDate)은 종료일(toDate)보다 늦을 수 없습니다.",
-      });
-    }
-  });
+  .superRefine(validateMemberListDateRange);
