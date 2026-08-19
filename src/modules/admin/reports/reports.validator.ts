@@ -25,7 +25,12 @@ export const listAdminReportsQuerySchema = z.object({
 
   reason: z.nativeEnum(ReportReason).optional(),
 
-  keyword: z.string().trim().min(1).max(100).optional(),
+  keyword: z
+    .string()
+    .trim()
+    .min(1, "검색어를 1자 이상 입력해 주세요.")
+    .max(100, "검색어는 100자 이하여야 합니다.")
+    .optional(),
 
   sort: z.enum(["LATEST", "OLDEST"]).default("LATEST"),
 });

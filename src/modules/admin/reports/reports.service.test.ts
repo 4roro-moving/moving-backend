@@ -363,6 +363,118 @@ describe("reportsService.getReportDetail", () => {
 
     assert.equal(result.target, null);
   });
+
+  it("REVIEW targetId가 숫자가 아니면 신고 상세는 유지하고 target만 null로 반환한다", async () => {
+    const report = createReportRow({
+      targetType: ReportTargetType.REVIEW,
+      targetId: "abc",
+    });
+
+    let reviewLookupCalled = false;
+
+    const service = createReportsService(
+      createRepositoryStub({
+        findReportById: async () => report,
+        findReviewTargetById: async () => {
+          reviewLookupCalled = true;
+          return null;
+        },
+      }),
+    );
+
+    const result = await service.getReportDetail(1);
+
+    assert.equal(result.id, report.id);
+    assert.equal(result.target, null);
+    assert.equal(reviewLookupCalled, false);
+  });
+
+  it("양의 정수가 아닌 numeric targetId는 repository 조회 없이 target null로 처리한다", async () => {
+    const invalidCases = [
+      { targetType: ReportTargetType.REVIEW, targetId: "0" },
+      { targetType: ReportTargetType.RESIDENCE_REVIEW, targetId: "-1" },
+      { targetType: ReportTargetType.GIVEAWAY, targetId: "1.5" },
+    ] as const;
+
+    for (const invalidCase of invalidCases) {
+      let lookupCalled = false;
+
+      const service = createReportsService(
+        createRepositoryStub({
+          findReportById: async () =>
+            createReportRow({
+              targetType: invalidCase.targetType,
+              targetId: invalidCase.targetId,
+            }),
+          findReviewTargetById: async () => {
+            lookupCalled = true;
+            return null;
+          },
+          findResidenceReviewTargetById: async () => {
+            lookupCalled = true;
+            return null;
+          },
+          findGiveawayTargetById: async () => {
+            lookupCalled = true;
+            return null;
+          },
+        }),
+      );
+
+      const result = await service.getReportDetail(1);
+
+      assert.equal(result.target, null);
+      assert.equal(
+        lookupCalled,
+        false,
+        `${invalidCase.targetType} target lookup should not be called for ${invalidCase.targetId}`,
+      );
+    }
+  });
+
+  it("존재하지 않는 MOVER UUID는 target null을 반환한다", async () => {
+    const report = createReportRow({
+      targetType: ReportTargetType.MOVER,
+      targetId: MOVER_ID,
+    });
+
+    const service = createReportsService(
+      createRepositoryStub({
+        findReportById: async () => report,
+        findMoverTargetById: async () => null,
+      }),
+    );
+
+    const result = await service.getReportDetail(1);
+
+    assert.equal(result.id, report.id);
+    assert.equal(result.target, null);
+  });
+
+  it("MOVER targetId가 malformed UUID여도 신고 상세는 유지하고 target만 null로 반환한다", async () => {
+    const report = createReportRow({
+      targetType: ReportTargetType.MOVER,
+      targetId: "not-a-uuid",
+    });
+
+    let moverLookupCalled = false;
+
+    const service = createReportsService(
+      createRepositoryStub({
+        findReportById: async () => report,
+        findMoverTargetById: async () => {
+          moverLookupCalled = true;
+          return null;
+        },
+      }),
+    );
+
+    const result = await service.getReportDetail(1);
+
+    assert.equal(result.id, report.id);
+    assert.equal(result.target, null);
+    assert.equal(moverLookupCalled, false);
+  });
 });
 
 describe("reportsService.handleReport", () => {

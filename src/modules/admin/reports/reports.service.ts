@@ -11,7 +11,11 @@ import {
   mapResidenceReviewReportTarget,
   mapReviewReportTarget,
 } from "./reports.mapper";
-import { assertReportPending, parseNumericReportTargetId } from "./reports.policy";
+import {
+  assertReportPending,
+  parseNumericReportTargetId,
+  parseUuidReportTargetId,
+} from "./reports.policy";
 import {
   reportsRepository,
   type AdminReportListFilters,
@@ -108,19 +112,34 @@ export function createReportsService(
     switch (targetType) {
       case ReportTargetType.REVIEW: {
         const reviewId = parseNumericReportTargetId(targetId);
+
+        if (reviewId === null) {
+          return null;
+        }
+
         const target = await repository.findReviewTargetById(reviewId);
 
         return target ? mapReviewReportTarget(target) : null;
       }
 
       case ReportTargetType.MOVER: {
-        const target = await repository.findMoverTargetById(targetId);
+        const moverId = parseUuidReportTargetId(targetId);
+
+        if (moverId === null) {
+          return null;
+        }
+
+        const target = await repository.findMoverTargetById(moverId);
 
         return target ? mapMoverReportTarget(target) : null;
       }
 
       case ReportTargetType.RESIDENCE_REVIEW: {
         const residenceReviewId = parseNumericReportTargetId(targetId);
+
+        if (residenceReviewId === null) {
+          return null;
+        }
 
         const target = await repository.findResidenceReviewTargetById(residenceReviewId);
 
@@ -129,6 +148,10 @@ export function createReportsService(
 
       case ReportTargetType.GIVEAWAY: {
         const giveawayId = parseNumericReportTargetId(targetId);
+
+        if (giveawayId === null) {
+          return null;
+        }
 
         const target = await repository.findGiveawayTargetById(giveawayId);
 

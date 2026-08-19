@@ -1,6 +1,9 @@
 import { ReportStatus } from "@prisma/client";
+import { z } from "zod";
 
 import { AppError } from "../../../lib/app-error";
+
+const reportTargetUuidSchema = z.uuid();
 
 export function assertReportPending(status: ReportStatus): void {
   if (status !== ReportStatus.PENDING) {
@@ -10,14 +13,18 @@ export function assertReportPending(status: ReportStatus): void {
   }
 }
 
-export function parseNumericReportTargetId(targetId: string): number {
+export function parseNumericReportTargetId(targetId: string): number | null {
   const id = Number(targetId);
 
   if (!Number.isInteger(id) || id <= 0) {
-    throw new AppError("NOT_FOUND", {
-      message: "신고 대상을 찾을 수 없습니다.",
-    });
+    return null;
   }
 
   return id;
+}
+
+export function parseUuidReportTargetId(targetId: string): string | null {
+  const result = reportTargetUuidSchema.safeParse(targetId);
+
+  return result.success ? result.data : null;
 }
