@@ -374,6 +374,17 @@ export const ERROR_CODES = {
     code: "GIVEAWAY_REQUEST_NOT_REJECTABLE",
     message: "대기 중인 신청만 거절할 수 있습니다.",
   },
+  // 이용약관 동의 처리
+  TERMS_AGREEMENT_REQUIRED: {
+    status: 400,
+    code: "TERMS_AGREEMENT_REQUIRED",
+    message: "필수 약관에 동의해야 가입할 수 있습니다.",
+  },
+  TERMS_AGREEMENT_INVALID: {
+    status: 400,
+    code: "TERMS_AGREEMENT_INVALID",
+    message: "약관 동의 정보가 올바르지 않습니다.",
+  },
 } as const;
 
 // ErrorCode의 key 타입

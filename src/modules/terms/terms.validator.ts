@@ -2,7 +2,7 @@ import { z } from "zod";
 
 // 페이지 번호 상한 (과도한 skip 값이 DB 조회로 전달되는 것을 방지)
 const MAX_PAGE = 10000;
-
+const MAX_TERMS_AGREEMENTS = 20;
 /**
  * 약관 유형.
  * TERMS_OF_SERVICE: 서비스 이용약관 / PRIVACY_POLICY: 개인정보 처리방침 /
@@ -27,6 +27,14 @@ const termsTypeSchema = z.enum(
  */
 const termsStatusSchema = z.enum(["DRAFT", "PUBLISHED", "ARCHIVED"], {
   error: "올바른 약관 상태가 아닙니다.",
+});
+
+/**
+ * 약관 동의 대상.
+ * ALL: 모든 회원 / CUSTOMER: 일반 사용자만 / MOVER: 기사님만
+ */
+const termsAudienceSchema = z.enum(["ALL", "CUSTOMER", "MOVER"], {
+  error: "올바른 약관 대상이 아닙니다.",
 });
 
 /**
@@ -70,6 +78,7 @@ export const createTermsSchema = z.object({
     .trim()
     .min(1, "본문을 입력해 주세요."),
   isRequired: z.boolean().default(true),
+  audience: termsAudienceSchema.optional(),
   effectiveAt: effectiveAtSchema.optional(),
 });
 
@@ -92,6 +101,7 @@ export const updateTermsSchema = z
       .min(1, "본문을 입력해 주세요.")
       .optional(),
     isRequired: z.boolean().optional(),
+    audience: termsAudienceSchema.optional(),
     effectiveAt: effectiveAtSchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
@@ -136,6 +146,41 @@ export const listTermsQuerySchema = z.object({
  */
 export const termsTypeParamSchema = z.object({
   type: termsTypeSchema,
+});
+
+/**
+ * 회원가입 시 전달하는 약관 동의 목록.
+ *
+ * 선택 약관은 거부(false)도 그대로 기록하므로 동의한 것만 보내지 말고
+ * 화면에 노출한 약관 전체를 보내야 합니다.
+ */
+export const termsAgreementsSchema = z
+  .array(
+    z.strictObject({
+      termsId: z
+        .number({ error: "약관 ID는 숫자여야 합니다." })
+        .int("올바른 약관 ID가 아닙니다.")
+        .positive("올바른 약관 ID가 아닙니다."),
+      isAgreed: z.boolean({ error: "동의 여부는 true 또는 false 여야 합니다." }),
+    }),
+    { error: "약관 동의 정보가 올바르지 않습니다." },
+  )
+  .max(MAX_TERMS_AGREEMENTS, `약관 동의는 ${String(MAX_TERMS_AGREEMENTS)}건 이하여야 합니다.`)
+  .refine(
+    (agreements) =>
+      new Set(agreements.map((agreement) => agreement.termsId)).size === agreements.length,
+    { error: "같은 약관이 중복으로 전달되었습니다." },
+  );
+
+/**
+ * 로그인한 사용자가 직접 동의를 저장/변경할 때 사용하는 body.
+ *
+ * 회원가입과 달리 "필수 약관을 모두 동의했는가"는 검증하지 않는다.
+ * 마케팅 수신 동의를 끄는 것처럼 선택 약관만 바꾸는 경우가 있기 때문이다.
+ * 필수 약관 미동의 상태는 GET /terms/me/pending 으로 확인한다.
+ */
+export const saveMyAgreementsSchema = z.strictObject({
+  agreements: termsAgreementsSchema.min(1, "동의할 약관을 선택해 주세요."),
 });
 
 export type TermsTypeParam = z.infer<typeof termsTypeParamSchema>;

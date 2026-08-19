@@ -6,7 +6,13 @@ import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
 
 import { termsRepository } from "./terms.repository";
-import type { CreateTermsInput, ListTermsQuery, UpdateTermsInput } from "./terms.type";
+import type {
+  CreateTermsInput,
+  ListTermsQuery,
+  TermsAgreementInput,
+  TermsAudienceRole,
+  UpdateTermsInput,
+} from "./terms.type";
 
 type CreateParams = {
   authorId: string;
@@ -57,6 +63,25 @@ async function findTermsOrThrow(termsId: number, db?: DbClient) {
   return terms;
 }
 
+/**
+ * 동의 이력에서 약관(termsId)별 최신 1건만 남긴다.
+ *
+ * 이력은 갱신하지 않고 계속 쌓이므로(마케팅 수신 동의/철회 반복 등)
+ * "현재 상태"는 가장 최근 기록으로 판단한다.
+ * repository 가 agreedAt 내림차순으로 반환하므로 첫 항목이 최신이다.
+ */
+function pickLatestByTermsId<T extends { termsId: number }>(histories: T[]): Map<number, T> {
+  const latest = new Map<number, T>();
+
+  for (const history of histories) {
+    if (!latest.has(history.termsId)) {
+      latest.set(history.termsId, history);
+    }
+  }
+
+  return latest;
+}
+
 export const termsService = {
   /**
    * 약관을 생성합니다. (관리자)
@@ -72,6 +97,11 @@ export const termsService = {
       isRequired: input.isRequired,
       authorId,
     };
+
+    // 미지정 시 스키마 기본값(ALL)을 사용한다.
+    if (input.audience !== undefined) {
+      data.audience = input.audience;
+    }
 
     if (input.effectiveAt !== undefined) {
       data.effectiveAt = new Date(`${input.effectiveAt}T00:00:00.000Z`);
@@ -141,6 +171,10 @@ export const termsService = {
 
     if (input.isRequired !== undefined) {
       data.isRequired = input.isRequired;
+    }
+
+    if (input.audience !== undefined) {
+      data.audience = input.audience;
     }
 
     if (input.effectiveAt !== undefined) {
@@ -224,5 +258,148 @@ export const termsService = {
     }
 
     return terms;
+  },
+
+  // ==========================================================================
+  // 약관 동의
+  // ==========================================================================
+
+  /**
+   * 회원가입 동의 화면에 노출할 약관 목록을 조회합니다.
+   * 해당 역할이 대상인 게시본만(필수 + 선택) 내려줍니다.
+   */
+  getSignUpTerms(role: TermsAudienceRole) {
+    return termsRepository.findPublishedForRole(role);
+  },
+
+  /**
+   * 회원가입 시 받은 약관 동의를 검증하고 저장합니다.
+   *
+   * 유저 생성과 반드시 같은 트랜잭션에서 호출해야 합니다.
+   * 유저는 생성됐는데 동의 이력이 없는 상태를 만들지 않기 위함입니다.
+   *
+   * 검증 순서
+   * 1. 전달된 termsId 가 실제 게시본이고 해당 역할 대상인지 (임의 id 차단)
+   * 2. 해당 역할의 필수 약관을 모두 동의했는지
+   */
+  async saveSignUpAgreements(
+    userId: string,
+    role: TermsAudienceRole,
+    agreements: TermsAgreementInput[],
+    db: DbClient,
+  ): Promise<void> {
+    const requiredTerms = await termsRepository.findRequiredPublished(role, db);
+
+    // 게시된 필수 약관도 없고 전달된 동의도 없으면 처리할 것이 없다.
+    if (requiredTerms.length === 0 && agreements.length === 0) {
+      return;
+    }
+
+    if (agreements.length > 0) {
+      const validTerms = await termsRepository.findPublishedByIds(
+        agreements.map((agreement) => agreement.termsId),
+        role,
+        db,
+      );
+      const validTermsIds = new Set(validTerms.map((terms) => terms.id));
+
+      const invalidIds = agreements
+        .map((agreement) => agreement.termsId)
+        .filter((termsId) => !validTermsIds.has(termsId));
+
+      if (invalidIds.length > 0) {
+        throw new AppError("TERMS_AGREEMENT_INVALID", {
+          message: `게시되지 않았거나 대상이 아닌 약관이 포함되어 있습니다. (id: ${invalidIds.join(", ")})`,
+        });
+      }
+    }
+
+    const agreedTermsIds = new Set(
+      agreements.filter((agreement) => agreement.isAgreed).map((agreement) => agreement.termsId),
+    );
+
+    const missingTerms = requiredTerms.filter((terms) => !agreedTermsIds.has(terms.id));
+
+    if (missingTerms.length > 0) {
+      throw new AppError("TERMS_AGREEMENT_REQUIRED", {
+        message: `필수 약관에 동의해야 가입할 수 있습니다. (${missingTerms
+          .map((terms) => terms.title)
+          .join(", ")})`,
+      });
+    }
+
+    if (agreements.length === 0) {
+      return;
+    }
+
+    await termsRepository.createAgreements(
+      agreements.map((agreement) => ({
+        userId,
+        termsId: agreement.termsId,
+        isAgreed: agreement.isAgreed,
+      })),
+      db,
+    );
+  },
+
+  /**
+   * 내 약관 동의 내역을 조회합니다.
+   * 이력이 쌓이므로 약관 버전별 최신 1건만 남겨 현재 상태로 보여줍니다.
+   */
+  async getMyAgreements(userId: string) {
+    const histories = await termsRepository.findAgreementsByUserId(userId);
+
+    return [...pickLatestByTermsId(histories).values()];
+  },
+
+  /**
+   * 아직 동의하지 않은 필수 약관을 조회합니다.
+   *
+   * 약관을 개정하면 새 Terms 행이 생겨 termsId 가 달라지므로,
+   * 별도 플래그 없이 여기서 자동으로 "재동의 필요" 대상으로 잡힙니다.
+   */
+  async getPendingRequiredTerms(userId: string, role: TermsAudienceRole) {
+    const requiredTerms = await termsRepository.findRequiredPublished(role);
+
+    if (requiredTerms.length === 0) {
+      return [];
+    }
+
+    const histories = await termsRepository.findAgreementsByUserId(userId);
+    const latest = pickLatestByTermsId(histories);
+
+    return requiredTerms.filter((terms) => latest.get(terms.id)?.isAgreed !== true);
+  },
+
+  async saveMyAgreements(
+    userId: string,
+    role: TermsAudienceRole,
+    agreements: TermsAgreementInput[],
+  ) {
+    const validTerms = await termsRepository.findPublishedByIds(
+      agreements.map((agreement) => agreement.termsId),
+      role,
+    );
+    const validTermsIds = new Set(validTerms.map((terms) => terms.id));
+
+    const invalidIds = agreements
+      .map((agreement) => agreement.termsId)
+      .filter((termsId) => !validTermsIds.has(termsId));
+
+    if (invalidIds.length > 0) {
+      throw new AppError("TERMS_AGREEMENT_INVALID", {
+        message: `게시되지 않았거나 대상이 아닌 약관이 포함되어 있습니다. (id: ${invalidIds.join(", ")})`,
+      });
+    }
+
+    await termsRepository.createAgreements(
+      agreements.map((agreement) => ({
+        userId,
+        termsId: agreement.termsId,
+        isAgreed: agreement.isAgreed,
+      })),
+    );
+
+    return termsService.getMyAgreements(userId);
   },
 };

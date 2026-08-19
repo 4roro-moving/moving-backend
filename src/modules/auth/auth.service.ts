@@ -35,6 +35,9 @@ import {
 import { tokenHash } from "../../utils/tokenHash";
 import { runTransaction } from "../../utils/transaction";
 
+import { termsService } from "../terms/terms.service";
+import type { TermsAgreementInput } from "../terms/terms.type";
+
 const PASSWORD_SALT_ROUNDS = 10;
 const REFRESH_TOKEN_RETENTION_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -164,6 +167,8 @@ const createLocalUser = async (input: SignUpInput, role: SignUpRole): Promise<Au
         },
         tx,
       );
+
+      await termsService.saveSignUpAgreements(user.id, role, input.agreements ?? [], tx);
 
       const { accessToken, refreshToken, refreshTokenExpiresAt } = createAuthTokens(
         user.id,
@@ -412,6 +417,7 @@ const createOAuthLoginResponse = async (
 const loginWithOAuth = async (
   profile: OAuthProfile,
   requestedRole: SignUpRole,
+  agreements: TermsAgreementInput[] = [],
 ): Promise<AuthResponse> => {
   const existingOAuthUser = await authRepository.findByProviderAndProviderId(
     profile.provider,
@@ -456,7 +462,7 @@ const loginWithOAuth = async (
         },
         tx,
       );
-
+      await termsService.saveSignUpAgreements(user.id, requestedRole, agreements, tx);
       const { accessToken, refreshToken, refreshTokenExpiresAt } = createAuthTokens(
         user.id,
         user.role,
@@ -536,7 +542,7 @@ const loginWithOAuth = async (
 const loginWithGoogle = async (input: GoogleOAuthInput): Promise<AuthResponse> => {
   const profile = await googleOAuth.getGoogleOAuthProfile(input.code);
 
-  return loginWithOAuth(profile, input.role);
+  return loginWithOAuth(profile, input.role, input.agreements ?? []);
 };
 
 /*
@@ -548,7 +554,7 @@ const loginWithGoogle = async (input: GoogleOAuthInput): Promise<AuthResponse> =
 const loginWithKakao = async (input: KakaoOAuthInput): Promise<AuthResponse> => {
   const profile = await kakaoOAuth.getKakaoOAuthProfile(input.code);
 
-  return loginWithOAuth(profile, input.role);
+  return loginWithOAuth(profile, input.role, input.agreements ?? []);
 };
 
 /*
@@ -560,7 +566,7 @@ const loginWithKakao = async (input: KakaoOAuthInput): Promise<AuthResponse> => 
 const loginWithNaver = async (input: NaverOAuthInput): Promise<AuthResponse> => {
   const profile = await naverOAuth.getNaverOAuthProfile(input.code, input.state);
 
-  return loginWithOAuth(profile, input.role);
+  return loginWithOAuth(profile, input.role, input.agreements ?? []);
 };
 
 /*
