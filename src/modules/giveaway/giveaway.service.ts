@@ -26,7 +26,7 @@ import {
 } from "./giveaway.policy";
 import { giveawayRepository } from "./giveaway.repository";
 import type { GiveawayOwnershipRow } from "./giveaway.repository";
-import { GIVEAWAY_REQUEST_STATUS, GIVEAWAY_VISIBILITY } from "./giveaway.type";
+import { GIVEAWAY_REQUEST_STATUS, GIVEAWAY_STATUS, GIVEAWAY_VISIBILITY } from "./giveaway.type";
 import type {
   CreateGiveawayInput,
   CreateGiveawayRequestInput,
@@ -499,6 +499,12 @@ async function selectGiveawayRequest(giveawayId: number, requestId: number, auth
     );
   } catch (error) {
     if (isDuplicateSelectedError(error)) {
+      throw new AppError("GIVEAWAY_RECEIVER_ALREADY_SELECTED");
+    }
+
+    const giveaway = await giveawayRepository.findGiveawayOwnership(giveawayId);
+
+    if (giveaway && giveaway.status !== GIVEAWAY_STATUS.AVAILABLE) {
       throw new AppError("GIVEAWAY_RECEIVER_ALREADY_SELECTED");
     }
 

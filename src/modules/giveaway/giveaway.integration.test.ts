@@ -264,12 +264,7 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
 
       for (const result of rejected) {
         assert.ok(result.reason instanceof AppError);
-        // Serializable 충돌 재시도가 소진되면 INTERNAL_SERVER_ERROR가 날 수 있다.
-        // 핵심은 아래 DB 정합성(SELECTED 1건)이다.
-        assert.ok(
-          result.reason.code === "GIVEAWAY_RECEIVER_ALREADY_SELECTED" ||
-            result.reason.code === "INTERNAL_SERVER_ERROR",
-        );
+        assert.equal(result.reason.code, "GIVEAWAY_RECEIVER_ALREADY_SELECTED");
       }
 
       const [giveaway, requestA, requestB] = await Promise.all([
