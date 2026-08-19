@@ -26,9 +26,13 @@ export type ListResidenceReviewQuery = z.infer<typeof listResidenceReviewQuerySc
 export type ListMyResidenceReviewQuery = z.infer<typeof listMyResidenceReviewQuerySchema>;
 export type ResidenceReviewListSort = ListResidenceReviewQuery["sort"];
 
-export type ResidenceReviewCursor = {
-  sort: ResidenceReviewListSort;
-  rating: number;
+export type ResidenceReviewCursorQuery = Pick<
+  ListResidenceReviewQuery,
+  "sort" | "keyword" | "regionId" | "rating"
+>;
+
+export type ResidenceReviewCursor = ResidenceReviewCursorQuery & {
+  ratingCursor: number;
   createdAt: Date;
   id: number;
 };
@@ -48,17 +52,22 @@ export type ResidenceReviewRegionSummary = ResidenceReviewRegion & {
   averageRating: number;
 };
 
-export type PublicResidenceReview = {
+export type ResidenceReviewItem = {
   id: number;
   title: string;
   content: string;
   rating: number;
   region: ResidenceReviewRegionSummary;
   author: ResidenceReviewAuthor;
-  isMine: boolean;
   createdAt: Date;
   updatedAt: Date;
 };
+
+export type PublicResidenceReview = ResidenceReviewItem & {
+  isMine: boolean;
+};
+
+export type MyResidenceReview = ResidenceReviewItem;
 
 export type RegionReviewStatistic = {
   region: ResidenceReviewRegion;

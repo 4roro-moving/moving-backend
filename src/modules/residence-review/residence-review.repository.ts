@@ -133,7 +133,7 @@ async function findManyWithCount({ skip, take, where }: ListParams, db: DbClient
   return { reviews, totalCount };
 }
 
-export function buildListWhere({
+function buildListWhere({
   regionId,
   keyword,
   rating,
@@ -171,10 +171,10 @@ function buildCursorCondition(cursor: ResidenceReviewCursor): Prisma.ResidenceRe
   if (cursor.sort === RESIDENCE_REVIEW_LIST_SORT.RATING) {
     return {
       OR: [
-        { rating: { lt: cursor.rating } },
-        { rating: cursor.rating, createdAt: { lt: cursor.createdAt } },
+        { rating: { lt: cursor.ratingCursor } },
+        { rating: cursor.ratingCursor, createdAt: { lt: cursor.createdAt } },
         {
-          rating: cursor.rating,
+          rating: cursor.ratingCursor,
           createdAt: cursor.createdAt,
           id: { lt: cursor.id },
         },

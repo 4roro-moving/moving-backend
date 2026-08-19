@@ -18,7 +18,8 @@ const customerAuth = [authenticate, authorize(UserRole.CUSTOMER)] as const;
 
 /**
  * 공개 거주후기 라우터 (/api/residence-reviews)
- * 인증 없이 노출 중인(isHidden=false) 후기만 조회합니다.
+ * 비회원도 노출 중인(isHidden=false) 후기를 조회할 수 있습니다.
+ * 목록·상세는 로그인 시 isMine을 내려주기 위해 optionalAuthenticate를 사용합니다.
  */
 const publicResidenceReviewRouter = Router();
 
@@ -48,6 +49,7 @@ publicResidenceReviewRouter.get(
  */
 const residenceReviewRouter = Router();
 
+// 내 후기는 건수가 많지 않고 페이지 번호를 직접 지정하는 편이 맞아 offset 페이지네이션을 유지합니다.
 residenceReviewRouter.get(
   "/me",
   ...customerAuth,

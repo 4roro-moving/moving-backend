@@ -1,30 +1,47 @@
 import { AppError } from "../../lib/app-error";
-import type { ResidenceReviewCursor, ResidenceReviewListSort } from "./residence-review.type";
-import { RESIDENCE_REVIEW_LIST_SORT, RESIDENCE_REVIEW_RATING } from "./residence-review.validator";
+import type { ResidenceReviewCursor, ResidenceReviewCursorQuery } from "./residence-review.type";
+import { RESIDENCE_REVIEW_RATING } from "./residence-review.validator";
 
 type SerializedResidenceReviewCursor = {
-  sort: ResidenceReviewListSort;
-  rating: number;
+  sort: ResidenceReviewCursorQuery["sort"];
+  ratingCursor: number;
   createdAt: string;
   id: number;
+  keyword?: string;
+  regionId?: number;
+  rating?: number;
 };
 
-const LIST_SORTS = new Set<string>(Object.values(RESIDENCE_REVIEW_LIST_SORT));
+function isSameOptionalValue<T>(left: T | undefined, right: T | undefined): boolean {
+  return left === right;
+}
+
+function isValidRatingValue(value: number | undefined): value is number {
+  return (
+    value !== undefined &&
+    Number.isInteger(value) &&
+    value >= RESIDENCE_REVIEW_RATING.MIN &&
+    value <= RESIDENCE_REVIEW_RATING.MAX
+  );
+}
 
 export function encodeResidenceReviewCursor(cursor: ResidenceReviewCursor): string {
   return Buffer.from(
     JSON.stringify({
       sort: cursor.sort,
-      rating: cursor.rating,
+      ratingCursor: cursor.ratingCursor,
       createdAt: cursor.createdAt.toISOString(),
       id: cursor.id,
+      ...(cursor.keyword !== undefined ? { keyword: cursor.keyword } : {}),
+      ...(cursor.regionId !== undefined ? { regionId: cursor.regionId } : {}),
+      ...(cursor.rating !== undefined ? { rating: cursor.rating } : {}),
     } satisfies SerializedResidenceReviewCursor),
   ).toString("base64url");
 }
 
 export function decodeResidenceReviewCursor(
   cursor: string | undefined,
-  sort: ResidenceReviewListSort,
+  query: ResidenceReviewCursorQuery,
 ): ResidenceReviewCursor | undefined {
   if (!cursor) {
     return undefined;
@@ -37,12 +54,12 @@ export function decodeResidenceReviewCursor(
     const createdAt = new Date(decoded.createdAt ?? "");
 
     if (
-      !LIST_SORTS.has(decoded.sort ?? "") ||
-      decoded.sort !== sort ||
+      decoded.sort !== query.sort ||
+      !isSameOptionalValue(decoded.keyword, query.keyword) ||
+      !isSameOptionalValue(decoded.regionId, query.regionId) ||
+      !isSameOptionalValue(decoded.rating, query.rating) ||
       Number.isNaN(createdAt.getTime()) ||
-      !Number.isInteger(decoded.rating) ||
-      (decoded.rating ?? 0) < RESIDENCE_REVIEW_RATING.MIN ||
-      (decoded.rating ?? 0) > RESIDENCE_REVIEW_RATING.MAX ||
+      !isValidRatingValue(decoded.ratingCursor) ||
       !Number.isInteger(decoded.id) ||
       (decoded.id ?? 0) <= 0
     ) {
@@ -50,10 +67,13 @@ export function decodeResidenceReviewCursor(
     }
 
     return {
-      sort,
-      rating: decoded.rating as number,
+      sort: query.sort,
+      ratingCursor: decoded.ratingCursor,
       createdAt,
       id: decoded.id as number,
+      keyword: query.keyword,
+      regionId: query.regionId,
+      rating: query.rating,
     };
   } catch {
     throw new AppError("VALIDATION_ERROR", {
