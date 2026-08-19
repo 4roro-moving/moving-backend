@@ -74,6 +74,18 @@ const descriptionSchema = z
     error: "상세 소개는 1000자 이하여야 합니다.",
   });
 
+//기사 활동 거점 추가
+const activityBaseSchema = z.strictObject({
+  address: z.string().trim().min(1, "활동 거점 주소를 입력해주세요.").max(255),
+  detailAddress: z.string().trim().max(100).optional(),
+  zipCode: z
+    .string()
+    .trim()
+    .regex(/^\d{5}$/, "우편번호는 5자리 숫자여야 합니다."),
+  latitude: z.number().finite().min(-90).max(90),
+  longitude: z.number().finite().min(-180).max(180),
+});
+
 const regionIdsSchema = z
   .array(
     z
@@ -118,6 +130,7 @@ export const createProfileSchema = z.strictObject({
   career: careerSchema,
   shortIntro: shortIntroSchema,
   description: descriptionSchema,
+  activityBase: activityBaseSchema,
   regionIds: regionIdsSchema,
   serviceTypes: serviceTypesSchema,
 });
@@ -194,6 +207,8 @@ export const updateProfileSchema = z
     shortIntro: shortIntroSchema.optional(),
 
     description: descriptionSchema.optional(),
+
+    activityBase: activityBaseSchema.optional(),
 
     regionIds: regionIdsSchema.optional(),
 

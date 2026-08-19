@@ -9,6 +9,13 @@ interface CreateMoverProfileData {
   career: number;
   shortIntro: string;
   description: string;
+  activityBase: {
+    address: string;
+    detailAddress?: string;
+    zipCode: string;
+    latitude: number;
+    longitude: number;
+  };
   regionIds: number[];
   serviceTypes: MoveType[];
 }
@@ -25,6 +32,11 @@ interface UpdateMoverProfileData {
   career?: number;
   shortIntro?: string;
   description?: string;
+  activityBaseAddress?: string;
+  activityBaseDetailAddress?: string | null;
+  activityBaseZipCode?: string;
+  activityBaseLatitude?: number;
+  activityBaseLongitude?: number;
 }
 
 /*
@@ -229,6 +241,11 @@ const createProfile = async (
       career: input.career,
       shortIntro: input.shortIntro,
       description: input.description,
+      activityBaseAddress: input.activityBase.address,
+      activityBaseDetailAddress: input.activityBase.detailAddress ?? null,
+      activityBaseZipCode: input.activityBase.zipCode,
+      activityBaseLatitude: input.activityBase.latitude,
+      activityBaseLongitude: input.activityBase.longitude,
 
       serviceAreas: {
         create: input.regionIds.map((regionId) => ({

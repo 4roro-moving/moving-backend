@@ -128,6 +128,7 @@ const createProfile = async (
     career: input.career,
     shortIntro: input.shortIntro,
     description: input.description,
+    activityBase: input.activityBase,
     regionIds: input.regionIds,
     serviceTypes: input.serviceTypes,
   };
@@ -496,7 +497,8 @@ const updateProfile = async (
         input.imageUrl !== undefined ||
         input.career !== undefined ||
         input.shortIntro !== undefined ||
-        input.description !== undefined;
+        input.description !== undefined ||
+        input.activityBase !== undefined;
 
       if (hasProfileUpdate) {
         await profileRepository.updateProfile(
@@ -520,6 +522,14 @@ const updateProfile = async (
 
             ...(input.description !== undefined && {
               description: input.description,
+            }),
+
+            ...(input.activityBase !== undefined && {
+              activityBaseAddress: input.activityBase.address,
+              activityBaseDetailAddress: input.activityBase.detailAddress ?? null,
+              activityBaseZipCode: input.activityBase.zipCode,
+              activityBaseLatitude: input.activityBase.latitude,
+              activityBaseLongitude: input.activityBase.longitude,
             }),
           },
           tx,

@@ -11,6 +11,22 @@ export const mapProfileResponse = (
   profile: MoverProfileWithRelations,
   hasPassword: boolean,
 ): ProfileResponse => {
+  const activityBase =
+    profile.activityBaseAddress !== null &&
+    profile.activityBaseZipCode !== null &&
+    profile.activityBaseLatitude !== null &&
+    profile.activityBaseLongitude !== null
+      ? {
+          address: profile.activityBaseAddress,
+          ...(profile.activityBaseDetailAddress !== null && {
+            detailAddress: profile.activityBaseDetailAddress,
+          }),
+          zipCode: profile.activityBaseZipCode,
+          latitude: profile.activityBaseLatitude.toNumber(),
+          longitude: profile.activityBaseLongitude.toNumber(),
+        }
+      : null;
+
   return {
     id: profile.id,
     userId: profile.userId,
@@ -23,6 +39,7 @@ export const mapProfileResponse = (
     career: profile.career,
     shortIntro: profile.shortIntro,
     description: profile.description,
+    activityBase,
     confirmedCount: profile.confirmedCount,
     averageRating: profile.averageRating.toNumber(),
     reviewCount: profile.reviewCount,

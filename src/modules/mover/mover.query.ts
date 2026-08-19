@@ -13,6 +13,8 @@ export const MOVER_LIST_SELECT = {
   confirmedCount: true,
   averageRating: true,
   reviewCount: true,
+  activityBaseLatitude: true,
+  activityBaseLongitude: true,
   serviceTypes: {
     select: {
       moveType: true,

@@ -1,5 +1,13 @@
 import type { MoveType } from "@prisma/client";
 
+export interface MoverActivityBase {
+  address: string;
+  detailAddress?: string;
+  zipCode: string;
+  latitude: number;
+  longitude: number;
+}
+
 export interface CreateProfileInput {
   phone?: string;
 
@@ -8,6 +16,7 @@ export interface CreateProfileInput {
   career: number;
   shortIntro: string;
   description: string;
+  activityBase: MoverActivityBase;
   regionIds: number[];
   serviceTypes: MoveType[];
 }
@@ -26,6 +35,7 @@ export interface UpdateProfileInput {
   career?: number;
   shortIntro?: string;
   description?: string;
+  activityBase?: MoverActivityBase;
   regionIds?: number[];
   serviceTypes?: MoveType[];
 }
@@ -44,6 +54,7 @@ export interface ProfileResponse {
   career: number;
   shortIntro: string;
   description: string;
+  activityBase: MoverActivityBase | null;
 
   confirmedCount: number;
   averageRating: number;
