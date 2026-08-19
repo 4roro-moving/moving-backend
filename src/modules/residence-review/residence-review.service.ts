@@ -2,12 +2,15 @@ import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import type { CursorPagination } from "../../types/response.type";
+import { getProfileImageUrl } from "../../utils/image-url";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
 import {
   decodeResidenceReviewCursor,
-  encodeResidenceReviewCursor,
+  encodeResidenceReviewNextCursor,
+  sliceResidenceReviewCursorPage,
+  toResidenceReviewCursorQuery,
 } from "./residence-review.cursor";
 import { residenceReviewRepository } from "./residence-review.repository";
 import type { ResidenceReviewRow } from "./residence-review.repository";
@@ -36,7 +39,7 @@ function toResidenceReviewItem(row: ResidenceReviewRow, averageRating?: number):
     author: {
       id: row.author.id,
       name: row.author.name,
-      imageUrl: row.author.customerProfile?.imageUrl ?? null,
+      imageUrl: getProfileImageUrl(row.author.customerProfile?.imageUrl ?? null),
     },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -116,7 +119,7 @@ async function findOwnedVisibleResidenceReviewOrThrow(
 
 async function getPublicResidenceReviewList(query: ListResidenceReviewQuery, viewerId?: string) {
   const { cursor, limit, regionId, keyword, rating, sort } = query;
-  const cursorQuery = { sort, keyword, regionId, rating };
+  const cursorQuery = toResidenceReviewCursorQuery({ sort, keyword, regionId, rating });
   const decodedCursor = decodeResidenceReviewCursor(cursor, cursorQuery);
 
   if (regionId !== undefined) {
@@ -132,9 +135,7 @@ async function getPublicResidenceReviewList(query: ListResidenceReviewQuery, vie
     ...(decodedCursor ? { cursor: decodedCursor } : {}),
   });
 
-  const hasNext = reviews.length > limit;
-  const pageReviews = reviews.slice(0, limit);
-  const lastReview = pageReviews.at(-1);
+  const { pageReviews, hasNext } = sliceResidenceReviewCursorPage(reviews, limit);
 
   return {
     reviews: pageReviews.map((review) => toPublicResidenceReview(review, viewerId)),
@@ -142,15 +143,7 @@ async function getPublicResidenceReviewList(query: ListResidenceReviewQuery, vie
       limit,
       totalCount,
       hasNext,
-      nextCursor:
-        hasNext && lastReview
-          ? encodeResidenceReviewCursor({
-              ...cursorQuery,
-              ratingCursor: lastReview.rating,
-              createdAt: lastReview.createdAt,
-              id: lastReview.id,
-            })
-          : null,
+      nextCursor: encodeResidenceReviewNextCursor(pageReviews.at(-1), hasNext, cursorQuery),
     } satisfies CursorPagination,
   };
 }

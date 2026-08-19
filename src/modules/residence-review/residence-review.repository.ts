@@ -2,13 +2,12 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
-import { RESIDENCE_REVIEW_VISIBILITY } from "./residence-review.type";
+import { RESIDENCE_REVIEW_LIST_SORT, RESIDENCE_REVIEW_VISIBILITY } from "./residence-review.type";
 import type {
   CreateResidenceReviewInput,
   ResidenceReviewCursor,
   ResidenceReviewListSort,
 } from "./residence-review.type";
-import { RESIDENCE_REVIEW_LIST_SORT } from "./residence-review.validator";
 
 const residenceReviewSelect = {
   id: true,
@@ -167,7 +166,9 @@ function buildListOrderBy(
   return [{ createdAt: "desc" }, { id: "desc" }];
 }
 
-function buildCursorCondition(cursor: ResidenceReviewCursor): Prisma.ResidenceReviewWhereInput {
+export function buildCursorCondition(
+  cursor: ResidenceReviewCursor,
+): Prisma.ResidenceReviewWhereInput {
   if (cursor.sort === RESIDENCE_REVIEW_LIST_SORT.RATING) {
     return {
       OR: [

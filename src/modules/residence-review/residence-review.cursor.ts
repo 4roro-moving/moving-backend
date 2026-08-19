@@ -1,9 +1,13 @@
 import { AppError } from "../../lib/app-error";
-import type { ResidenceReviewCursor, ResidenceReviewCursorQuery } from "./residence-review.type";
+import type {
+  ResidenceReviewCursor,
+  ResidenceReviewCursorQuery,
+  ResidenceReviewListSort,
+} from "./residence-review.type";
 import { RESIDENCE_REVIEW_RATING } from "./residence-review.validator";
 
 type SerializedResidenceReviewCursor = {
-  sort: ResidenceReviewCursorQuery["sort"];
+  sort: ResidenceReviewListSort;
   ratingCursor: number;
   createdAt: string;
   id: number;
@@ -12,17 +16,60 @@ type SerializedResidenceReviewCursor = {
   rating?: number;
 };
 
+type ResidenceReviewCursorPosition = {
+  rating: number;
+  createdAt: Date;
+  id: number;
+};
+
+type ResidenceReviewCursorQueryInput = {
+  sort: ResidenceReviewListSort;
+  keyword?: string | undefined;
+  regionId?: number | undefined;
+  rating?: number | undefined;
+};
+
 function isSameOptionalValue<T>(left: T | undefined, right: T | undefined): boolean {
   return left === right;
 }
 
-function isValidRatingValue(value: number | undefined): value is number {
+function isValidRatingValue(value: unknown): value is number {
   return (
-    value !== undefined &&
+    typeof value === "number" &&
     Number.isInteger(value) &&
     value >= RESIDENCE_REVIEW_RATING.MIN &&
     value <= RESIDENCE_REVIEW_RATING.MAX
   );
+}
+
+function isPositiveInt(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value > 0;
+}
+
+export function toResidenceReviewCursorQuery(
+  query: ResidenceReviewCursorQueryInput,
+): ResidenceReviewCursorQuery {
+  return {
+    sort: query.sort,
+    ...(query.keyword !== undefined ? { keyword: query.keyword } : {}),
+    ...(query.regionId !== undefined ? { regionId: query.regionId } : {}),
+    ...(query.rating !== undefined ? { rating: query.rating } : {}),
+  };
+}
+
+export function sliceResidenceReviewCursorPage<T>(
+  reviews: T[],
+  limit: number,
+): {
+  pageReviews: T[];
+  hasNext: boolean;
+} {
+  const hasNext = reviews.length > limit;
+
+  return {
+    pageReviews: reviews.slice(0, limit),
+    hasNext,
+  };
 }
 
 export function encodeResidenceReviewCursor(cursor: ResidenceReviewCursor): string {
@@ -39,6 +86,23 @@ export function encodeResidenceReviewCursor(cursor: ResidenceReviewCursor): stri
   ).toString("base64url");
 }
 
+export function encodeResidenceReviewNextCursor(
+  lastReview: ResidenceReviewCursorPosition | undefined,
+  hasNext: boolean,
+  query: ResidenceReviewCursorQuery,
+): string | null {
+  if (!hasNext || lastReview === undefined) {
+    return null;
+  }
+
+  return encodeResidenceReviewCursor({
+    ...query,
+    ratingCursor: lastReview.rating,
+    createdAt: lastReview.createdAt,
+    id: lastReview.id,
+  });
+}
+
 export function decodeResidenceReviewCursor(
   cursor: string | undefined,
   query: ResidenceReviewCursorQuery,
@@ -52,6 +116,7 @@ export function decodeResidenceReviewCursor(
       Buffer.from(cursor, "base64url").toString("utf8"),
     ) as Partial<SerializedResidenceReviewCursor>;
     const createdAt = new Date(decoded.createdAt ?? "");
+    const id = decoded.id;
 
     if (
       decoded.sort !== query.sort ||
@@ -60,8 +125,7 @@ export function decodeResidenceReviewCursor(
       !isSameOptionalValue(decoded.rating, query.rating) ||
       Number.isNaN(createdAt.getTime()) ||
       !isValidRatingValue(decoded.ratingCursor) ||
-      !Number.isInteger(decoded.id) ||
-      (decoded.id ?? 0) <= 0
+      !isPositiveInt(id)
     ) {
       throw new Error("Invalid cursor");
     }
@@ -70,10 +134,10 @@ export function decodeResidenceReviewCursor(
       sort: query.sort,
       ratingCursor: decoded.ratingCursor,
       createdAt,
-      id: decoded.id as number,
-      keyword: query.keyword,
-      regionId: query.regionId,
-      rating: query.rating,
+      id,
+      ...(query.keyword !== undefined ? { keyword: query.keyword } : {}),
+      ...(query.regionId !== undefined ? { regionId: query.regionId } : {}),
+      ...(query.rating !== undefined ? { rating: query.rating } : {}),
     };
   } catch {
     throw new AppError("VALIDATION_ERROR", {

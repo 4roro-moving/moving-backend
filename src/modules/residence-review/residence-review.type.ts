@@ -18,18 +18,28 @@ export const REGION_REVIEW_STATISTIC = {
   AVERAGE_DECIMAL_PLACES: 2,
 } as const;
 
+export const RESIDENCE_REVIEW_LIST_SORT = {
+  CREATED_AT: "createdAt",
+  CREATED_AT_ASC: "createdAtAsc",
+  RATING: "rating",
+} as const;
+
+export type ResidenceReviewListSort =
+  (typeof RESIDENCE_REVIEW_LIST_SORT)[keyof typeof RESIDENCE_REVIEW_LIST_SORT];
+
 export type CreateResidenceReviewInput = z.infer<typeof createResidenceReviewSchema>;
 export type UpdateResidenceReviewInput = z.infer<typeof updateResidenceReviewSchema>;
 export type ResidenceReviewIdParam = z.infer<typeof residenceReviewIdParamSchema>;
 export type RegionIdParam = z.infer<typeof regionIdParamSchema>;
 export type ListResidenceReviewQuery = z.infer<typeof listResidenceReviewQuerySchema>;
 export type ListMyResidenceReviewQuery = z.infer<typeof listMyResidenceReviewQuerySchema>;
-export type ResidenceReviewListSort = ListResidenceReviewQuery["sort"];
 
-export type ResidenceReviewCursorQuery = Pick<
-  ListResidenceReviewQuery,
-  "sort" | "keyword" | "regionId" | "rating"
->;
+export type ResidenceReviewCursorQuery = {
+  sort: ResidenceReviewListSort;
+  keyword?: string;
+  regionId?: number;
+  rating?: number;
+};
 
 export type ResidenceReviewCursor = ResidenceReviewCursorQuery & {
   ratingCursor: number;
