@@ -6,6 +6,7 @@ import type {
   CreateTermsInput,
   ListTermsQuery,
   TermsAudienceRole,
+  SaveMyAgreementsInput,
   TermsIdParam,
   UpdateTermsInput,
 } from "./terms.type";
@@ -154,6 +155,19 @@ export const termsController = {
     res.status(200).json({
       success: true,
       data: terms,
+    });
+  },
+
+  // POST /api/terms/me/agreements  내 약관 동의 저장 (재동의 / 마케팅 수신 변경)
+  saveMyAgreements: async (req: Request, res: Response) => {
+    const { id, role } = getAuthUser(req);
+    const { agreements } = req.body as SaveMyAgreementsInput;
+
+    const saved = await termsService.saveMyAgreements(id, role, agreements);
+
+    res.status(201).json({
+      success: true,
+      data: saved,
     });
   },
 };

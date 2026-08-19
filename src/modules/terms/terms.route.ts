@@ -8,6 +8,7 @@ import {
   createTermsSchema,
   listTermsQuerySchema,
   termsIdParamSchema,
+  saveMyAgreementsSchema,
   termsTypeParamSchema,
   updateTermsSchema,
 } from "./terms.validator";
@@ -48,22 +49,25 @@ const publicTermsRouter = Router();
 
 publicTermsRouter.get("/", asyncHandler(termsController.getPublishedList));
 
-publicTermsRouter.get(
-  "/:type",
-  validate({ params: termsTypeParamSchema }),
-  asyncHandler(termsController.getPublishedByType),
-);
-
-publicTermsRouter.get(
-  "/me/agreements",
-  authenticate,
-  asyncHandler(termsController.getMyAgreements),
-);
+publicTermsRouter
+  .route("/me/agreements")
+  .get(authenticate, asyncHandler(termsController.getMyAgreements))
+  .post(
+    authenticate,
+    validate({ body: saveMyAgreementsSchema }),
+    asyncHandler(termsController.saveMyAgreements),
+  );
 
 publicTermsRouter.get(
   "/me/pending",
   authenticate,
   asyncHandler(termsController.getPendingRequiredTerms),
+);
+
+publicTermsRouter.get(
+  "/:type",
+  validate({ params: termsTypeParamSchema }),
+  asyncHandler(termsController.getPublishedByType),
 );
 
 export { adminTermsRouter, publicTermsRouter };

@@ -172,4 +172,15 @@ export const termsAgreementsSchema = z
     { error: "같은 약관이 중복으로 전달되었습니다." },
   );
 
+/**
+ * 로그인한 사용자가 직접 동의를 저장/변경할 때 사용하는 body.
+ *
+ * 회원가입과 달리 "필수 약관을 모두 동의했는가"는 검증하지 않는다.
+ * 마케팅 수신 동의를 끄는 것처럼 선택 약관만 바꾸는 경우가 있기 때문이다.
+ * 필수 약관 미동의 상태는 GET /terms/me/pending 으로 확인한다.
+ */
+export const saveMyAgreementsSchema = z.strictObject({
+  agreements: termsAgreementsSchema.min(1, "동의할 약관을 선택해 주세요."),
+});
+
 export type TermsTypeParam = z.infer<typeof termsTypeParamSchema>;

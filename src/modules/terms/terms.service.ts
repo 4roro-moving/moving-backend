@@ -370,4 +370,36 @@ export const termsService = {
 
     return requiredTerms.filter((terms) => latest.get(terms.id)?.isAgreed !== true);
   },
+
+  async saveMyAgreements(
+    userId: string,
+    role: TermsAudienceRole,
+    agreements: TermsAgreementInput[],
+  ) {
+    const validTerms = await termsRepository.findPublishedByIds(
+      agreements.map((agreement) => agreement.termsId),
+      role,
+    );
+    const validTermsIds = new Set(validTerms.map((terms) => terms.id));
+
+    const invalidIds = agreements
+      .map((agreement) => agreement.termsId)
+      .filter((termsId) => !validTermsIds.has(termsId));
+
+    if (invalidIds.length > 0) {
+      throw new AppError("TERMS_AGREEMENT_INVALID", {
+        message: `게시되지 않았거나 대상이 아닌 약관이 포함되어 있습니다. (id: ${invalidIds.join(", ")})`,
+      });
+    }
+
+    await termsRepository.createAgreements(
+      agreements.map((agreement) => ({
+        userId,
+        termsId: agreement.termsId,
+        isAgreed: agreement.isAgreed,
+      })),
+    );
+
+    return termsService.getMyAgreements(userId);
+  },
 };

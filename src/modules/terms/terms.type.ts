@@ -4,6 +4,7 @@ import type { z } from "zod";
 import type {
   createTermsSchema,
   listTermsQuerySchema,
+  saveMyAgreementsSchema,
   termsAgreementsSchema,
   termsIdParamSchema,
   updateTermsSchema,
@@ -16,3 +17,4 @@ export type ListTermsQuery = z.infer<typeof listTermsQuerySchema>;
 export type TermsAgreementsInput = z.infer<typeof termsAgreementsSchema>;
 export type TermsAgreementInput = TermsAgreementsInput[number];
 export type TermsAudienceRole = Extract<UserRole, "CUSTOMER" | "MOVER">;
+export type SaveMyAgreementsInput = z.infer<typeof saveMyAgreementsSchema>;
