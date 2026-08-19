@@ -67,6 +67,7 @@ function isUniqueConstraintError(error: unknown, fields: string[]): boolean {
 
 function isDuplicateRequestError(error: unknown): boolean {
   return isUniqueConstraintError(error, [
+    "giveaway_requests_one_active_per_user_idx",
     "giveaway_id",
     "giveawayid",
     "requester_id",
@@ -296,6 +297,15 @@ async function createGiveawayRequest(
       const giveaway = await findGiveawayOwnershipOrThrow(giveawayId, tx);
 
       assertCanRequestGiveaway(giveaway, requesterId);
+
+      const activeRequest = await giveawayRepository.findActiveRequestByGiveawayAndRequester(
+        { giveawayId, requesterId },
+        tx,
+      );
+
+      if (activeRequest) {
+        throw new AppError("GIVEAWAY_REQUEST_ALREADY_EXISTS");
+      }
 
       const createData: Parameters<typeof giveawayRepository.createRequest>[0] = {
         giveawayId,

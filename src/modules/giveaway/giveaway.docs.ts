@@ -95,13 +95,14 @@ registerRouterDocs(giveawayRouter, {
       summary: "나눔 신청",
       description: [
         "AVAILABLE 상태의 글에만 신청할 수 있습니다.",
-        "작성자 본인은 신청할 수 없으며, 같은 글에 재신청할 수 없습니다.",
+        "작성자 본인은 신청할 수 없습니다.",
+        "PENDING 또는 SELECTED 신청이 있으면 재신청할 수 없고, CANCELLED·REJECTED 이후에는 재신청할 수 있습니다.",
       ].join("\n"),
       responses: {
         201: "신청 성공",
         403: "본인 글에는 신청할 수 없습니다.",
         404: "나눔 글을 찾을 수 없습니다.",
-        409: "신청할 수 없는 상태이거나 이미 신청했습니다.",
+        409: "신청할 수 없는 상태이거나 대기·선정된 신청이 이미 있습니다.",
       },
     },
     "POST /:giveawayId/requests/:requestId/select": {

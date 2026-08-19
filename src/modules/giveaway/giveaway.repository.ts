@@ -2,7 +2,12 @@ import type { Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
-import { GIVEAWAY_REQUEST_STATUS, GIVEAWAY_STATUS, GIVEAWAY_VISIBILITY } from "./giveaway.type";
+import {
+  ACTIVE_GIVEAWAY_REQUEST_STATUSES,
+  GIVEAWAY_REQUEST_STATUS,
+  GIVEAWAY_STATUS,
+  GIVEAWAY_VISIBILITY,
+} from "./giveaway.type";
 import type { GiveawayRequestStatusValue } from "./giveaway.type";
 
 const authorSelect = {
@@ -40,7 +45,7 @@ const giveawayListSelect = {
       requests: {
         where: {
           status: {
-            in: [GIVEAWAY_REQUEST_STATUS.PENDING, GIVEAWAY_REQUEST_STATUS.SELECTED],
+            in: [...ACTIVE_GIVEAWAY_REQUEST_STATUSES],
           },
         },
       },
@@ -70,7 +75,7 @@ const giveawayDetailSelect = {
       requests: {
         where: {
           status: {
-            in: [GIVEAWAY_REQUEST_STATUS.PENDING, GIVEAWAY_REQUEST_STATUS.SELECTED],
+            in: [...ACTIVE_GIVEAWAY_REQUEST_STATUSES],
           },
         },
       },
@@ -314,18 +319,40 @@ function findRequestById(requestId: number, db: DbClient = prisma) {
   });
 }
 
-function findRequestByGiveawayAndRequester(
+function findActiveRequestByGiveawayAndRequester(
   params: { giveawayId: number; requesterId: string },
   db: DbClient = prisma,
 ) {
-  return db.giveawayRequest.findUnique({
+  return db.giveawayRequest.findFirst({
     where: {
-      giveawayId_requesterId: {
-        giveawayId: params.giveawayId,
-        requesterId: params.requesterId,
+      giveawayId: params.giveawayId,
+      requesterId: params.requesterId,
+      status: {
+        in: [...ACTIVE_GIVEAWAY_REQUEST_STATUSES],
       },
     },
     select: requestSelect,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+  });
+}
+
+async function findRequestByGiveawayAndRequester(
+  params: { giveawayId: number; requesterId: string },
+  db: DbClient = prisma,
+) {
+  const activeRequest = await findActiveRequestByGiveawayAndRequester(params, db);
+
+  if (activeRequest) {
+    return activeRequest;
+  }
+
+  return db.giveawayRequest.findFirst({
+    where: {
+      giveawayId: params.giveawayId,
+      requesterId: params.requesterId,
+    },
+    select: requestSelect,
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
   });
 }
 
@@ -452,6 +479,7 @@ export const giveawayRepository = {
   completeGiveaway,
   restoreGiveawayToAvailable,
   findRequestById,
+  findActiveRequestByGiveawayAndRequester,
   findRequestByGiveawayAndRequester,
   findRequestsWithCount,
   findMyRequestsWithCount,

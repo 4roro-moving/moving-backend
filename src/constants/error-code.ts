@@ -345,7 +345,7 @@ export const ERROR_CODES = {
   GIVEAWAY_REQUEST_ALREADY_EXISTS: {
     status: 409,
     code: "GIVEAWAY_REQUEST_ALREADY_EXISTS",
-    message: "이미 해당 나눔 글에 신청했습니다.",
+    message: "이미 대기 중이거나 선정된 신청이 있습니다.",
   },
   GIVEAWAY_REQUEST_NOT_EDITABLE: {
     status: 409,

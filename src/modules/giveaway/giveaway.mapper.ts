@@ -1,5 +1,4 @@
 import { getProfileImageUrl } from "../../utils/image-url";
-import { GIVEAWAY_VISIBILITY } from "./giveaway.type";
 import type {
   GiveawayDetailRow,
   GiveawayListRow,
