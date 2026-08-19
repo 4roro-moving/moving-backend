@@ -54,6 +54,7 @@ registerRouterDocs(adminMoverRouter, {
       ].join("\n"),
       responses: {
         200: "처리 성공",
+        401: "인증이 필요합니다.",
         403: "자기 자신의 계정 상태는 변경할 수 없습니다.",
         404: "기사를 찾을 수 없습니다.",
         409: "MOVER_STATUS_ALREADY_PROCESSED - 이미 요청한 상태로 처리된 기사님입니다.",
