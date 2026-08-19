@@ -21,11 +21,22 @@ const residenceReviewSelect = {
     select: {
       id: true,
       name: true,
+      reviewStatistic: {
+        select: {
+          averageRating: true,
+        },
+      },
     },
   },
   author: {
     select: {
+      id: true,
       name: true,
+      customerProfile: {
+        select: {
+          imageUrl: true,
+        },
+      },
     },
   },
 } satisfies Prisma.ResidenceReviewSelect;
@@ -57,12 +68,14 @@ type FindPublicListParams = {
   sort: ResidenceReviewListSort;
   regionId?: number | undefined;
   keyword?: string | undefined;
+  rating?: number | undefined;
   cursor?: ResidenceReviewCursor | undefined;
 };
 
 type ListWhereParams = {
   regionId?: number | undefined;
   keyword?: string | undefined;
+  rating?: number | undefined;
 };
 
 type UpdateResidenceReviewData = {
@@ -123,10 +136,12 @@ async function findManyWithCount({ skip, take, where }: ListParams, db: DbClient
 export function buildListWhere({
   regionId,
   keyword,
+  rating,
 }: ListWhereParams): Prisma.ResidenceReviewWhereInput {
   return {
     isHidden: RESIDENCE_REVIEW_VISIBILITY.PUBLIC,
     ...(regionId !== undefined ? { regionId } : {}),
+    ...(rating !== undefined ? { rating } : {}),
     ...(keyword
       ? {
           OR: [
@@ -145,6 +160,10 @@ function buildListOrderBy(
     return [{ rating: "desc" }, { createdAt: "desc" }, { id: "desc" }];
   }
 
+  if (sort === RESIDENCE_REVIEW_LIST_SORT.CREATED_AT_ASC) {
+    return [{ createdAt: "asc" }, { id: "asc" }];
+  }
+
   return [{ createdAt: "desc" }, { id: "desc" }];
 }
 
@@ -158,6 +177,18 @@ function buildCursorCondition(cursor: ResidenceReviewCursor): Prisma.ResidenceRe
           rating: cursor.rating,
           createdAt: cursor.createdAt,
           id: { lt: cursor.id },
+        },
+      ],
+    };
+  }
+
+  if (cursor.sort === RESIDENCE_REVIEW_LIST_SORT.CREATED_AT_ASC) {
+    return {
+      OR: [
+        { createdAt: { gt: cursor.createdAt } },
+        {
+          createdAt: cursor.createdAt,
+          id: { gt: cursor.id },
         },
       ],
     };
@@ -188,10 +219,10 @@ function applyCursor(
 }
 
 async function findManyByCursorWithCount(
-  { take, sort, regionId, keyword, cursor }: FindPublicListParams,
+  { take, sort, regionId, keyword, rating, cursor }: FindPublicListParams,
   db: DbClient = prisma,
 ) {
-  const where = buildListWhere({ regionId, keyword });
+  const where = buildListWhere({ regionId, keyword, rating });
   const [reviews, totalCount] = await Promise.all([
     db.residenceReview.findMany({
       where: applyCursor(where, cursor),

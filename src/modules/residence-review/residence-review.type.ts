@@ -34,7 +34,9 @@ export type ResidenceReviewCursor = {
 };
 
 export type ResidenceReviewAuthor = {
+  id: string;
   name: string;
+  imageUrl: string | null;
 };
 
 export type ResidenceReviewRegion = {
@@ -42,13 +44,18 @@ export type ResidenceReviewRegion = {
   name: string;
 };
 
+export type ResidenceReviewRegionSummary = ResidenceReviewRegion & {
+  averageRating: number;
+};
+
 export type PublicResidenceReview = {
   id: number;
   title: string;
   content: string;
   rating: number;
-  region: ResidenceReviewRegion;
+  region: ResidenceReviewRegionSummary;
   author: ResidenceReviewAuthor;
+  isMine: boolean;
   createdAt: Date;
   updatedAt: Date;
 };

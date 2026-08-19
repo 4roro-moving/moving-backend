@@ -26,6 +26,7 @@ export const RESIDENCE_REVIEW_LIST_QUERY = {
 
 export const RESIDENCE_REVIEW_LIST_SORT = {
   CREATED_AT: "createdAt",
+  CREATED_AT_ASC: "createdAtAsc",
   RATING: "rating",
 } as const;
 
@@ -142,10 +143,23 @@ export const listResidenceReviewQuerySchema = z.object({
     .int(VALIDATION_MESSAGE.REGION_ID_INT)
     .positive(VALIDATION_MESSAGE.REGION_ID_POSITIVE)
     .optional(),
+  rating: z.coerce
+    .number({ error: VALIDATION_MESSAGE.RATING_NUMBER })
+    .int(VALIDATION_MESSAGE.RATING_INT)
+    .min(RESIDENCE_REVIEW_RATING.MIN, VALIDATION_MESSAGE.RATING_MIN)
+    .max(RESIDENCE_REVIEW_RATING.MAX, VALIDATION_MESSAGE.RATING_MAX)
+    .optional(),
   sort: z
-    .enum([RESIDENCE_REVIEW_LIST_SORT.CREATED_AT, RESIDENCE_REVIEW_LIST_SORT.RATING], {
-      error: VALIDATION_MESSAGE.SORT_INVALID,
-    })
+    .enum(
+      [
+        RESIDENCE_REVIEW_LIST_SORT.CREATED_AT,
+        RESIDENCE_REVIEW_LIST_SORT.CREATED_AT_ASC,
+        RESIDENCE_REVIEW_LIST_SORT.RATING,
+      ],
+      {
+        error: VALIDATION_MESSAGE.SORT_INVALID,
+      },
+    )
     .default(RESIDENCE_REVIEW_LIST_SORT.CREATED_AT),
   cursor: z
     .string()

@@ -21,14 +21,26 @@ import type {
   UpdateResidenceReviewInput,
 } from "./residence-review.type";
 
-function toPublicResidenceReview(row: ResidenceReviewRow): PublicResidenceReview {
+function toPublicResidenceReview(
+  row: ResidenceReviewRow,
+  viewerId?: string,
+): PublicResidenceReview {
   return {
     id: row.id,
     title: row.title,
     content: row.content,
     rating: row.rating,
-    region: row.region,
-    author: row.author,
+    region: {
+      id: row.region.id,
+      name: row.region.name,
+      averageRating: Number(row.region.reviewStatistic?.averageRating ?? 0),
+    },
+    author: {
+      id: row.author.id,
+      name: row.author.name,
+      imageUrl: row.author.customerProfile?.imageUrl ?? null,
+    },
+    isMine: viewerId !== undefined && viewerId === row.author.id,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
   };
@@ -91,8 +103,8 @@ async function findOwnedVisibleResidenceReviewOrThrow(
   return review;
 }
 
-async function getPublicResidenceReviewList(query: ListResidenceReviewQuery) {
-  const { cursor, limit, regionId, keyword, sort } = query;
+async function getPublicResidenceReviewList(query: ListResidenceReviewQuery, viewerId?: string) {
+  const { cursor, limit, regionId, keyword, rating, sort } = query;
   const decodedCursor = decodeResidenceReviewCursor(cursor, sort);
 
   if (regionId !== undefined) {
@@ -104,6 +116,7 @@ async function getPublicResidenceReviewList(query: ListResidenceReviewQuery) {
     sort,
     ...(regionId !== undefined ? { regionId } : {}),
     ...(keyword !== undefined ? { keyword } : {}),
+    ...(rating !== undefined ? { rating } : {}),
     ...(decodedCursor ? { cursor: decodedCursor } : {}),
   });
 
@@ -112,7 +125,7 @@ async function getPublicResidenceReviewList(query: ListResidenceReviewQuery) {
   const lastReview = pageReviews.at(-1);
 
   return {
-    reviews: pageReviews.map(toPublicResidenceReview),
+    reviews: pageReviews.map((review) => toPublicResidenceReview(review, viewerId)),
     pagination: {
       limit,
       totalCount,
@@ -130,14 +143,14 @@ async function getPublicResidenceReviewList(query: ListResidenceReviewQuery) {
   };
 }
 
-async function getPublicResidenceReviewById(residenceReviewId: number) {
+async function getPublicResidenceReviewById(residenceReviewId: number, viewerId?: string) {
   const review = await residenceReviewRepository.findPublicById(residenceReviewId);
 
   if (!review) {
     throw new AppError("RESIDENCE_REVIEW_NOT_FOUND");
   }
 
-  return toPublicResidenceReview(review);
+  return toPublicResidenceReview(review, viewerId);
 }
 
 async function getRegionReviewStatistic(regionId: number): Promise<RegionReviewStatistic> {
@@ -179,7 +192,7 @@ async function getMyResidenceReviewList(authorId: string, query: ListMyResidence
   });
 
   return {
-    reviews: reviews.map(toPublicResidenceReview),
+    reviews: reviews.map((review) => toPublicResidenceReview(review, authorId)),
     pagination: buildPagination(totalCount, page, limit),
   };
 }
@@ -193,7 +206,7 @@ async function createResidenceReview(authorId: string, input: CreateResidenceRev
 
       await refreshRegionReviewStatistic(input.regionId, tx);
 
-      return toPublicResidenceReview(review);
+      return toPublicResidenceReview(review, authorId);
     },
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -248,7 +261,7 @@ async function updateResidenceReview(
         await refreshRegionReviewStatistic(owned.regionId, tx);
       }
 
-      return toPublicResidenceReview(review);
+      return toPublicResidenceReview(review, authorId);
     },
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,

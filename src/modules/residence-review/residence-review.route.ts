@@ -1,7 +1,7 @@
 import { UserRole } from "@prisma/client";
 import { Router } from "express";
 
-import { authenticate, authorize } from "../../middlewares/auth";
+import { authenticate, authorize, optionalAuthenticate } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
 import { asyncHandler } from "../../utils/async-handler.util";
 import { residenceReviewController } from "./residence-review.controller";
@@ -24,6 +24,7 @@ const publicResidenceReviewRouter = Router();
 
 publicResidenceReviewRouter.get(
   "/",
+  optionalAuthenticate,
   validate({ query: listResidenceReviewQuerySchema }),
   asyncHandler(residenceReviewController.getPublicResidenceReviewList),
 );
@@ -36,6 +37,7 @@ publicResidenceReviewRouter.get(
 
 publicResidenceReviewRouter.get(
   "/:residenceReviewId",
+  optionalAuthenticate,
   validate({ params: residenceReviewIdParamSchema }),
   asyncHandler(residenceReviewController.getPublicResidenceReviewById),
 );
