@@ -99,6 +99,6 @@ export const moverCalendarRepository = {
   //동일 기사/ 동일 날짜에 들어오는 동시 요청을 순서대로 처리하기 위한 PostgreSQL 잠금
   lockMoverDate(moverId: string, date: Date, db: DbClient) {
     const key = `${moverId}:${date.toISOString().slice(0, 10)}`;
-    return db.$queryRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
+    return db.$executeRaw(Prisma.sql`SELECT pg_advisory_xact_lock(hashtextextended(${key}, 0))`);
   },
 };

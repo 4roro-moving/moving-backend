@@ -3,6 +3,7 @@ import {
   EstimateRequestHistoryType,
   EstimateRequestStatus,
   NotificationType,
+  RefreshTokenRevokedReason,
   RefreshTokenSessionType,
   SuspensionAction,
   type Prisma,
@@ -222,6 +223,7 @@ export const customersService = {
         await authRepository.revokeAllRefreshTokensByUserId(
           customerId,
           RefreshTokenSessionType.USER,
+          RefreshTokenRevokedReason.FORCED,
           tx,
         );
       }
