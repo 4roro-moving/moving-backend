@@ -1,18 +1,22 @@
 import type { z } from "zod";
 
 import type {
+  chatImageUploadUrlBodySchema,
   chatMessageListQuerySchema,
   chatRoomParamSchema,
   createChatRoomBodySchema,
   joinChatRoomPayloadSchema,
+  sendChatImageMessagePayloadSchema,
   sendChatMessagePayloadSchema,
 } from "./chat.validator";
 
 export type ChatRoomParam = z.infer<typeof chatRoomParamSchema>;
 export type CreateChatRoomBody = z.infer<typeof createChatRoomBodySchema>;
 export type ChatMessageListQuery = z.infer<typeof chatMessageListQuerySchema>;
+export type ChatImageUploadUrlBody = z.infer<typeof chatImageUploadUrlBodySchema>;
 export type JoinChatRoomPayload = z.infer<typeof joinChatRoomPayloadSchema>;
 export type SendChatMessagePayload = z.infer<typeof sendChatMessagePayloadSchema>;
+export type SendChatImageMessagePayload = z.infer<typeof sendChatImageMessagePayloadSchema>;
 
 export type ChatParticipant = {
   id: string;

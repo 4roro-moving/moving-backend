@@ -7,6 +7,7 @@ import type { ChatMessageResponse, ChatRoomSummary, MissedChatMessagesResponse }
 import {
   joinChatRoomPayloadSchema,
   leaveChatRoomPayloadSchema,
+  sendChatImageMessagePayloadSchema,
   sendChatMessagePayloadSchema,
 } from "./chat.validator";
 
@@ -160,6 +161,56 @@ export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): 
           senderId,
           input.roomId,
           input.content,
+        );
+
+        io.to(toRoomName(input.roomId)).emit("chat:message:new", message);
+        void chatService.createMessageReceivedNotification({
+          roomId: input.roomId,
+          senderId,
+          messageId: message.id,
+          skip: hasReceiverSocketInRoom(io, input.roomId, senderId),
+        });
+
+        callback?.({
+          ok: true,
+          message,
+          ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
+        });
+      } catch (error) {
+        callback?.({
+          ok: false,
+          error: emitSocketError(socket, error),
+          ...(clientMessageId ? { clientMessageId } : {}),
+        });
+      }
+    },
+  );
+
+  socket.on(
+    "chat:image:send",
+    async (payload: unknown, callback?: (response: SendMessageAck) => void) => {
+      const clientMessageId =
+        typeof payload === "object" &&
+        payload !== null &&
+        "clientMessageId" in payload &&
+        typeof payload.clientMessageId === "string"
+          ? payload.clientMessageId
+          : undefined;
+
+      try {
+        const input = sendChatImageMessagePayloadSchema.parse(payload);
+        const senderId = getSocketUserId(socket);
+
+        if (socket.data.roomId !== input.roomId) {
+          throw new AppError("FORBIDDEN", {
+            message: "채팅방 입장 후 이미지를 보낼 수 있습니다.",
+          });
+        }
+
+        const message = await chatService.createImageMessageForJoinedRoom(
+          senderId,
+          input.roomId,
+          input.imageKey,
         );
 
         io.to(toRoomName(input.roomId)).emit("chat:message:new", message);

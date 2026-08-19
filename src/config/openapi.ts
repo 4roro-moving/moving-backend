@@ -29,6 +29,8 @@ async function registerModuleDocs(): Promise<void> {
   await import("../modules/admin/member-management/movers/movers.docs");
   // 2026.08.08 유서현 - [추가] 관리자 확정 견적/견적 요청 취소 API 문서 등록
   await import("../modules/admin/estimates/estimates.docs");
+  // 2026.08.15 정슬기 - [추가] 관리자 신고 관리 API 문서 등록
+  await import("../modules/admin/reports/reports.docs");
   // 2026.07.30 장민주 - [추가] 인증 API 문서 등록
   await import("../modules/auth/auth.docs");
   // 2026.08.05 장민주 - [추가] 관리자 인증 API 문서 등록
@@ -41,6 +43,8 @@ async function registerModuleDocs(): Promise<void> {
   await import("../modules/admin/faq/faq.docs");
   // 2026.07.30 심현수 - [추가] QNA API 문서 등록
   await import("../modules/inquiry/inquiry.docs");
+  // 2026.08.17 김나연 - [추가] 거주후기 API 문서 등록
+  await import("../modules/residence-review/residence-review.docs");
   // 2026.07.30 장민주 - [추가] 프로필 API 문서 등록
   await import("../modules/report/report.docs");
   await import("../modules/profile/profile.docs");
