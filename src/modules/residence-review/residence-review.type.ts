@@ -24,6 +24,14 @@ export type ResidenceReviewIdParam = z.infer<typeof residenceReviewIdParamSchema
 export type RegionIdParam = z.infer<typeof regionIdParamSchema>;
 export type ListResidenceReviewQuery = z.infer<typeof listResidenceReviewQuerySchema>;
 export type ListMyResidenceReviewQuery = z.infer<typeof listMyResidenceReviewQuerySchema>;
+export type ResidenceReviewListSort = ListResidenceReviewQuery["sort"];
+
+export type ResidenceReviewCursor = {
+  sort: ResidenceReviewListSort;
+  rating: number;
+  createdAt: Date;
+  id: number;
+};
 
 export type ResidenceReviewAuthor = {
   name: string;

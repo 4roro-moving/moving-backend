@@ -1,9 +1,14 @@
 import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
+import type { CursorPagination } from "../../types/response.type";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
+import {
+  decodeResidenceReviewCursor,
+  encodeResidenceReviewCursor,
+} from "./residence-review.cursor";
 import { residenceReviewRepository } from "./residence-review.repository";
 import type { ResidenceReviewRow } from "./residence-review.repository";
 import { REGION_REVIEW_STATISTIC, RESIDENCE_REVIEW_VISIBILITY } from "./residence-review.type";
@@ -87,26 +92,41 @@ async function findOwnedVisibleResidenceReviewOrThrow(
 }
 
 async function getPublicResidenceReviewList(query: ListResidenceReviewQuery) {
-  const { page, limit, regionId } = query;
+  const { cursor, limit, regionId, keyword, sort } = query;
+  const decodedCursor = decodeResidenceReviewCursor(cursor, sort);
 
   if (regionId !== undefined) {
     await assertRegionExists(regionId);
   }
 
-  const where: Prisma.ResidenceReviewWhereInput = {
-    isHidden: RESIDENCE_REVIEW_VISIBILITY.PUBLIC,
+  const { reviews, totalCount } = await residenceReviewRepository.findManyByCursorWithCount({
+    take: limit + 1,
+    sort,
     ...(regionId !== undefined ? { regionId } : {}),
-  };
-
-  const { reviews, totalCount } = await residenceReviewRepository.findManyWithCount({
-    skip: (page - 1) * limit,
-    take: limit,
-    where,
+    ...(keyword !== undefined ? { keyword } : {}),
+    ...(decodedCursor ? { cursor: decodedCursor } : {}),
   });
 
+  const hasNext = reviews.length > limit;
+  const pageReviews = reviews.slice(0, limit);
+  const lastReview = pageReviews.at(-1);
+
   return {
-    reviews: reviews.map(toPublicResidenceReview),
-    pagination: buildPagination(totalCount, page, limit),
+    reviews: pageReviews.map(toPublicResidenceReview),
+    pagination: {
+      limit,
+      totalCount,
+      hasNext,
+      nextCursor:
+        hasNext && lastReview
+          ? encodeResidenceReviewCursor({
+              sort,
+              rating: lastReview.rating,
+              createdAt: lastReview.createdAt,
+              id: lastReview.id,
+            })
+          : null,
+    } satisfies CursorPagination,
   };
 }
 
