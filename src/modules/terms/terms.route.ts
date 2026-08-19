@@ -54,4 +54,16 @@ publicTermsRouter.get(
   asyncHandler(termsController.getPublishedByType),
 );
 
+publicTermsRouter.get(
+  "/me/agreements",
+  authenticate,
+  asyncHandler(termsController.getMyAgreements),
+);
+
+publicTermsRouter.get(
+  "/me/pending",
+  authenticate,
+  asyncHandler(termsController.getPendingRequiredTerms),
+);
+
 export { adminTermsRouter, publicTermsRouter };

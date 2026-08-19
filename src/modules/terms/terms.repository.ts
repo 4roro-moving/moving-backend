@@ -3,6 +3,8 @@ import type { Prisma, TermsType } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
 
+import type { TermsAudienceRole } from "./terms.type";
+
 /**
  * 약관 조회에 공통으로 사용하는 select.
  */
@@ -22,6 +24,24 @@ const termsSelect = {
   updatedAt: true,
   deletedAt: true,
 } satisfies Prisma.TermsSelect;
+
+const agreementSelect = {
+  id: true,
+  termsId: true,
+  isAgreed: true,
+  agreedAt: true,
+  terms: {
+    select: {
+      id: true,
+      type: true,
+      version: true,
+      title: true,
+      isRequired: true,
+      audience: true,
+      status: true,
+    },
+  },
+} satisfies Prisma.TermsAgreementSelect;
 
 type ListParams = {
   skip: number;
@@ -149,5 +169,72 @@ export const termsRepository = {
     });
 
     return count;
+  },
+
+  findRequiredPublished(role: TermsAudienceRole, db: DbClient = prisma) {
+    return db.terms.findMany({
+      where: {
+        status: "PUBLISHED",
+        deletedAt: null,
+        isRequired: true,
+        audience: { in: ["ALL", role] },
+      },
+      select: { id: true, type: true, version: true, title: true },
+      orderBy: [{ type: "asc" }],
+    });
+  },
+
+  /**
+   * 해당 역할에게 노출할, 현재 게시된 약관 전체 (필수 + 선택).
+   * 회원가입 동의 화면에서 무엇을 보여줄지 결정할 때 사용한다.
+   */
+  findPublishedForRole(role: TermsAudienceRole, db: DbClient = prisma) {
+    return db.terms.findMany({
+      where: {
+        status: "PUBLISHED",
+        deletedAt: null,
+        audience: { in: ["ALL", role] },
+      },
+      select: termsSelect,
+      orderBy: [{ type: "asc" }],
+    });
+  },
+
+  /**
+   * 전달받은 id 들 중 실제로 게시되어 있고 해당 역할에 해당하는 약관만 반환한다.
+   * 클라이언트가 임의의 termsId 를 보내는 것을 막기 위한 검증용이다.
+   */
+  findPublishedByIds(termsIds: number[], role: TermsAudienceRole, db: DbClient = prisma) {
+    return db.terms.findMany({
+      where: {
+        id: { in: termsIds },
+        status: "PUBLISHED",
+        deletedAt: null,
+        audience: { in: ["ALL", role] },
+      },
+      select: { id: true, isRequired: true },
+    });
+  },
+
+  /**
+   * 동의 이력을 일괄 생성한다.
+   *
+   * 이력은 갱신하지 않고 계속 쌓는다. 마케팅 수신처럼 동의/철회를 반복하는
+   * 항목의 시점별 기록이 남아야 하기 때문이다.
+   */
+  createAgreements(data: Prisma.TermsAgreementUncheckedCreateInput[], db: DbClient = prisma) {
+    return db.termsAgreement.createMany({ data });
+  },
+
+  /**
+   * 사용자의 동의 이력 전체를 최신순으로 조회한다.
+   * 약관별 최신 상태 판별은 service 에서 처리한다.
+   */
+  findAgreementsByUserId(userId: string, db: DbClient = prisma) {
+    return db.termsAgreement.findMany({
+      where: { userId },
+      select: agreementSelect,
+      orderBy: [{ agreedAt: "desc" }, { id: "desc" }],
+    });
   },
 };

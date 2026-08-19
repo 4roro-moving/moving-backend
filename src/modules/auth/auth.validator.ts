@@ -1,6 +1,8 @@
 import { UserRole } from "@prisma/client";
 import { z } from "zod";
 
+import { termsAgreementsSchema } from "../terms/terms.validator";
+
 const BCRYPT_PASSWORD_MAX_BYTES = 72;
 
 const emailSchema = z
@@ -93,6 +95,7 @@ export const signUpSchema = z.strictObject({
   password: passwordSchema,
   name: nameSchema,
   phone: phoneSchema,
+  agreements: termsAgreementsSchema.optional(),
 });
 
 export const loginSchema = z.strictObject({
@@ -113,6 +116,7 @@ export const loginSchema = z.strictObject({
 export const googleOAuthSchema = z.strictObject({
   code: authorizationCodeSchema,
   role: userRoleSchema,
+  agreements: termsAgreementsSchema.optional(),
 });
 
 /*
@@ -127,6 +131,7 @@ export const googleOAuthSchema = z.strictObject({
 export const kakaoOAuthSchema = z.strictObject({
   code: authorizationCodeSchema,
   role: userRoleSchema,
+  agreements: termsAgreementsSchema.optional(),
 });
 
 /*
@@ -142,6 +147,7 @@ export const naverOAuthSchema = z.strictObject({
   code: authorizationCodeSchema,
   state: stateSchema,
   role: userRoleSchema,
+  agreements: termsAgreementsSchema.optional(),
 });
 
 export const authValidator = {
