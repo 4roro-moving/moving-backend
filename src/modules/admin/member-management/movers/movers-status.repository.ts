@@ -74,6 +74,10 @@ export const moversStatusRepository = {
     canceledAt: Date,
     db: Prisma.TransactionClient,
   ) {
+    if (estimateIds.length === 0) {
+      return Promise.resolve([] as Array<{ id: number }>);
+    }
+
     return db.$queryRaw<Array<{ id: number }>>(Prisma.sql`
       UPDATE estimates AS e
       SET status = ${EstimateStatus.CANCELED}::"EstimateStatus",
