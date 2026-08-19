@@ -8,12 +8,19 @@ const authHeaderSchema = z.object({
   authorization: z.string().meta({ example: "Bearer <access-token>" }),
 });
 
+const optionalAuthHeaderSchema = z.object({
+  authorization: z.string().optional().meta({
+    example: "Bearer <access-token>",
+    description: "선택. 로그인 시 isMine 확인용이며, 없어도 조회할 수 있습니다.",
+  }),
+});
+
 const RESIDENCE_REVIEW_DOCS = {
   TAG_PUBLIC: "Residence Review",
   TAG_CUSTOMER: "Residence Review (Customer)",
   PUBLIC_LIST_SUMMARY: "거주후기 목록 (공개)",
   PUBLIC_LIST_DESCRIPTION: [
-    "비회원도 조회할 수 있습니다. 로그인하면 `isMine`으로 본인 작성 여부를 확인할 수 있습니다.",
+    "Authorization 헤더는 선택입니다. 없어도 조회할 수 있고, 유효한 Access Token을 보내면 `isMine`으로 본인 작성 여부를 확인할 수 있습니다.",
     "",
     "- 노출 중인(`isHidden=false`) 후기만 조회합니다.",
     "- `keyword`는 제목·내용 부분 검색입니다. 작성자명·지역명 검색은 하지 않습니다.",
@@ -31,14 +38,14 @@ const RESIDENCE_REVIEW_DOCS = {
   ].join("\n"),
   PUBLIC_DETAIL_SUMMARY: "거주후기 상세 (공개)",
   PUBLIC_DETAIL_DESCRIPTION: [
-    "비회원도 조회할 수 있습니다. 로그인하면 `isMine`으로 본인 작성 여부를 확인할 수 있습니다.",
+    "Authorization 헤더는 선택입니다. 없어도 조회할 수 있고, 유효한 Access Token을 보내면 `isMine`으로 본인 작성 여부를 확인할 수 있습니다.",
     "숨김 처리된 후기는 작성자를 포함해 조회할 수 없습니다.",
     "Access Token이 만료되면 비회원과 같이 조회되며 `isMine`은 false입니다.",
     "Authorization 형식이 잘못되었거나 위조된 토큰이면 401, 정지·탈퇴 계정이면 403입니다.",
   ].join(" "),
   STATISTIC_SUMMARY: "지역 거주후기 통계 (공개)",
   STATISTIC_DESCRIPTION: [
-    "인증 없이 접근 가능합니다.",
+    "인증 없이 접근 가능합니다. Authorization 헤더는 필요하지 않으며, 보내도 조회 결과에는 영향을 주지 않습니다.",
     "",
     "- 해당 지역의 노출 중인(`isHidden=false`) 후기 평점 합계, 후기 수, 평균 평점을 조회합니다.",
     "- 숨김 처리된 후기는 통계에 포함되지 않습니다.",
@@ -80,6 +87,7 @@ const RESIDENCE_REVIEW_DOCS = {
 registerRouterDocs(publicResidenceReviewRouter, {
   basePath: "/api/residence-reviews",
   tag: RESIDENCE_REVIEW_DOCS.TAG_PUBLIC,
+  headers: optionalAuthHeaderSchema,
   commonResponses: {
     422: ERROR_CODES.VALIDATION_ERROR.message,
   },
