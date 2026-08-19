@@ -28,8 +28,6 @@ import { moversStatusRepository } from "./movers-status.repository";
 import type { UpdateMemberStatusBody } from "../member-status.validator";
 import type { ListMoverQuery, MoverDetail, UpdateMoverStatusResponse } from "./movers.type";
 
-const MOVER_SUSPENSION_SYSTEM_MESSAGE = "기사님의 이용 제한으로 견적이 취소되었습니다.";
-
 export const moversService = {
   /** 관리자용 기사(MOVER) 목록을 조회합니다. */
   async getMoverList(query: ListMoverQuery) {
@@ -142,14 +140,14 @@ export const moversService = {
             roomId,
             senderId: null,
             type: ChatMessageType.SYSTEM,
-            content: MOVER_SUSPENSION_SYSTEM_MESSAGE,
+            content: "기사님의 이용 제한으로 견적이 취소되었습니다.",
           }));
           const notifications: Prisma.NotificationCreateManyInput[] = canceledEstimates.map(
             (estimate) => ({
               userId: estimate.estimateRequest.customerId,
               type: NotificationType.ESTIMATE_CANCELED_BY_ACCOUNT_SUSPENSION,
               title: "견적 취소",
-              content: "기사님의 이용 제한으로 견적이 취소되었습니다.",
+              content: "견적",
               linkUrl: null,
               expiresAt: null,
               sourceId: `admin-suspend-mover:${moverId}:${String(estimate.id)}`,
