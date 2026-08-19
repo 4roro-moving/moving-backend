@@ -1,5 +1,10 @@
 import { AppError } from "../../lib/app-error";
-import { GIVEAWAY_REQUEST_STATUS, GIVEAWAY_STATUS, GIVEAWAY_VISIBILITY } from "./giveaway.type";
+import {
+  ACTIVE_GIVEAWAY_REQUEST_STATUSES,
+  GIVEAWAY_REQUEST_STATUS,
+  GIVEAWAY_STATUS,
+  GIVEAWAY_VISIBILITY,
+} from "./giveaway.type";
 import type { GiveawayOwnershipRow, GiveawayRequestRow } from "./giveaway.repository";
 
 export function assertGiveawayVisible<T extends { isHidden: boolean }>(
@@ -54,6 +59,30 @@ export function assertCanRequestGiveaway(giveaway: GiveawayOwnershipRow, request
       message: "신청 가능 상태의 나눔 글에만 신청할 수 있습니다.",
     });
   }
+}
+
+export function canRequestGiveaway(
+  giveaway: Pick<GiveawayOwnershipRow, "authorId" | "status" | "isHidden">,
+  requesterId: string,
+  myRequest: Pick<GiveawayRequestRow, "status"> | null,
+) {
+  if (giveaway.isHidden === GIVEAWAY_VISIBILITY.HIDDEN) {
+    return false;
+  }
+
+  if (giveaway.status !== GIVEAWAY_STATUS.AVAILABLE) {
+    return false;
+  }
+
+  if (giveaway.authorId === requesterId) {
+    return false;
+  }
+
+  if (myRequest && ACTIVE_GIVEAWAY_REQUEST_STATUSES.some((status) => status === myRequest.status)) {
+    return false;
+  }
+
+  return true;
 }
 
 export function assertRequestOwner(request: GiveawayRequestRow, requesterId: string) {

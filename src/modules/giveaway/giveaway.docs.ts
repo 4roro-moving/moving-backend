@@ -47,7 +47,11 @@ registerRouterDocs(giveawayRouter, {
     },
     "GET /:giveawayId": {
       summary: "나눔 글 상세",
-      description: "숨김 글은 작성자 포함 404입니다. 작성자/수령자만 receiver를 볼 수 있습니다.",
+      description: [
+        "숨김 글은 작성자 포함 404입니다. 작성자/수령자만 receiver를 볼 수 있습니다.",
+        "canRequest는 AVAILABLE이고 본인 글이 아니며, PENDING·SELECTED 신청이 없을 때 true입니다.",
+        "CANCELLED·REJECTED 이력이 있어도 재신청 가능하면 canRequest는 true입니다.",
+      ].join("\n"),
       responses: { 200: "조회 성공", 404: "나눔 글을 찾을 수 없습니다." },
     },
     "PATCH /:giveawayId": {

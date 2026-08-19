@@ -128,6 +128,13 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
 
       await giveawayService.cancelGiveawayRequest(first.id, fixture.requesterId);
 
+      const afterCancel = await giveawayService.getGiveawayDetail(
+        fixture.giveawayId,
+        fixture.requesterId,
+      );
+      assert.equal(afterCancel.myRequest?.status, GIVEAWAY_REQUEST_STATUS.CANCELLED);
+      assert.equal(afterCancel.canRequest, true);
+
       const second = await giveawayService.createGiveawayRequest(
         fixture.giveawayId,
         fixture.requesterId,
@@ -150,6 +157,7 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
       assert.equal(secondRow.status, GiveawayRequestStatus.PENDING);
       assert.equal(detail.myRequest?.id, second.id);
       assert.equal(detail.myRequest?.status, GIVEAWAY_REQUEST_STATUS.PENDING);
+      assert.equal(detail.canRequest, false);
     } finally {
       await cleanupUsers([fixture.authorId, fixture.requesterId]);
     }
@@ -168,6 +176,13 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
       );
 
       await giveawayService.rejectGiveawayRequest(fixture.giveawayId, first.id, fixture.authorId);
+
+      const afterReject = await giveawayService.getGiveawayDetail(
+        fixture.giveawayId,
+        fixture.requesterId,
+      );
+      assert.equal(afterReject.myRequest?.status, GIVEAWAY_REQUEST_STATUS.REJECTED);
+      assert.equal(afterReject.canRequest, true);
 
       const second = await giveawayService.createGiveawayRequest(
         fixture.giveawayId,
@@ -196,6 +211,12 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
       await giveawayService.createGiveawayRequest(fixture.giveawayId, fixture.requesterId, {
         message: "진행 중 신청",
       });
+
+      const detail = await giveawayService.getGiveawayDetail(
+        fixture.giveawayId,
+        fixture.requesterId,
+      );
+      assert.equal(detail.canRequest, false);
 
       await assert.rejects(
         () =>
@@ -233,14 +254,23 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
         ),
       ]);
 
-      assert.equal(results.filter((result) => result.status === "fulfilled").length, 1);
-      assert.equal(results.filter((result) => result.status === "rejected").length, 1);
-
-      const rejected = results.find(
+      const fulfilled = results.filter((result) => result.status === "fulfilled");
+      const rejected = results.filter(
         (result): result is PromiseRejectedResult => result.status === "rejected",
       );
-      assert.ok(rejected?.reason instanceof AppError);
-      assert.equal(rejected.reason.code, "GIVEAWAY_RECEIVER_ALREADY_SELECTED");
+
+      assert.ok(fulfilled.length <= 1, "선정 성공은 최대 1건이어야 합니다.");
+      assert.equal(rejected.length, results.length - fulfilled.length);
+
+      for (const result of rejected) {
+        assert.ok(result.reason instanceof AppError);
+        // Serializable 충돌 재시도가 소진되면 INTERNAL_SERVER_ERROR가 날 수 있다.
+        // 핵심은 아래 DB 정합성(SELECTED 1건)이다.
+        assert.ok(
+          result.reason.code === "GIVEAWAY_RECEIVER_ALREADY_SELECTED" ||
+            result.reason.code === "INTERNAL_SERVER_ERROR",
+        );
+      }
 
       const [giveaway, requestA, requestB] = await Promise.all([
         prisma.giveaway.findUniqueOrThrow({

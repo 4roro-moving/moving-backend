@@ -15,6 +15,7 @@ import {
   assertRequestOwner,
   assertRequestRejectable,
   assertRequestSelectable,
+  canRequestGiveaway,
 } from "./giveaway.policy";
 import type { GiveawayOwnershipRow, GiveawayRequestRow } from "./giveaway.repository";
 import { GIVEAWAY_REQUEST_STATUS, GIVEAWAY_STATUS, GIVEAWAY_VISIBILITY } from "./giveaway.type";
@@ -166,6 +167,50 @@ describe("assertCanRequestGiveaway", () => {
       () => assertCanRequestGiveaway(completedGiveaway, "requester-2"),
       isAppError("GIVEAWAY_ALREADY_COMPLETED"),
     );
+  });
+});
+
+describe("canRequestGiveaway", () => {
+  it("신청 이력이 없는 AVAILABLE 글은 true", () => {
+    assert.equal(canRequestGiveaway(availableGiveaway, "requester-1", null), true);
+  });
+
+  it("CANCELLED·REJECTED 이후에는 true", () => {
+    assert.equal(
+      canRequestGiveaway(
+        availableGiveaway,
+        "requester-1",
+        createRequest({ status: GIVEAWAY_REQUEST_STATUS.CANCELLED }),
+      ),
+      true,
+    );
+    assert.equal(
+      canRequestGiveaway(
+        availableGiveaway,
+        "requester-1",
+        createRequest({ status: GIVEAWAY_REQUEST_STATUS.REJECTED }),
+      ),
+      true,
+    );
+  });
+
+  it("PENDING·SELECTED면 false", () => {
+    assert.equal(canRequestGiveaway(availableGiveaway, "requester-1", createRequest()), false);
+    assert.equal(
+      canRequestGiveaway(
+        availableGiveaway,
+        "requester-1",
+        createRequest({ status: GIVEAWAY_REQUEST_STATUS.SELECTED }),
+      ),
+      false,
+    );
+  });
+
+  it("작성자·IN_PROGRESS·COMPLETED·숨김 글은 false", () => {
+    assert.equal(canRequestGiveaway(availableGiveaway, "author-1", null), false);
+    assert.equal(canRequestGiveaway(inProgressGiveaway, "requester-2", null), false);
+    assert.equal(canRequestGiveaway(completedGiveaway, "requester-2", null), false);
+    assert.equal(canRequestGiveaway(hiddenGiveaway, "requester-1", null), false);
   });
 });
 

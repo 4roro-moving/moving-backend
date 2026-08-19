@@ -1,4 +1,5 @@
 import { getProfileImageUrl } from "../../utils/image-url";
+import { canRequestGiveaway } from "./giveaway.policy";
 import type {
   GiveawayDetailRow,
   GiveawayListRow,
@@ -72,6 +73,7 @@ export function toGiveawayDetail(
     images: toPublicImages(giveaway.images),
     activeRequestCount: giveaway._count.requests,
     receiver: isAuthor || isReceiver ? giveaway.receiver : null,
+    canRequest: canRequestGiveaway(giveaway, viewer.id, myRequest),
     myRequest: myRequest
       ? {
           id: myRequest.id,
