@@ -25,6 +25,7 @@ export function assertGiveawayNotCompleted(giveaway: GiveawayOwnershipRow) {
 }
 
 export function assertGiveawayEditable(giveaway: GiveawayOwnershipRow) {
+  assertGiveawayVisible(giveaway);
   assertGiveawayNotCompleted(giveaway);
 
   if (giveaway.status !== GIVEAWAY_STATUS.AVAILABLE) {

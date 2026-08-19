@@ -129,6 +129,10 @@ describe("assertGiveawayEditable / assertGiveawayDeletable", () => {
       isAppError("GIVEAWAY_ALREADY_COMPLETED"),
     );
   });
+
+  it("숨김 글 수정은 GIVEAWAY_NOT_FOUND", () => {
+    assert.throws(() => assertGiveawayEditable(hiddenGiveaway), isAppError("GIVEAWAY_NOT_FOUND"));
+  });
 });
 
 describe("assertCanRequestGiveaway", () => {

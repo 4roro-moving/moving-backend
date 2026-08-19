@@ -230,8 +230,9 @@ async function updateGiveaway(giveawayId: number, data: UpdateGiveawayData, db: 
   }
 
   if (data.images !== undefined) {
-    await db.giveawayImage.deleteMany({ where: { giveawayId } });
+    // deleteMany 빈값으로 중첩 쓰기 삭제 (이전: delete, update 두 번 처리함)
     updateData.images = {
+      deleteMany: {},
       create: data.images,
     };
   }
@@ -388,15 +389,20 @@ function createRequest(
   });
 }
 
-function updateRequestMessage(
-  params: { requestId: number; message: string | null },
+async function updateRequestMessage(
+  params: { requestId: number; requesterId: string; message: string | null },
   db: DbClient = prisma,
 ) {
-  return db.giveawayRequest.update({
-    where: { id: params.requestId },
+  const { count } = await db.giveawayRequest.updateMany({
+    where: {
+      id: params.requestId,
+      requesterId: params.requesterId,
+      status: GIVEAWAY_REQUEST_STATUS.PENDING,
+    },
     data: { message: params.message },
-    select: requestSelect,
   });
+
+  return count > 0;
 }
 
 async function updateRequestStatus(

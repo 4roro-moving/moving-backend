@@ -82,7 +82,7 @@ function isDuplicateSelectedError(error: unknown): boolean {
   ]);
 }
 
-async function assertRegionExists(regionId: number | null | undefined, db: DbClient) {
+async function assertRegionExists(regionId: number | null | undefined, db?: DbClient) {
   if (regionId === undefined || regionId === null) {
     return;
   }
@@ -123,10 +123,14 @@ async function getGiveawayDetail(giveawayId: number, viewerId: string) {
   return toGiveawayDetail(giveaway, { id: viewerId }, myRequest);
 }
 
-async function listGiveaways(query: ListGiveawayQuery) {
+async function listVisibleGiveaways(
+  query: ListGiveawayQuery,
+  extraWhere: Prisma.GiveawayWhereInput = {},
+) {
   await assertRegionExists(query.regionId);
 
   const where: Prisma.GiveawayWhereInput = {
+    ...extraWhere,
     isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
   };
 
@@ -148,62 +152,18 @@ async function listGiveaways(query: ListGiveawayQuery) {
     giveaways: giveaways.map(toGiveawayListItem),
     pagination: buildPagination(totalCount, query.page, query.limit),
   };
+}
+
+async function listGiveaways(query: ListGiveawayQuery) {
+  return listVisibleGiveaways(query);
 }
 
 async function listMyGiveaways(authorId: string, query: ListMyGiveawayQuery) {
-  await assertRegionExists(query.regionId);
-
-  const where: Prisma.GiveawayWhereInput = {
-    authorId,
-    isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
-  };
-
-  if (query.status !== undefined) {
-    where.status = query.status;
-  }
-
-  if (query.regionId !== undefined) {
-    where.regionId = query.regionId;
-  }
-
-  const { giveaways, totalCount } = await giveawayRepository.findGiveawaysWithCount({
-    skip: (query.page - 1) * query.limit,
-    take: query.limit,
-    where,
-  });
-
-  return {
-    giveaways: giveaways.map(toGiveawayListItem),
-    pagination: buildPagination(totalCount, query.page, query.limit),
-  };
+  return listVisibleGiveaways(query, { authorId });
 }
 
 async function listReceivedGiveaways(receiverId: string, query: ListMyGiveawayQuery) {
-  await assertRegionExists(query.regionId);
-
-  const where: Prisma.GiveawayWhereInput = {
-    receiverId,
-    isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
-  };
-
-  if (query.status !== undefined) {
-    where.status = query.status;
-  }
-
-  if (query.regionId !== undefined) {
-    where.regionId = query.regionId;
-  }
-
-  const { giveaways, totalCount } = await giveawayRepository.findGiveawaysWithCount({
-    skip: (query.page - 1) * query.limit,
-    take: query.limit,
-    where,
-  });
-
-  return {
-    giveaways: giveaways.map(toGiveawayListItem),
-    pagination: buildPagination(totalCount, query.page, query.limit),
-  };
+  return listVisibleGiveaways(query, { receiverId });
 }
 
 async function createGiveaway(authorId: string, input: CreateGiveawayInput) {
@@ -377,10 +337,21 @@ async function updateGiveawayRequest(
 
   const updated = await giveawayRepository.updateRequestMessage({
     requestId,
+    requesterId,
     message: input.message,
   });
 
-  return toGiveawayRequestItem(updated);
+  if (!updated) {
+    throw new AppError("GIVEAWAY_REQUEST_NOT_EDITABLE");
+  }
+
+  const saved = await giveawayRepository.findRequestById(requestId);
+
+  if (!saved) {
+    throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND");
+  }
+
+  return toGiveawayRequestItem(saved);
 }
 
 async function cancelGiveawayRequest(requestId: number, requesterId: string) {
