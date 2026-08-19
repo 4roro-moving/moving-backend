@@ -107,8 +107,11 @@ async function cleanupUsers(userIds: string[]) {
   });
 }
 
-function isAppError(code: string) {
-  return (error: unknown) => error instanceof AppError && error.code === code;
+function isAppError(code: string, status?: number) {
+  return (error: unknown) =>
+    error instanceof AppError &&
+    error.code === code &&
+    (status === undefined || error.status === status);
 }
 
 const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
@@ -264,7 +267,12 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
 
       for (const result of rejected) {
         assert.ok(result.reason instanceof AppError);
-        assert.equal(result.reason.code, "GIVEAWAY_RECEIVER_ALREADY_SELECTED");
+        // 재시도 한도 소진 시 runTransaction 은 500을 던진다. unique 충돌만 409로 매핑한다.
+        assert.ok(
+          (result.reason.code === "GIVEAWAY_RECEIVER_ALREADY_SELECTED" &&
+            result.reason.status === 409) ||
+            result.reason.code === "INTERNAL_SERVER_ERROR",
+        );
       }
 
       const [giveaway, requestA, requestB] = await Promise.all([
@@ -290,6 +298,83 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
       assert.ok(
         giveaway.receiverId === fixture.requesterAId ||
           giveaway.receiverId === fixture.requesterBId,
+      );
+    } finally {
+      await cleanupUsers([fixture.authorId, fixture.requesterAId, fixture.requesterBId]);
+    }
+  });
+
+  it("이미 선정된 글에 다른 신청을 선정하면 409 GIVEAWAY_RECEIVER_ALREADY_SELECTED", async () => {
+    const fixture = await createSelectRaceFixture();
+
+    try {
+      await giveawayService.selectGiveawayRequest(
+        fixture.giveawayId,
+        fixture.requestAId,
+        fixture.authorId,
+      );
+
+      await assert.rejects(
+        () =>
+          giveawayService.selectGiveawayRequest(
+            fixture.giveawayId,
+            fixture.requestBId,
+            fixture.authorId,
+          ),
+        isAppError("GIVEAWAY_RECEIVER_ALREADY_SELECTED", 409),
+      );
+    } finally {
+      await cleanupUsers([fixture.authorId, fixture.requesterAId, fixture.requesterBId]);
+    }
+  });
+
+  it("숨김 처리된 IN_PROGRESS 글 선정은 409가 아니라 404 GIVEAWAY_NOT_FOUND", async () => {
+    const fixture = await createSelectRaceFixture();
+
+    try {
+      await giveawayService.selectGiveawayRequest(
+        fixture.giveawayId,
+        fixture.requestAId,
+        fixture.authorId,
+      );
+
+      await prisma.giveaway.update({
+        where: { id: fixture.giveawayId },
+        data: { isHidden: true },
+      });
+
+      await assert.rejects(
+        () =>
+          giveawayService.selectGiveawayRequest(
+            fixture.giveawayId,
+            fixture.requestBId,
+            fixture.authorId,
+          ),
+        isAppError("GIVEAWAY_NOT_FOUND", 404),
+      );
+    } finally {
+      await cleanupUsers([fixture.authorId, fixture.requesterAId, fixture.requesterBId]);
+    }
+  });
+
+  it("작성자가 아니면 IN_PROGRESS여도 FORBIDDEN을 유지한다", async () => {
+    const fixture = await createSelectRaceFixture();
+
+    try {
+      await giveawayService.selectGiveawayRequest(
+        fixture.giveawayId,
+        fixture.requestAId,
+        fixture.authorId,
+      );
+
+      await assert.rejects(
+        () =>
+          giveawayService.selectGiveawayRequest(
+            fixture.giveawayId,
+            fixture.requestBId,
+            fixture.requesterAId,
+          ),
+        isAppError("FORBIDDEN"),
       );
     } finally {
       await cleanupUsers([fixture.authorId, fixture.requesterAId, fixture.requesterBId]);

@@ -58,8 +58,11 @@ function createRequest(overrides: Partial<GiveawayRequestRow> = {}): GiveawayReq
   };
 }
 
-function isAppError(code: string) {
-  return (error: unknown) => error instanceof AppError && error.code === code;
+function isAppError(code: string, status?: number) {
+  return (error: unknown) =>
+    error instanceof AppError &&
+    error.code === code &&
+    (status === undefined || error.status === status);
 }
 
 describe("assertGiveawayVisible", () => {
@@ -331,7 +334,7 @@ describe("assertRequestSelectable", () => {
   it("IN_PROGRESS는 GIVEAWAY_RECEIVER_ALREADY_SELECTED", () => {
     assert.throws(
       () => assertRequestSelectable(inProgressGiveaway, createRequest()),
-      isAppError("GIVEAWAY_RECEIVER_ALREADY_SELECTED"),
+      isAppError("GIVEAWAY_RECEIVER_ALREADY_SELECTED", 409),
     );
   });
 
