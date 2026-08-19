@@ -156,34 +156,30 @@ export const moversService = {
             }),
           );
 
-          await Promise.all([
-            moversStatusRepository.cancelPendingRevisions(
-              canceledEstimates.map((estimate) => estimate.id),
-              tx,
-            ),
-            moversStatusRepository.createSystemMessages(systemMessages, tx),
-            moversStatusRepository.updateChatRoomsLastMessageAt(chatRoomIds, now, tx),
-            moversStatusRepository.createNotifications(notifications, tx),
-          ]);
+          await moversStatusRepository.cancelPendingRevisions(
+            canceledEstimates.map((estimate) => estimate.id),
+            tx,
+          );
+          await moversStatusRepository.createSystemMessages(systemMessages, tx);
+          await moversStatusRepository.updateChatRoomsLastMessageAt(chatRoomIds, now, tx);
+          await moversStatusRepository.createNotifications(notifications, tx);
         }
       }
 
-      const [suspension] = await Promise.all([
-        moversStatusRepository.createMoverSuspension(
-          {
-            moverId,
-            adminId,
-            action: input.action,
-            reason: input.reason,
-            ...(input.internalNote !== undefined ? { internalNote: input.internalNote } : {}),
-          },
-          tx,
-        ),
-        moversStatusRepository.createMoverStatusActivityLog(
-          { moverId, adminId, action: input.action, reason: input.reason, createdAt: now },
-          tx,
-        ),
-      ]);
+      const suspension = await moversStatusRepository.createMoverSuspension(
+        {
+          moverId,
+          adminId,
+          action: input.action,
+          reason: input.reason,
+          ...(input.internalNote !== undefined ? { internalNote: input.internalNote } : {}),
+        },
+        tx,
+      );
+      await moversStatusRepository.createMoverStatusActivityLog(
+        { moverId, adminId, action: input.action, reason: input.reason, createdAt: now },
+        tx,
+      );
 
       if (input.action === SuspensionAction.SUSPEND) {
         await authRepository.revokeAllRefreshTokensByUserId(
