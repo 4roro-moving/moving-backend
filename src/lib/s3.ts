@@ -12,4 +12,5 @@ if (!region) {
 
 export const s3Client = new S3Client({
   region,
+  requestChecksumCalculation: "WHEN_REQUIRED",
 });
