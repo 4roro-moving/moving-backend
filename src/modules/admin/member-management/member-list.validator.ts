@@ -50,10 +50,8 @@ export const memberListSortOrderSchema = z
   })
   .default("LATEST");
 
-/**
- * 목록 정렬 기준입니다. 반복 query의 전달 순서가 정렬 우선순위가 됩니다.
- * 예: `sorts=CAREER_DESC&sorts=AVERAGE_RATING_DESC`
- */
+export const DEFAULT_MEMBER_LIST_SORT = "CREATED_AT_DESC";
+
 export const MEMBER_LIST_SORTS = [
   "PENDING_DESC",
   "PENDING_ASC",

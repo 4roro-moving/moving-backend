@@ -9,16 +9,17 @@ import {
 
 import { buildPagination } from "../../../../utils/pagination.util";
 import { authRepository } from "../../../auth/auth.repository";
-import { memberRepository } from "../member.repository";
 import { AppError } from "../../../../lib/app-error";
 import { disconnectUserSockets } from "../../../../socket";
 import { runTransaction } from "../../../../utils/transaction";
 
+import { DEFAULT_MEMBER_LIST_SORT } from "../member-list.validator";
+import { MEMBER_STATUS } from "../member-status.constants";
 import {
   assertAdminCanChangeMemberStatus,
   resolveIsActiveForSuspensionAction,
 } from "../member.policy";
-import { MEMBER_STATUS } from "../member-status.constants";
+import { memberRepository } from "../member.repository";
 
 import { toMoverDetail, toMoverListItem } from "./movers.mapper";
 import { moversRepository } from "./movers.repository";
@@ -34,7 +35,7 @@ export const moversService = {
   async getMoverList(query: ListMoverQuery) {
     const { page, limit } = query;
 
-    const sorts = query.sorts?.length ? query.sorts : ["CREATED_AT_DESC"];
+    const sorts = query.sorts?.length ? query.sorts : [DEFAULT_MEMBER_LIST_SORT];
 
     const { movers, totalCount } = await moversRepository.findManyWithCount({
       skip: (page - 1) * limit,

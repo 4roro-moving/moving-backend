@@ -15,12 +15,13 @@ import { disconnectUserSockets } from "../../../../socket";
 import { buildPagination } from "../../../../utils/pagination.util";
 import { runTransaction } from "../../../../utils/transaction";
 
-import { memberRepository } from "../member.repository";
+import { DEFAULT_MEMBER_LIST_SORT } from "../member-list.validator";
+import { MEMBER_STATUS } from "../member-status.constants";
 import {
   assertAdminCanChangeMemberStatus,
   resolveIsActiveForSuspensionAction,
 } from "../member.policy";
-import { MEMBER_STATUS } from "../member-status.constants";
+import { memberRepository } from "../member.repository";
 
 import { customersRepository } from "./customers.repository";
 import { customersStatusRepository } from "./customers-status.repository";
@@ -38,7 +39,7 @@ export const customersService = {
   async getCustomerList(query: ListCustomerQuery) {
     const { page, limit } = query;
 
-    const sorts = query.sorts?.length ? query.sorts : ["CREATED_AT_DESC"];
+    const sorts = query.sorts?.length ? query.sorts : [DEFAULT_MEMBER_LIST_SORT];
 
     const { customers, totalCount } = await customersRepository.findManyWithCount({
       skip: (page - 1) * limit,
