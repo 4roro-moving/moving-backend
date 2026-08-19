@@ -47,7 +47,7 @@ export const moversStatusRepository = {
         AND e.status = ${sentEstimateStatusSql}
         AND er.status = ${openEstimateRequestStatusSql}
         AND er."isActive" = TRUE
-      FOR UPDATE
+      FOR UPDATE OF e
     `);
 
     return rows.map((row) => row.id);
