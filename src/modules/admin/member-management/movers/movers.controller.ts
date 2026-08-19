@@ -1,8 +1,9 @@
 import type { Request, Response } from "express";
 
+import { AppError } from "../../../../lib/app-error";
 import { sendResponse } from "../../../../utils/response.util";
 import { moversService } from "./movers.service";
-import type { ListMoverQuery, MoverIdParam } from "./movers.type";
+import type { ListMoverQuery, MoverIdParam, UpdateMoverStatusBody } from "./movers.type";
 
 export const moversController = {
   // GET /api/admin/movers
@@ -21,5 +22,23 @@ export const moversController = {
     const detail = await moversService.getMoverDetail(id);
 
     return sendResponse(res, 200, detail);
+  },
+
+  // PATCH /api/admin/movers/:id/status
+  updateMoverStatus: async (req: Request, res: Response) => {
+    const { id } = res.locals.params as MoverIdParam;
+    const input = req.body as UpdateMoverStatusBody;
+
+    if (!req.admin) {
+      throw new AppError("UNAUTHORIZED");
+    }
+
+    const result = await moversService.updateMoverStatus({
+      moverId: id,
+      adminId: req.admin.id,
+      input,
+    });
+
+    return sendResponse(res, 200, result);
   },
 };

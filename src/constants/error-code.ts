@@ -293,6 +293,11 @@ export const ERROR_CODES = {
     code: "CUSTOMER_STATUS_ALREADY_PROCESSED",
     message: "이미 요청한 상태로 처리된 회원입니다.",
   },
+  MOVER_STATUS_ALREADY_PROCESSED: {
+    status: 409,
+    code: "MOVER_STATUS_ALREADY_PROCESSED",
+    message: "이미 요청한 상태로 처리된 기사님입니다.",
+  },
   DESIGNATION_ALREADY_REJECTED: {
     status: 409,
     code: "DESIGNATION_ALREADY_REJECTED",
