@@ -535,6 +535,16 @@ model MoverProfile {
   shortIntro     String
   /// 상세 소개(긴 텍스트).
   description    String  @db.Text
+  /// 기사님의 주 활동 거점 도로명 주소. 기존 프로필 호환을 위해 DB에서는 nullable.
+  activityBaseAddress       String?  @map("activity_base_address")
+  /// 활동 거점의 건물명·층 등 상세 주소.
+  activityBaseDetailAddress String?  @map("activity_base_detail_address")
+  /// 활동 거점 우편번호.
+  activityBaseZipCode       String?  @map("activity_base_zip_code")
+  /// 활동 거점 위도. 지도 마커 표시에 사용.
+  activityBaseLatitude      Decimal? @map("activity_base_latitude") @db.Decimal(9, 6)
+  /// 활동 거점 경도. 지도 마커 표시에 사용.
+  activityBaseLongitude     Decimal? @map("activity_base_longitude") @db.Decimal(10, 6)
   /// 고객에게 확정된 견적 수. 정렬/노출용 비정규화 필드.
   confirmedCount Int     @default(0)
   /// 리뷰 평균 평점(소수점 1자리). 리뷰 변경 시 갱신하는 비정규화 필드.
