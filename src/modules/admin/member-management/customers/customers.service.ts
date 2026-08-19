@@ -170,7 +170,7 @@ export const customersService = {
             }));
           });
 
-          // 견적 요청 이력에 취소 전 상태와 변경 후 상태를 남김
+          // EstimateRequestHistory에 취소 전 상태와 변경 후 상태를 남김
           const histories: Prisma.EstimateRequestHistoryCreateManyInput[] = canceledRequests.map(
             (request) => ({
               estimateRequestId: request.id,
@@ -185,41 +185,36 @@ export const customersService = {
             }),
           );
 
-          // 취소된 견적 요청에 연결된 견적·수정 요청을 정리하고, 이력·메시지·알림을 함께 저장
-          await Promise.all([
-            customersStatusRepository.cancelSentEstimates(
-              canceledRequestIds.map((request) => request.id),
-              now,
-              tx,
-            ),
-            customersStatusRepository.cancelPendingEstimateRevisions(
-              canceledRequestIds.map((request) => request.id),
-              tx,
-            ),
-            customersStatusRepository.createEstimateRequestHistories(histories, tx),
-            customersStatusRepository.createSystemMessages(systemMessages, tx),
-            customersStatusRepository.createNotifications(notifications, tx),
-          ]);
+          await customersStatusRepository.cancelSentEstimates(
+            canceledRequestIds.map((request) => request.id),
+            now,
+            tx,
+          );
+          await customersStatusRepository.cancelPendingEstimateRevisions(
+            canceledRequestIds.map((request) => request.id),
+            tx,
+          );
+          await customersStatusRepository.createEstimateRequestHistories(histories, tx);
+          await customersStatusRepository.createSystemMessages(systemMessages, tx);
+          await customersStatusRepository.createNotifications(notifications, tx);
         }
       }
 
-      // 정지·해제 모두 감사용 이력과 운영 활동 로그를 남김
-      const [suspension] = await Promise.all([
-        customersStatusRepository.createCustomerSuspension(
-          {
-            customerId,
-            adminId,
-            action: input.action,
-            reason: input.reason,
-            ...(input.internalNote !== undefined ? { internalNote: input.internalNote } : {}),
-          },
-          tx,
-        ),
-        customersStatusRepository.createCustomerStatusActivityLog(
-          { customerId, adminId, action: input.action, reason: input.reason, createdAt: now },
-          tx,
-        ),
-      ]);
+      const suspension = await customersStatusRepository.createCustomerSuspension(
+        {
+          customerId,
+          adminId,
+          action: input.action,
+          reason: input.reason,
+          ...(input.internalNote !== undefined ? { internalNote: input.internalNote } : {}),
+        },
+        tx,
+      );
+
+      await customersStatusRepository.createCustomerStatusActivityLog(
+        { customerId, adminId, action: input.action, reason: input.reason, createdAt: now },
+        tx,
+      );
 
       if (input.action === SuspensionAction.SUSPEND) {
         // 새 토큰 재발급을 막아 정지된 고객이 즉시 다시 인증되도록 함
