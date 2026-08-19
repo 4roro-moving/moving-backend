@@ -13,20 +13,19 @@ import { memberRepository } from "../member.repository";
 import { AppError } from "../../../../lib/app-error";
 import { disconnectUserSockets } from "../../../../socket";
 import { runTransaction } from "../../../../utils/transaction";
+
 import {
   assertAdminCanChangeMemberStatus,
   resolveIsActiveForSuspensionAction,
 } from "../member.policy";
 import { MEMBER_STATUS } from "../member-status.constants";
+
 import { toMoverDetail, toMoverListItem } from "./movers.mapper";
 import { moversRepository } from "./movers.repository";
 import { moversStatusRepository } from "./movers-status.repository";
-import type {
-  ListMoverQuery,
-  MoverDetail,
-  UpdateMoverStatusBody,
-  UpdateMoverStatusResponse,
-} from "./movers.type";
+
+import type { UpdateMemberStatusBody } from "../member-status.validator";
+import type { ListMoverQuery, MoverDetail, UpdateMoverStatusResponse } from "./movers.type";
 
 const MOVER_SUSPENSION_SYSTEM_MESSAGE = "기사님의 이용 제한으로 견적이 취소되었습니다.";
 
@@ -89,7 +88,7 @@ export const moversService = {
   }: {
     moverId: string;
     adminId: string;
-    input: UpdateMoverStatusBody;
+    input: UpdateMemberStatusBody;
   }): Promise<UpdateMoverStatusResponse> {
     assertAdminCanChangeMemberStatus(moverId, adminId);
 

@@ -14,16 +14,12 @@ import type {
   MemberListBase,
   MemberSuspensionHistoryItem,
 } from "../member.type";
-import type {
-  listMoverQuerySchema,
-  moverIdParamSchema,
-  updateMoverStatusBodySchema,
-} from "./movers.validator";
+
 import type { MemberStatus } from "../member-status.constants";
+import type { listMoverQuerySchema, moverIdParamSchema } from "./movers.validator";
 
 export type ListMoverQuery = z.infer<typeof listMoverQuerySchema>;
 export type MoverIdParam = z.infer<typeof moverIdParamSchema>;
-export type UpdateMoverStatusBody = z.infer<typeof updateMoverStatusBodySchema>;
 
 export type UpdateMoverStatusResponse = {
   id: string;

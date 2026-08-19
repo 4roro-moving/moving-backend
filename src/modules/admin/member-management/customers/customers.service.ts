@@ -15,19 +15,21 @@ import { disconnectUserSockets } from "../../../../socket";
 import { buildPagination } from "../../../../utils/pagination.util";
 import { runTransaction } from "../../../../utils/transaction";
 
-import { customersRepository } from "./customers.repository";
-import { customersStatusRepository } from "./customers-status.repository";
 import { memberRepository } from "../member.repository";
 import {
   assertAdminCanChangeMemberStatus,
   resolveIsActiveForSuspensionAction,
 } from "../member.policy";
 import { MEMBER_STATUS } from "../member-status.constants";
+
+import { customersRepository } from "./customers.repository";
+import { customersStatusRepository } from "./customers-status.repository";
 import { toCustomerDetail, toCustomerListItem } from "./customers.mapper";
+
+import type { UpdateMemberStatusBody } from "../member-status.validator";
 import type {
   CustomerDetail,
   ListCustomerQuery,
-  UpdateCustomerStatusBody,
   UpdateCustomerStatusResponse,
 } from "./customers.type";
 
@@ -88,7 +90,7 @@ export const customersService = {
   }: {
     customerId: string;
     adminId: string;
-    input: UpdateCustomerStatusBody;
+    input: UpdateMemberStatusBody;
   }): Promise<UpdateCustomerStatusResponse> {
     assertAdminCanChangeMemberStatus(customerId, adminId);
 
