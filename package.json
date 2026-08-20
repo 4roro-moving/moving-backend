@@ -15,7 +15,9 @@
     "prepare": "husky",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "test:db": "tsx --env-file=.env --import ./scripts/enable-db-integration.mjs --test \"src/modules/estimate-request/estimateRequest.cancelRace.test.ts\" \"src/modules/admin/member-management/customers/customers.status-race.test.ts\" \"src/modules/admin/member-management/movers/movers.status-race.test.ts\" \"src/modules/profile/profile.updateBasicInfo.password-revoke.integration.test.ts\"",
-    "prisma:seed": "tsx --tsconfig prisma/tsconfig.json prisma/seed.ts"
+    "prisma:seed": "tsx --tsconfig prisma/tsconfig.json prisma/seed.ts",
+    "seed:audit": "tsx scripts/seed-audit/dryrun.ts && tsx scripts/seed-audit/date-audit.ts && tsx scripts/seed-audit/date-audit2.ts && tsx scripts/seed-audit/date-audit3.ts",
+    "seed:images": "tsx --tsconfig prisma/tsconfig.json prisma/seeds/images/sync-images.ts"
   },
   "prisma": {
     "seed": "tsx --tsconfig prisma/tsconfig.json prisma/seed.ts"
@@ -56,6 +58,8 @@
   "devDependencies": {
     "@commitlint/cli": "^21.2.1",
     "@commitlint/config-conventional": "^21.2.0",
+    "@dicebear/collection": "^9.4.2",
+    "@dicebear/core": "^9.4.3",
     "@eslint/js": "^10.0.1",
     "@types/bcrypt": "^6.0.0",
     "@types/compression": "^1.8.1",
@@ -75,6 +79,7 @@
     "lint-staged": "^17.1.0",
     "prettier": "^3.9.5",
     "prisma": "^6.16.2",
+    "sharp": "^0.35.3",
     "supertest": "^7.2.2",
     "tsx": "^4.23.1",
     "typescript": "^5.9.3",

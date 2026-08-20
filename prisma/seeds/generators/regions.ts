@@ -1,3 +1,12 @@
+/*
+ * 지역 마스터 (17개 시·도)
+ *
+ * 다른 모든 데이터가 이 id 를 참조하므로 가장 먼저 적재한다.
+ * TRUNCATE 로 시퀀스를 초기화했으므로 id 는 1~17 로 결정적이다.
+ */
+
+import type { PrismaClient } from "@prisma/client";
+
 export const REGIONS = [
   { name: "서울", latitude: 37.5665, longitude: 126.978 },
   { name: "부산", latitude: 35.1796, longitude: 129.0756 },
@@ -17,3 +26,24 @@ export const REGIONS = [
   { name: "경남", latitude: 35.2383, longitude: 128.6924 },
   { name: "제주", latitude: 33.4996, longitude: 126.5312 },
 ] as const;
+
+export type RegionRow = { id: number; name: string };
+
+export async function seedRegions(prisma: PrismaClient): Promise<RegionRow[]> {
+  console.log("🗺️  지역 마스터를 생성합니다");
+
+  await prisma.region.createMany({
+    data: REGIONS.map((region, index) => ({
+      id: index + 1,
+      name: region.name,
+      latitude: region.latitude,
+      longitude: region.longitude,
+    })),
+  });
+
+  const rows = REGIONS.map((region, index) => ({ id: index + 1, name: region.name }));
+
+  console.log(`  ✅ 지역 ${rows.length}개`);
+
+  return rows;
+}
