@@ -63,11 +63,13 @@ export function toMemberSuspensionHistoryItem(item: {
   action: MemberSuspensionHistoryItem["action"];
   reason: string;
   createdAt: Date;
+  admin: MemberSuspensionHistoryItem["admin"];
 }): MemberSuspensionHistoryItem {
   return {
     id: item.id,
     action: item.action,
     reason: item.reason,
     createdAt: item.createdAt,
+    admin: item.admin,
   };
 }

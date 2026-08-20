@@ -40,6 +40,7 @@ registerRouterDocs(adminMoverRouter, {
       description: [
         "관리자가 기사님(MOVER)의 계정·프로필과 주요 활동 이력을 조회합니다.",
         "진행 중 견적은 전송(SENT)·확정(CONFIRMED) 상태, 최근 견적은 만료·취소 또는 이사 완료 거래의 최신 5건을 제공합니다.",
+        "정지·해제 이력에는 조치 종류·사유·처리 시각과 처리 관리자 정보를 포함합니다.",
         "Customer ID 또는 존재하지 않는 ID는 MOVER_NOT_FOUND를 반환합니다.",
       ].join("\n"),
       responses: { 200: "조회 성공", 404: "기사를 찾을 수 없습니다." },

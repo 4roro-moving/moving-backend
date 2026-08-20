@@ -46,4 +46,8 @@ export type MemberSuspensionHistoryItem = {
   action: SuspensionAction;
   reason: string;
   createdAt: Date;
+  admin: {
+    id: string;
+    name: string;
+  };
 };
