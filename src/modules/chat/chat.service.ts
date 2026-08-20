@@ -8,8 +8,9 @@ import {
 import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { getImageUrl } from "../../utils/image-url";
+import { isPastInKst } from "../../utils/kst";
 import { runTransaction } from "../../utils/transaction";
-import { resolveExpiresAt, resolveMoveDate } from "../estimate-request/estimateRequest.policy";
+import { resolveMoveDate } from "../estimate-request/estimateRequest.policy";
 import { notificationService } from "../notification/notification.service";
 import { chatImageService } from "./chat-image.service";
 import {
@@ -29,6 +30,13 @@ const CHAT_ROOM_BLOCKED_REQUEST_STATUSES: readonly EstimateRequestStatus[] = [
   "CANCELED",
 ];
 const ESTIMATE_REVISION_CONTENT = "견적 수정 요청이 도착했습니다.";
+
+function getEstimateMoveDate(estimate: {
+  moveDate: Date | null;
+  estimateRequest: { moveDate: Date };
+}): Date {
+  return estimate.moveDate ?? estimate.estimateRequest.moveDate;
+}
 
 function isParticipant(room: Pick<ChatRoomRow, "customerId" | "moverId">, userId: string): boolean {
   return room.customerId === userId || room.moverId === userId;
@@ -227,14 +235,10 @@ function assertEstimateRevisionHasChanges(params: {
   }
 }
 
-function assertApprovedRevisionSnapshot(
-  revision: Pick<EstimateRevisionForResponseRow, "requestedMoveDate">,
-): asserts revision is Pick<EstimateRevisionForResponseRow, "requestedMoveDate"> & {
-  requestedMoveDate: Date;
-} {
-  if (!revision.requestedMoveDate) {
+function assertRevisionMoveDateStillValid(requestedMoveDate: Date): void {
+  if (isPastInKst(requestedMoveDate)) {
     throw new AppError("CONFLICT", {
-      message: "이사일 정보가 없는 견적 수정 요청은 승인할 수 없습니다.",
+      message: "과거 이사일로는 견적 수정 요청을 승인할 수 없습니다.",
     });
   }
 }
@@ -502,8 +506,9 @@ export const chatService = {
 
         assertParticipant(lockedRoom, requesterId);
         assertEstimateRevisionRequestable(lockedRoom, requesterId);
+        const previousMoveDate = getEstimateMoveDate(lockedRoom.estimate);
         assertEstimateRevisionHasChanges({
-          previousMoveDate: lockedRoom.estimate.estimateRequest.moveDate,
+          previousMoveDate,
           requestedMoveDate,
           previousPrice: lockedRoom.estimate.price,
           requestedPrice: input.requestedPrice,
@@ -529,7 +534,7 @@ export const chatService = {
             requesterId,
             previousPrice: lockedRoom.estimate.price,
             requestedPrice: input.requestedPrice,
-            previousMoveDate: lockedRoom.estimate.estimateRequest.moveDate,
+            previousMoveDate,
             requestedMoveDate,
             previousComment: lockedRoom.estimate.comment,
             requestedComment: input.requestedComment,
@@ -612,46 +617,14 @@ export const chatService = {
         const respondedAt = new Date();
 
         if (input.response === "APPROVED") {
-          assertApprovedRevisionSnapshot(lockedRevision);
+          assertRevisionMoveDateStillValid(lockedRevision.requestedMoveDate);
 
           await chatRepository.updateEstimateForRevision(
             {
               estimateId: lockedRevision.estimateId,
               price: lockedRevision.requestedPrice,
               comment: lockedRevision.requestedComment,
-            },
-            tx,
-          );
-          await chatRepository.updateEstimateRequestForRevision(
-            {
-              estimateRequestId: lockedRevision.estimate.estimateRequest.id,
               moveDate: lockedRevision.requestedMoveDate,
-              expiresAt: resolveExpiresAt(lockedRevision.requestedMoveDate),
-            },
-            tx,
-          );
-
-          await chatRepository.createEstimateRequestHistory(
-            {
-              estimateRequestId: lockedRevision.estimate.estimateRequest.id,
-              changedBy: responderId,
-              type: "UPDATED",
-              previousData: {
-                moveDate: lockedRevision.estimate.estimateRequest.moveDate.toISOString(),
-                estimate: {
-                  id: lockedRevision.estimateId,
-                  price: lockedRevision.previousPrice,
-                  comment: lockedRevision.previousComment,
-                },
-              },
-              changedData: {
-                moveDate: lockedRevision.requestedMoveDate.toISOString(),
-                estimate: {
-                  id: lockedRevision.estimateId,
-                  price: lockedRevision.requestedPrice,
-                  comment: lockedRevision.requestedComment,
-                },
-              },
             },
             tx,
           );

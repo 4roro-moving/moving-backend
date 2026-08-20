@@ -71,7 +71,7 @@ export function mapSentEstimate(row: MoverSentEstimateRow) {
     estimateRequest: {
       id: row.estimateRequest.id,
       moveType: row.estimateRequest.moveType,
-      moveDate: row.estimateRequest.moveDate.toISOString(),
+      moveDate: (row.moveDate ?? row.estimateRequest.moveDate).toISOString(),
       fromZipCode: row.estimateRequest.fromZipCode,
       fromAddress: row.estimateRequest.fromAddress,
       fromDetailAddress: row.estimateRequest.fromDetailAddress,

@@ -79,6 +79,7 @@ const chatRoomForRevisionSelect = {
       id: true,
       price: true,
       comment: true,
+      moveDate: true,
       status: true,
       estimateRequest: {
         select: {
@@ -113,6 +114,7 @@ const estimateRevisionForResponseSelect = {
     select: {
       id: true,
       status: true,
+      moveDate: true,
       estimateRequest: {
         select: {
           id: true,
@@ -414,6 +416,7 @@ export const chatRepository = {
       estimateId: number;
       price: number;
       comment: string;
+      moveDate: Date;
     },
     db: DbClient = prisma,
   ) {
@@ -422,35 +425,8 @@ export const chatRepository = {
       data: {
         price: data.price,
         comment: data.comment,
-      },
-      select: { id: true },
-    });
-  },
-
-  updateEstimateRequestForRevision(
-    data: {
-      estimateRequestId: number;
-      moveDate: Date;
-      expiresAt: Date;
-    },
-    db: DbClient = prisma,
-  ) {
-    return db.estimateRequest.update({
-      where: { id: data.estimateRequestId },
-      data: {
         moveDate: data.moveDate,
-        expiresAt: data.expiresAt,
       },
-      select: { id: true },
-    });
-  },
-
-  createEstimateRequestHistory(
-    data: Prisma.EstimateRequestHistoryUncheckedCreateInput,
-    db: DbClient = prisma,
-  ) {
-    return db.estimateRequestHistory.create({
-      data,
       select: { id: true },
     });
   },

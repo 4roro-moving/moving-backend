@@ -61,8 +61,8 @@ export type ChatEstimateRevision = {
   responderId: string | null;
   previousPrice: number;
   requestedPrice: number;
-  previousMoveDate: Date | null;
-  requestedMoveDate: Date | null;
+  previousMoveDate: Date;
+  requestedMoveDate: Date;
   previousComment: string;
   requestedComment: string;
   status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELED";

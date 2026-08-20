@@ -59,7 +59,7 @@ export function mapDetailEstimate(estimate: ReceivedEstimateDetailItem) {
     estimateRequest: {
       id: estimate.estimateRequest.id,
       moveType: estimate.estimateRequest.moveType,
-      moveDate: estimate.estimateRequest.moveDate,
+      moveDate: estimate.moveDate ?? estimate.estimateRequest.moveDate,
       fromZipCode: estimate.estimateRequest.fromZipCode,
       fromAddress: estimate.estimateRequest.fromAddress,
       fromDetailAddress: estimate.estimateRequest.fromDetailAddress,
