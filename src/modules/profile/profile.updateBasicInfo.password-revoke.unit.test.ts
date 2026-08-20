@@ -3,7 +3,7 @@ import { afterEach, describe, it } from "node:test";
 
 import bcrypt from "bcrypt";
 import type { RefreshTokenRevokedReason } from "@prisma/client";
-import { AuthProvider, Prisma, RefreshTokenSessionType, UserRole } from "@prisma/client";
+import { AuthProvider, Prisma, UserRole } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import { authRepository } from "../auth/auth.repository";
