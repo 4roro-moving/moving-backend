@@ -577,14 +577,14 @@ model MoverProfile {
   /// 수정 시각.
   updatedAt    DateTime           @updatedAt
 
-  /// 평점순 정렬 최적화.
-  @@index([averageRating])
-  /// 리뷰 많은 순 정렬 최적화.
-  @@index([reviewCount])
+  /// 평점순 정렬 최적화. (orderBy 는 항상 id asc 를 타이브레이커로 붙인다)
+  @@index([averageRating(sort: Desc), id])
+  /// 리뷰 많은 순 정렬 최적화. (기본 정렬)
+  @@index([reviewCount(sort: Desc), id])
   /// 경력순 정렬 최적화.
-  @@index([career])
+  @@index([career(sort: Desc), id])
   /// 확정 많은 순 정렬 최적화.
-  @@index([confirmedCount])
+  @@index([confirmedCount(sort: Desc), id])
   @@map("mover_profiles")
 }
 
