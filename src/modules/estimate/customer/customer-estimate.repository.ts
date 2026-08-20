@@ -82,6 +82,7 @@ function getReceivedEstimateDetailSelect(customerId: string) {
     id: true,
     price: true,
     comment: true,
+    moveDate: true,
     status: true,
     isDesignated: true,
     createdAt: true,
@@ -149,6 +150,7 @@ function getReceivedEstimateDetailSelect(customerId: string) {
 const receivedEstimateForConfirmSelect = {
   id: true,
   moverId: true,
+  moveDate: true,
   status: true,
   estimateRequest: {
     select: {

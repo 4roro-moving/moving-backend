@@ -142,6 +142,8 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
           requesterId: customerId,
           previousPrice: 100_000,
           requestedPrice: 120_000,
+          previousMoveDate: estimateRequest.moveDate,
+          requestedMoveDate: estimateRequest.moveDate,
           previousComment: "정지 전 견적 내용입니다.",
           requestedComment: "정지 전 수정 요청 내용입니다.",
         },

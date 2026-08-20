@@ -6,6 +6,8 @@ import type {
   chatRoomParamSchema,
   createChatRoomBodySchema,
   joinChatRoomPayloadSchema,
+  requestEstimateRevisionPayloadSchema,
+  respondEstimateRevisionPayloadSchema,
   sendChatImageMessagePayloadSchema,
   sendChatMessagePayloadSchema,
 } from "./chat.validator";
@@ -17,6 +19,8 @@ export type ChatImageUploadUrlBody = z.infer<typeof chatImageUploadUrlBodySchema
 export type JoinChatRoomPayload = z.infer<typeof joinChatRoomPayloadSchema>;
 export type SendChatMessagePayload = z.infer<typeof sendChatMessagePayloadSchema>;
 export type SendChatImageMessagePayload = z.infer<typeof sendChatImageMessagePayloadSchema>;
+export type RequestEstimateRevisionPayload = z.infer<typeof requestEstimateRevisionPayloadSchema>;
+export type RespondEstimateRevisionPayload = z.infer<typeof respondEstimateRevisionPayloadSchema>;
 
 export type ChatParticipant = {
   id: string;
@@ -47,6 +51,23 @@ export type ChatMessageResponse = {
   readAt: Date | null;
   createdAt: Date;
   sender: ChatParticipant | null;
+  revision: ChatEstimateRevision | null;
+};
+
+export type ChatEstimateRevision = {
+  id: number;
+  estimateId: number;
+  requesterId: string;
+  responderId: string | null;
+  previousPrice: number;
+  requestedPrice: number;
+  previousMoveDate: Date;
+  requestedMoveDate: Date;
+  previousComment: string;
+  requestedComment: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELED";
+  createdAt: Date;
+  respondedAt: Date | null;
 };
 
 export type MissedChatMessagesResponse = {
