@@ -2,6 +2,7 @@ import type { MoveType } from "@prisma/client";
 
 import { prisma } from "../../../lib/prisma";
 import type { DbClient } from "../../../utils/transaction";
+import type { MoverActivityBase } from "./profile.type";
 
 interface CreateMoverProfileData {
   nickname: string;
@@ -9,13 +10,7 @@ interface CreateMoverProfileData {
   career: number;
   shortIntro: string;
   description: string;
-  activityBase: {
-    address: string;
-    detailAddress?: string;
-    zipCode: string;
-    latitude: number;
-    longitude: number;
-  };
+  activityBase: MoverActivityBase;
   regionIds: number[];
   serviceTypes: MoveType[];
 }
