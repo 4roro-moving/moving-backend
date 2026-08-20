@@ -130,7 +130,7 @@ export const customersService = {
         const requestIds = cancelableRequests.map((request) => request.id);
 
         if (requestIds.length > 0) {
-          // 상태 조건을 다시 확인해 여전히 취소 가능한 견적 요청만 취소
+          // 상태 조건을 다시 확인해 여전히 취소 가능한 견적 요청만 취소 후, 취소된 견적 요청 ID 반환
           const canceledRequestIds =
             await customersStatusRepository.cancelPendingOrOpenEstimateRequests(
               requestIds,
@@ -142,15 +142,16 @@ export const customersService = {
             canceledRequestIdSet.has(request.id),
           );
 
-          // 각 요청에 연결된 모든 채팅방에 SYSTEM 메시지 생성
-          const systemMessages = canceledRequests.flatMap((request) =>
-            request.chatRooms.map((room) => ({
-              roomId: room.id,
-              senderId: null,
-              type: ChatMessageType.SYSTEM,
-              content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
-            })),
+          // 취소된 견적 요청에 연결된 채팅방 ID 수집 후 SYSTEM 메시지 생성 및 lastMessageAt 갱신
+          const chatRoomIds = canceledRequests.flatMap((request) =>
+            request.chatRooms.map((room) => room.id),
           );
+          const systemMessages = chatRoomIds.map((roomId) => ({
+            roomId,
+            senderId: null,
+            type: ChatMessageType.SYSTEM,
+            content: "고객의 이용 제한으로 견적 요청이 취소되었습니다.",
+          }));
 
           // 이미 견적을 보낸 기사와 지정 견적 대상으로 선택된 기사에게 보낼 알림 생성
           const notifications = canceledRequests.flatMap((request) => {
@@ -197,6 +198,7 @@ export const customersService = {
           );
           await customersStatusRepository.createEstimateRequestHistories(histories, tx);
           await customersStatusRepository.createSystemMessages(systemMessages, tx);
+          await customersStatusRepository.updateChatRoomsLastMessageAt(chatRoomIds, now, tx);
           // createManyAndReturn을 통해 실제 INSERT된 알림만 받아, 이를 createdNotifications에 push함
           createdNotifications.push(
             ...(await customersStatusRepository.createNotifications(notifications, tx)),

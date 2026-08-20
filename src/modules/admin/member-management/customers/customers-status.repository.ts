@@ -164,6 +164,11 @@ export const customersStatusRepository = {
     return db.chatMessage.createMany({ data });
   },
 
+  /** 취소된 견적 요청과 연결된 채팅방들의lastMessageAt을 정지 처리 시각으로 일괄 갱신합니다. */
+  updateChatRoomsLastMessageAt(roomIds: number[], lastMessageAt: Date, db: DbClient = prisma) {
+    return db.chatRoom.updateMany({ where: { id: { in: roomIds } }, data: { lastMessageAt } });
+  },
+
   /** 견적 기사·지정 기사에게 보낼 취소 알림을 중복 키는 건너뛰며 일괄 저장합니다. */
   createNotifications(data: Prisma.NotificationCreateManyInput[], db: DbClient = prisma) {
     return db.notification.createManyAndReturn({
