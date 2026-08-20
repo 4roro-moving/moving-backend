@@ -1,3 +1,5 @@
+import { EstimateRequestStatus, EstimateStatus } from "@prisma/client";
+
 import {
   toMemberDetailAccount,
   toMemberListBase,
@@ -22,12 +24,54 @@ export function toCustomerListItem(customer: CustomerListRow): CustomerListItem 
 }
 
 function toEstimateHistoryItem(item: EstimateHistoryRow) {
+  const estimateStatusCounts = item.estimates.reduce(
+    (counts, estimate) => {
+      counts[estimate.status] += 1;
+      return counts;
+    },
+    {
+      [EstimateStatus.SENT]: 0,
+      [EstimateStatus.CONFIRMED]: 0,
+      [EstimateStatus.EXPIRED]: 0,
+      [EstimateStatus.CANCELED]: 0,
+    },
+  );
+
+  const confirmedEstimate = item.confirmedEstimate;
+
   return {
     id: item.id,
     moveType: item.moveType,
     status: item.status,
     moveDate: item.moveDate,
+    expiresAt: item.expiresAt,
+    expiredAt: item.expiredAt,
+    canceledAt: item.canceledAt,
+    completedAt: item.completedAt,
     createdAt: item.createdAt,
+    estimateSummary: {
+      totalCount: item.estimates.length,
+      sentCount: estimateStatusCounts[EstimateStatus.SENT],
+      confirmedCount: estimateStatusCounts[EstimateStatus.CONFIRMED],
+      expiredCount: estimateStatusCounts[EstimateStatus.EXPIRED],
+      canceledCount: estimateStatusCounts[EstimateStatus.CANCELED],
+    },
+    confirmedEstimate: confirmedEstimate
+      ? {
+          id: confirmedEstimate.id,
+          mover: {
+            id: confirmedEstimate.moverId,
+            name: confirmedEstimate.mover.name,
+            nickname: confirmedEstimate.mover.moverProfile?.nickname ?? null,
+          },
+          price: confirmedEstimate.price,
+          confirmedAt: confirmedEstimate.confirmedAt,
+          cancelable:
+            item.status === EstimateRequestStatus.CONFIRMED &&
+            item.isActive &&
+            item.confirmedEstimateId === confirmedEstimate.id,
+        }
+      : null,
   };
 }
 
@@ -76,7 +120,7 @@ export function toCustomerDetail(
       serviceAreas: profile?.serviceAreas.map((area) => area.region.name) ?? [],
       serviceTypes: profile?.serviceTypes.map((type) => type.moveType) ?? [],
     },
-    estimateHistory: {
+    estimateRequests: {
       totalCount: histories.estimateHistory.totalCount,
       items: histories.estimateHistory.items.map(toEstimateHistoryItem),
     },
