@@ -49,6 +49,8 @@ async function registerModuleDocs(): Promise<void> {
   await import("../modules/report/report.docs");
   await import("../modules/profile/profile.docs");
   await import("../modules/chat/chat.docs");
+  // 2026.08.18 김나연 - [추가] 나눔 API 문서 등록
+  await import("../modules/giveaway/giveaway.docs");
 }
 
 export async function generateOpenApiDocument(): Promise<OpenAPIObject> {
