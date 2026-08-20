@@ -222,7 +222,7 @@ function applyCursor(
 async function findManyByCursorWithCount(
   { take, sort, regionId, keyword, rating, cursor }: FindPublicListParams,
   db: DbClient = prisma,
-) {
+): Promise<{ reviews: ResidenceReviewRow[]; totalCount: number | null }> {
   const where = buildListWhere({ regionId, keyword, rating });
   const [reviews, totalCount] = await Promise.all([
     db.residenceReview.findMany({
@@ -231,7 +231,8 @@ async function findManyByCursorWithCount(
       orderBy: buildListOrderBy(sort),
       take,
     }),
-    db.residenceReview.count({ where }),
+    // 무한 스크롤 다음 페이지에서는 같은 필터의 전체 건수를 다시 세지 않습니다.
+    cursor == null ? db.residenceReview.count({ where }) : Promise.resolve(null),
   ]);
 
   return { reviews, totalCount };

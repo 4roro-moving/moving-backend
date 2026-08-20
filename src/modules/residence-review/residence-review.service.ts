@@ -119,12 +119,13 @@ async function findOwnedVisibleResidenceReviewOrThrow(
 
 async function getPublicResidenceReviewList(query: ListResidenceReviewQuery, viewerId?: string) {
   const { cursor, limit, regionId, keyword, rating, sort } = query;
-  const cursorQuery = toResidenceReviewCursorQuery({ sort, keyword, regionId, rating });
-  const decodedCursor = decodeResidenceReviewCursor(cursor, cursorQuery);
 
   if (regionId !== undefined) {
     await assertRegionExists(regionId);
   }
+
+  const cursorQuery = toResidenceReviewCursorQuery({ sort, keyword, regionId, rating });
+  const decodedCursor = decodeResidenceReviewCursor(cursor, cursorQuery);
 
   const { reviews, totalCount } = await residenceReviewRepository.findManyByCursorWithCount({
     take: limit + 1,

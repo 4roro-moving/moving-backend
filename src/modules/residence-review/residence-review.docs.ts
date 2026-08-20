@@ -33,6 +33,7 @@ const RESIDENCE_REVIEW_DOCS = {
     "- 조건이 다른 `cursor`를 보내면 유효하지 않은 커서로 응답합니다.",
     "- `cursor`가 없으면 해당 조건의 첫 페이지부터 조회합니다.",
     "- `cursor`가 있으면 해당 위치 다음 후기를 조회합니다.",
+    "- `pagination.totalCount`는 첫 페이지(`cursor` 없음)에서만 전체 건수입니다. `cursor`가 있으면 `null`이며, 전체 건수는 첫 페이지 응답을 사용하면 됩니다.",
     "- 다음 페이지는 응답의 `pagination.nextCursor`로 요청합니다.",
     "- 존재하지 않는 지역이면 지원하지 않는 지역으로 응답합니다.",
     "- 각 후기의 `author`는 `id`, `name`, `imageUrl`을 포함합니다. `imageUrl`은 프로필 이미지 URL이며 없으면 null입니다.",
