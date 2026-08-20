@@ -6,7 +6,6 @@ import { moverCalendarRouter } from "./mover-calendar.route";
 registerRouterDocs(moverCalendarRouter, {
   basePath: "/api/movers",
   tag: "Mover Calendar",
-  headers: z.object({ authorization: z.string().optional() }),
   commonResponses: { 422: "입력값 검증 실패" },
   endpoints: {
     "GET /:moverId/calendar": {
@@ -16,11 +15,13 @@ registerRouterDocs(moverCalendarRouter, {
       responses: { 200: "조회 성공", 404: "기사를 찾을 수 없음" },
     },
     "PUT /me/calendar/:date": {
+      headers: z.object({ authorization: z.string() }),
       summary: "내 휴무일 등록 또는 해제",
       description:
         "OFF로 휴무를 등록하고 AVAILABLE로 휴무를 해제합니다. FULL은 직접 지정할 수 없습니다.",
       responses: {
         200: "변경 성공",
+        400: "지난 날짜 변경 불가",
         401: "인증 필요",
         403: "기사 권한 필요",
         409: "확정 일정 존재",

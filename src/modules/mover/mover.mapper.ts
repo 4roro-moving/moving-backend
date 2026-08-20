@@ -33,6 +33,13 @@ export function mapMoverSummary(mover: MoverListItem) {
     confirmedEstimateCount: mover.confirmedCount,
     favoriteCount: mover.user._count.favoritesReceived,
     moveTypes: mover.serviceTypes.map((serviceType) => serviceType.moveType),
+    activityBase:
+      mover.activityBaseLatitude !== null && mover.activityBaseLongitude !== null
+        ? {
+            latitude: mover.activityBaseLatitude.toNumber(),
+            longitude: mover.activityBaseLongitude.toNumber(),
+          }
+        : null,
   };
 }
 
