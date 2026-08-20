@@ -136,6 +136,12 @@ export const listTermsQuerySchema = z.object({
     .positive("조회 개수는 1 이상이어야 합니다.")
     .max(50, "조회 개수는 50 이하여야 합니다.")
     .default(10),
+  keyword: z
+    .string({ error: "검색어는 문자열이어야 합니다." })
+    .trim()
+    .min(1, "검색어를 입력해 주세요.")
+    .max(100, "검색어는 100자 이하여야 합니다.")
+    .optional(),
   type: termsTypeSchema.optional(),
   status: termsStatusSchema.optional(),
 });
