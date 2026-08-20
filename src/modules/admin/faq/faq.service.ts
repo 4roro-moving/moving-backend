@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
+import { escapeLikePattern } from "../../../utils/search.util";
 
 import { faqRepository } from "./faq.repository";
 import type { CreateFaqInput, ListFaqQuery, UpdateFaqInput } from "./faq.type";
@@ -37,10 +38,22 @@ export const faqService = {
     const where: Prisma.FaqWhereInput = {};
 
     if (keyword !== undefined) {
-      where.question = {
-        contains: keyword,
-        mode: "insensitive",
-      };
+      const escapedKeyword = escapeLikePattern(keyword);
+
+      where.OR = [
+        {
+          question: {
+            contains: escapedKeyword,
+            mode: "insensitive",
+          },
+        },
+        {
+          answer: {
+            contains: escapedKeyword,
+            mode: "insensitive",
+          },
+        },
+      ];
     }
 
     if (isVisible !== undefined) {

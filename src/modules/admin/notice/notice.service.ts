@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
+import { escapeLikePattern } from "../../../utils/search.util";
 
 import { runTransaction } from "../../../utils/transaction";
 import { notificationService } from "../../notification/notification.service";
@@ -62,9 +63,9 @@ export const noticeService = {
 
     const where: Prisma.NoticeWhereInput = {};
 
-    if (keyword) {
+    if (keyword !== undefined) {
       where.title = {
-        contains: keyword,
+        contains: escapeLikePattern(keyword),
         mode: "insensitive",
       };
     }

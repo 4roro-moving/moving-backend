@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
+import { escapeLikePattern } from "../../utils/search.util";
 import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
 
@@ -167,7 +168,7 @@ export const adminInquiryService = {
 
     if (keyword !== undefined) {
       where.title = {
-        contains: keyword,
+        contains: escapeLikePattern(keyword),
         mode: "insensitive",
       };
     }
