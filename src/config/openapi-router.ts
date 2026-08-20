@@ -8,6 +8,7 @@ import { registry } from "./openapi";
 export type EndpointDoc = {
   summary: string;
   description?: string;
+  headers?: ZodObject;
   responses?: Record<number, string>;
 };
 
@@ -127,7 +128,7 @@ export function registerRouterDocs(router: Router, options: RegisterOptions): vo
       summary: doc.summary,
       ...(doc.description !== undefined && { description: doc.description }),
       request: {
-        ...(headers !== undefined && { headers }),
+        ...((doc.headers ?? headers) !== undefined && { headers: doc.headers ?? headers }),
         ...(route.schemas.params !== undefined && { params: route.schemas.params }),
         ...(route.schemas.query !== undefined && { query: route.schemas.query }),
         ...(route.schemas.body !== undefined && {

@@ -12,15 +12,14 @@ import "dotenv/config";
 
 import { AppError } from "../../lib/app-error";
 import { prisma } from "../../lib/prisma";
-import { createRefreshToken } from "../../utils/jwt";
 import { clearRefreshTokenRotationGraceCache } from "../../utils/refresh-token-rotation-grace-cache";
+import { createRefreshToken } from "../../utils/jwt";
 import { tokenHash } from "../../utils/tokenHash";
 import { authRepository } from "./auth.repository";
 import { authService } from "./auth.service";
 
-const USER_ID = "user-single-flight-1";
+const USER_ID = "user-grace-1";
 const FAMILY_A = "11111111-1111-4111-8111-111111111111";
-const FAMILY_B = "22222222-2222-4222-8222-222222222222";
 
 const FUTURE_EXPIRES_AT = new Date("2099-01-01T00:00:00.000Z");
 
@@ -49,35 +48,11 @@ type RevokeFamilyCall = {
   revokedReason: RefreshTokenRevokedReason;
 };
 
-type Deferred<T = void> = {
-  promise: Promise<T>;
-  resolve: (value: T | PromiseLike<T>) => void;
-  reject: (reason?: unknown) => void;
-};
-
-function createDeferred<T = void>(): Deferred<T> {
-  let resolve!: (value: T | PromiseLike<T>) => void;
-  let reject!: (reason?: unknown) => void;
-
-  const promise = new Promise<T>((res, rej) => {
-    resolve = res;
-    reject = rej;
-  });
-
-  return { promise, resolve, reject };
-}
-
-function waitForMicrotasks(): Promise<void> {
-  return new Promise((resolve) => {
-    queueMicrotask(resolve);
-  });
-}
-
 function createLocalUser(overrides: Partial<AuthUser> = {}): AuthUser {
   return {
     id: USER_ID,
-    email: "single-flight@example.com",
-    name: "Single Flight User",
+    email: "user-grace@example.com",
+    name: "Grace User",
     phone: "01012345678",
     role: UserRole.CUSTOMER,
     authProvider: AuthProvider.LOCAL,
@@ -212,7 +187,13 @@ function createActiveStoredToken(
   };
 }
 
-describe("authService refresh token single-flight", () => {
+function assertUserRefreshUnauthorized(error: unknown, message: string): void {
+  assert.ok(error instanceof AppError);
+  assert.equal(error.code, "UNAUTHORIZED");
+  assert.equal(error.message, message);
+}
+
+describe("authService refresh token rotation grace", () => {
   const originalFindRefreshTokenByHash = authRepository.findRefreshTokenByHash;
   const originalFindById = authRepository.findById;
   const originalRevokeRefreshTokenByHash = authRepository.revokeRefreshTokenByHash;
@@ -237,152 +218,36 @@ describe("authService refresh token single-flight", () => {
     }
   });
 
-  it("performs one USER rotation and shares the same tokens for concurrent refresh requests", async () => {
-    const refreshToken = createSessionRefreshToken();
-    const store = createRefreshTokenStore([createActiveStoredToken(refreshToken)]);
+  it("reproduces reuse detection when R1 is retried after rotation with grace disabled", async () => {
+    process.env.REFRESH_TOKEN_ROTATION_GRACE_MS = "0";
 
-    let revokeRotatedCount = 0;
-    let saveCount = 0;
-    let findByHashCount = 0;
-
-    const rotationEntered = createDeferred<void>();
-    const rotationRelease = createDeferred<void>();
-
-    installRefreshRepository(store);
-
-    authRepository.findRefreshTokenByHash = async (hash, sessionType) => {
-      findByHashCount += 1;
-      return store.findByHash(hash, sessionType);
-    };
-
-    authRepository.revokeRefreshTokenByHash = async (hash, sessionType, revokedReason) => {
-      if (revokedReason === RefreshTokenRevokedReason.ROTATED) {
-        revokeRotatedCount += 1;
-
-        if (revokeRotatedCount === 1) {
-          rotationEntered.resolve();
-          await rotationRelease.promise;
-        }
-      }
-
-      return store.revokeByHash(hash, sessionType, revokedReason);
-    };
-
-    authRepository.saveRefreshToken = async (data) => {
-      saveCount += 1;
-      return store.saveToken(data);
-    };
-
-    authRepository.findById = async () => createLocalUser();
-
-    prisma.$transaction = (async (callback: (tx: never) => Promise<unknown>) =>
-      callback({} as never)) as unknown as typeof prisma.$transaction;
-
-    const concurrentRefresh = Promise.all([
-      authService.refresh(refreshToken),
-      authService.refresh(refreshToken),
-      authService.refresh(refreshToken),
-    ]);
-
-    await rotationEntered.promise;
-    await waitForMicrotasks();
-    rotationRelease.resolve();
-
-    const results = await concurrentRefresh;
-
-    assert.equal(revokeRotatedCount, 1);
-    assert.equal(saveCount, 1);
-    assert.equal(findByHashCount, 1);
-    assert.equal(store.revokeFamilyCalls.length, 0);
-
-    assert.equal(results[0].accessToken, results[1].accessToken);
-    assert.equal(results[0].refreshToken, results[1].refreshToken);
-    assert.equal(results[1].accessToken, results[2].accessToken);
-    assert.equal(results[1].refreshToken, results[2].refreshToken);
-  });
-
-  it("does not trigger reuse detection during concurrent refresh of the same token", async () => {
-    const refreshToken = createSessionRefreshToken();
-    const store = createRefreshTokenStore([createActiveStoredToken(refreshToken)]);
-
-    const rotationEntered = createDeferred<void>();
-    const rotationRelease = createDeferred<void>();
-    let revokeRotatedCount = 0;
-
-    installRefreshRepository(store);
-
-    authRepository.revokeRefreshTokenByHash = async (hash, sessionType, revokedReason) => {
-      if (revokedReason === RefreshTokenRevokedReason.ROTATED) {
-        revokeRotatedCount += 1;
-
-        if (revokeRotatedCount === 1) {
-          rotationEntered.resolve();
-          await rotationRelease.promise;
-        }
-      }
-
-      return store.revokeByHash(hash, sessionType, revokedReason);
-    };
-
-    authRepository.findById = async () => createLocalUser();
-
-    prisma.$transaction = (async (callback: (tx: never) => Promise<unknown>) =>
-      callback({} as never)) as unknown as typeof prisma.$transaction;
-
-    const concurrentRefresh = Promise.all([
-      authService.refresh(refreshToken),
-      authService.refresh(refreshToken),
-    ]);
-
-    await rotationEntered.promise;
-    rotationRelease.resolve();
-
-    const results = await concurrentRefresh;
-
-    assert.equal(store.revokeFamilyCalls.length, 0);
-    assert.ok(results.every((result) => typeof result.accessToken === "string"));
-    assert.ok(results.every((result) => typeof result.refreshToken === "string"));
-    assert.equal(results[0].refreshToken, results[1].refreshToken);
-  });
-
-  it("applies reuse detection after single-flight rotation completes and R1 is submitted again", async () => {
-    process.env.REFRESH_TOKEN_ROTATION_GRACE_MS = "30";
-
-    const refreshTokenR1 = createSessionRefreshToken();
-    const store = createRefreshTokenStore([createActiveStoredToken(refreshTokenR1)]);
+    const r1 = createSessionRefreshToken();
+    const store = createRefreshTokenStore([createActiveStoredToken(r1)]);
 
     installRefreshRepository(store);
     authRepository.findById = async () => createLocalUser();
-
     prisma.$transaction = (async (callback: (tx: never) => Promise<unknown>) =>
       callback({} as never)) as unknown as typeof prisma.$transaction;
 
-    const [firstResult, secondResult] = await Promise.all([
-      authService.refresh(refreshTokenR1),
-      authService.refresh(refreshTokenR1),
-    ]);
+    const firstResult = await authService.refresh(r1);
 
-    assert.equal(firstResult.refreshToken, secondResult.refreshToken);
-    assert.equal(store.revokeFamilyCalls.length, 0);
+    assert.ok(firstResult.accessToken);
+    assert.ok(firstResult.refreshToken);
 
-    const rotatedR1 = store.tokens.find((token) => token.tokenHash === tokenHash(refreshTokenR1));
-    const activeR2 = store.tokens.find(
-      (token) => token.tokenHash === tokenHash(firstResult.refreshToken),
-    );
-
+    const rotatedR1 = store.findByHash(tokenHash(r1), RefreshTokenSessionType.USER);
     assert.equal(rotatedR1?.revokedReason, RefreshTokenRevokedReason.ROTATED);
-    assert.equal(activeR2?.revokedAt, null);
 
-    await new Promise((resolve) => {
-      setTimeout(resolve, 40);
-    });
+    const activeR2 = store.tokens.find(
+      (token) => token.revokedAt === null && token.tokenHash !== tokenHash(r1),
+    );
+    assert.ok(activeR2);
 
     await assert.rejects(
-      () => authService.refresh(refreshTokenR1),
-      (error: unknown) =>
-        error instanceof AppError &&
-        error.code === "UNAUTHORIZED" &&
-        error.message === REVOKED_USER_MESSAGE,
+      () => authService.refresh(r1),
+      (error: unknown) => {
+        assertUserRefreshUnauthorized(error, REVOKED_USER_MESSAGE);
+        return true;
+      },
     );
 
     assert.deepEqual(store.revokeFamilyCalls, [
@@ -392,61 +257,61 @@ describe("authService refresh token single-flight", () => {
         revokedReason: RefreshTokenRevokedReason.REUSE_DETECTED,
       },
     ]);
-
-    assert.equal(activeR2?.revokedReason, RefreshTokenRevokedReason.REUSE_DETECTED);
+    assert.equal(activeR2.revokedReason, RefreshTokenRevokedReason.REUSE_DETECTED);
   });
 
-  it("runs separate rotations for concurrent refresh requests with different tokens", async () => {
-    const refreshTokenR1 = createSessionRefreshToken();
-    const refreshTokenR2 = createSessionRefreshToken();
+  it("returns the same rotation result when R1 is retried within grace TTL", async () => {
+    process.env.REFRESH_TOKEN_ROTATION_GRACE_MS = "5000";
 
-    const store = createRefreshTokenStore([
-      createActiveStoredToken(refreshTokenR1, { id: 1, familyId: FAMILY_A }),
-      createActiveStoredToken(refreshTokenR2, {
-        id: 2,
-        tokenHash: tokenHash(refreshTokenR2),
-        familyId: FAMILY_B,
-      }),
-    ]);
-
-    let revokeRotatedCount = 0;
-    let saveCount = 0;
-    let findByHashCount = 0;
+    const r1 = createSessionRefreshToken();
+    const store = createRefreshTokenStore([createActiveStoredToken(r1)]);
 
     installRefreshRepository(store);
-
-    authRepository.findRefreshTokenByHash = async (hash, sessionType) => {
-      findByHashCount += 1;
-      return store.findByHash(hash, sessionType);
-    };
-
-    authRepository.revokeRefreshTokenByHash = async (hash, sessionType, revokedReason) => {
-      if (revokedReason === RefreshTokenRevokedReason.ROTATED) {
-        revokeRotatedCount += 1;
-      }
-
-      return store.revokeByHash(hash, sessionType, revokedReason);
-    };
-
-    authRepository.saveRefreshToken = async (data) => {
-      saveCount += 1;
-      return store.saveToken(data);
-    };
-
     authRepository.findById = async () => createLocalUser();
-
     prisma.$transaction = (async (callback: (tx: never) => Promise<unknown>) =>
       callback({} as never)) as unknown as typeof prisma.$transaction;
 
-    const [resultR1, resultR2] = await Promise.all([
-      authService.refresh(refreshTokenR1),
-      authService.refresh(refreshTokenR2),
-    ]);
+    const firstResult = await authService.refresh(r1);
+    const secondResult = await authService.refresh(r1);
 
-    assert.equal(revokeRotatedCount, 2);
-    assert.equal(saveCount, 2);
-    assert.equal(findByHashCount, 2);
-    assert.notEqual(resultR1.refreshToken, resultR2.refreshToken);
-    assert.notEqual(tokenHash(resultR1.refreshToken), tokenHash(resultR2.refreshToken));
+    assert.deepEqual(secondResult, firstResult);
+    assert.equal(store.revokeFamilyCalls.length, 0);
+
+    const activeTokens = store.tokens.filter((token) => token.revokedAt === null);
+    assert.equal(activeTokens.length, 1);
+  });
+
+  it("triggers reuse detection when R1 is retried after grace TTL expires", async () => {
+    process.env.REFRESH_TOKEN_ROTATION_GRACE_MS = "30";
+
+    const r1 = createSessionRefreshToken();
+    const store = createRefreshTokenStore([createActiveStoredToken(r1)]);
+
+    installRefreshRepository(store);
+    authRepository.findById = async () => createLocalUser();
+    prisma.$transaction = (async (callback: (tx: never) => Promise<unknown>) =>
+      callback({} as never)) as unknown as typeof prisma.$transaction;
+
+    await authService.refresh(r1);
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
+
+    await assert.rejects(
+      () => authService.refresh(r1),
+      (error: unknown) => {
+        assertUserRefreshUnauthorized(error, REVOKED_USER_MESSAGE);
+        return true;
+      },
+    );
+
+    assert.deepEqual(store.revokeFamilyCalls, [
+      {
+        familyId: FAMILY_A,
+        sessionType: RefreshTokenSessionType.USER,
+        revokedReason: RefreshTokenRevokedReason.REUSE_DETECTED,
+      },
+    ]);
   });
 });

@@ -2,6 +2,7 @@ import type { MoveType } from "@prisma/client";
 
 import { prisma } from "../../../lib/prisma";
 import type { DbClient } from "../../../utils/transaction";
+import type { MoverActivityBase } from "./profile.type";
 
 interface CreateMoverProfileData {
   nickname: string;
@@ -9,6 +10,7 @@ interface CreateMoverProfileData {
   career: number;
   shortIntro: string;
   description: string;
+  activityBase: MoverActivityBase;
   regionIds: number[];
   serviceTypes: MoveType[];
 }
@@ -25,6 +27,11 @@ interface UpdateMoverProfileData {
   career?: number;
   shortIntro?: string;
   description?: string;
+  activityBaseAddress?: string;
+  activityBaseDetailAddress?: string | null;
+  activityBaseZipCode?: string;
+  activityBaseLatitude?: number;
+  activityBaseLongitude?: number;
 }
 
 /*
@@ -229,6 +236,11 @@ const createProfile = async (
       career: input.career,
       shortIntro: input.shortIntro,
       description: input.description,
+      activityBaseAddress: input.activityBase.address,
+      activityBaseDetailAddress: input.activityBase.detailAddress ?? null,
+      activityBaseZipCode: input.activityBase.zipCode,
+      activityBaseLatitude: input.activityBase.latitude,
+      activityBaseLongitude: input.activityBase.longitude,
 
       serviceAreas: {
         create: input.regionIds.map((regionId) => ({

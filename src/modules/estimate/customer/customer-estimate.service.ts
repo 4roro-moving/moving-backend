@@ -359,7 +359,9 @@ export const receivedEstimateService = {
 
     // 2026.08.03 정슬기 - [수정] 알림 실패가 확정 성공 응답을 덮지 않도록 격리
     try {
-      await notificationService.createNotification(result.notificationPayload);
+      const notification = await notificationService.createNotification(result.notificationPayload);
+
+      notificationService.sendNotification(result.notificationPayload.userId, notification);
     } catch (error) {
       logger.error("Failed to create ESTIMATE_CONFIRMED notification.", {
         error,

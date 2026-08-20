@@ -27,6 +27,7 @@ import moverRouter from "./modules/mover/mover.route";
 import { moverCalendarRouter } from "./modules/mover-calendar/mover-calendar.route";
 import { notificationRouter } from "./modules/notification/notification.route";
 import notificationSseRouter from "./modules/notification/notification-sse.route";
+import { giveawayRequestRouter, giveawayRouter } from "./modules/giveaway/giveaway.route";
 import { profileRouter } from "./modules/profile/profile.route";
 import reportRouter from "./modules/report/report.route";
 import {
@@ -180,6 +181,8 @@ app.use("/api/chats", chatRouter);
 app.use("/api/notifications", notificationRouter);
 app.use("/api/notifications/sse", notificationSseRouter);
 app.use("/api/terms", publicTermsRouter);
+app.use("/api/giveaways", giveawayRouter);
+app.use("/api/giveaway-requests", giveawayRequestRouter);
 app.use("/api/residence-reviews", residenceReviewRouter);
 app.use("/api/residence-reviews", publicResidenceReviewRouter);
 
