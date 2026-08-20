@@ -161,9 +161,16 @@ export const inquiryService = {
 export const adminInquiryService = {
   /** 관리자 문의 목록 (상태 필터 + 미종료 필터) */
   async getInquiryList(query: AdminListInquiryQuery) {
-    const { page, limit, status, openOnly } = query;
+    const { page, limit, status, openOnly, keyword } = query;
 
     const where: Prisma.InquiryWhereInput = {};
+
+    if (keyword !== undefined) {
+      where.title = {
+        contains: keyword,
+        mode: "insensitive",
+      };
+    }
 
     if (status !== undefined) {
       where.status = status;

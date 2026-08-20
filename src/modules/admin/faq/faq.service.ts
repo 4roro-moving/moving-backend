@@ -32,9 +32,16 @@ export const faqService = {
    * 관리자 FAQ 목록을 조회합니다. (숨김 포함, 페이지네이션)
    */
   async getFaqList(query: ListFaqQuery) {
-    const { page, limit, isVisible } = query;
+    const { page, limit, keyword, isVisible } = query;
 
     const where: Prisma.FaqWhereInput = {};
+
+    if (keyword !== undefined) {
+      where.question = {
+        contains: keyword,
+        mode: "insensitive",
+      };
+    }
 
     if (isVisible !== undefined) {
       where.isVisible = isVisible;

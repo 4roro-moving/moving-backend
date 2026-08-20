@@ -69,12 +69,21 @@ export const listFaqQuerySchema = z.object({
     .positive("페이지 번호는 1 이상이어야 합니다.")
     .max(MAX_PAGE, `페이지 번호는 ${String(MAX_PAGE)} 이하여야 합니다.`)
     .default(1),
+
   limit: z.coerce
     .number({ error: "조회 개수는 숫자여야 합니다." })
     .int("조회 개수는 정수여야 합니다.")
     .positive("조회 개수는 1 이상이어야 합니다.")
     .max(50, "조회 개수는 50 이하여야 합니다.")
     .default(10),
+
+  keyword: z
+    .string({ error: "검색어는 문자열이어야 합니다." })
+    .trim()
+    .min(1, "검색어를 입력해 주세요.")
+    .max(200, "검색어는 200자 이하여야 합니다.")
+    .optional(),
+
   isVisible: z
     .enum(["true", "false"])
     .transform((value) => value === "true")

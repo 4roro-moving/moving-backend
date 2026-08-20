@@ -58,9 +58,16 @@ export const noticeService = {
    * 고정 공지 우선, 그다음 최신순으로 정렬됩니다.
    */
   async getNoticeList(query: ListNoticeQuery) {
-    const { page, limit, audience, isVisible } = query;
+    const { page, limit, keyword, audience, isVisible } = query;
 
     const where: Prisma.NoticeWhereInput = {};
+
+    if (keyword) {
+      where.title = {
+        contains: keyword,
+        mode: "insensitive",
+      };
+    }
 
     if (audience !== undefined) {
       where.audience = audience;
