@@ -21,6 +21,10 @@ import {
   handleRefreshTokenFamilyReuseDetection,
   runRefreshTokenFamilyRotation,
 } from "../../../utils/refresh-token-family-coordination";
+import {
+  getRefreshTokenRotationGraceResult,
+  setRefreshTokenRotationGraceResult,
+} from "../../../utils/refresh-token-rotation-grace-cache";
 import { tokenHash } from "../../../utils/tokenHash";
 import { runTransaction } from "../../../utils/transaction";
 
@@ -258,6 +262,15 @@ const executeAdminRefresh = async (
     storedRefreshToken.revokedReason === RefreshTokenRevokedReason.ROTATED &&
     storedRefreshToken.familyId !== null
   ) {
+    const graceResult = getRefreshTokenRotationGraceResult<AdminRefreshResponse>(
+      RefreshTokenSessionType.ADMIN,
+      currentTokenHash,
+    );
+
+    if (graceResult !== null) {
+      return graceResult;
+    }
+
     await handleRefreshTokenFamilyReuseDetection(
       RefreshTokenSessionType.ADMIN,
       storedRefreshToken.familyId,
@@ -407,21 +420,29 @@ const executeAdminRefresh = async (
     };
   };
 
+  const cacheRotationGraceResult = (result: AdminRefreshResponse): AdminRefreshResponse => {
+    setRefreshTokenRotationGraceResult(RefreshTokenSessionType.ADMIN, currentTokenHash, result);
+
+    return result;
+  };
+
   if (storedRefreshToken.familyId !== null) {
-    return runRefreshTokenFamilyRotation(
-      RefreshTokenSessionType.ADMIN,
-      storedRefreshToken.familyId,
-      performRotation,
-      (issuedRefreshTokenHash) =>
-        authRepository.revokeRefreshTokenByHash(
-          issuedRefreshTokenHash,
-          RefreshTokenSessionType.ADMIN,
-          RefreshTokenRevokedReason.REUSE_DETECTED,
-        ),
+    return cacheRotationGraceResult(
+      await runRefreshTokenFamilyRotation(
+        RefreshTokenSessionType.ADMIN,
+        storedRefreshToken.familyId,
+        performRotation,
+        (issuedRefreshTokenHash) =>
+          authRepository.revokeRefreshTokenByHash(
+            issuedRefreshTokenHash,
+            RefreshTokenSessionType.ADMIN,
+            RefreshTokenRevokedReason.REUSE_DETECTED,
+          ),
+      ),
     );
   }
 
-  return performRotation();
+  return cacheRotationGraceResult(await performRotation());
 };
 
 /**
