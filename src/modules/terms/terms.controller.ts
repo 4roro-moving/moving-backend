@@ -5,6 +5,8 @@ import { termsService } from "./terms.service";
 import type {
   CreateTermsInput,
   ListTermsQuery,
+  TermsAudienceRole,
+  SaveMyAgreementsInput,
   TermsIdParam,
   UpdateTermsInput,
 } from "./terms.type";
@@ -16,6 +18,20 @@ function getAdminId(req: Request): string {
   }
 
   return req.user.id;
+}
+
+function getAuthUser(req: Request): { id: string; role: TermsAudienceRole } {
+  if (!req.user) {
+    throw new AppError("UNAUTHORIZED");
+  }
+
+  if (req.user.role === "ADMIN") {
+    throw new AppError("FORBIDDEN", {
+      message: "관리자 계정은 약관 동의 대상이 아닙니다.",
+    });
+  }
+
+  return { id: req.user.id, role: req.user.role };
 }
 
 export const termsController = {
@@ -115,6 +131,43 @@ export const termsController = {
     res.status(200).json({
       success: true,
       data: terms,
+    });
+  },
+
+  // GET /api/terms/me/agreements  내 약관 동의 내역 (약관 버전별 최신 상태)
+  getMyAgreements: async (req: Request, res: Response) => {
+    const { id } = getAuthUser(req);
+
+    const agreements = await termsService.getMyAgreements(id);
+
+    res.status(200).json({
+      success: true,
+      data: agreements,
+    });
+  },
+
+  // GET /api/terms/me/pending 아직 동의하지 않은 필수 약관 (약관 개정 시 재동의 대상 포함)
+  getPendingRequiredTerms: async (req: Request, res: Response) => {
+    const { id, role } = getAuthUser(req);
+
+    const terms = await termsService.getPendingRequiredTerms(id, role);
+
+    res.status(200).json({
+      success: true,
+      data: terms,
+    });
+  },
+
+  // POST /api/terms/me/agreements  내 약관 동의 저장 (재동의 / 마케팅 수신 변경)
+  saveMyAgreements: async (req: Request, res: Response) => {
+    const { id, role } = getAuthUser(req);
+    const { agreements } = req.body as SaveMyAgreementsInput;
+
+    const saved = await termsService.saveMyAgreements(id, role, agreements);
+
+    res.status(201).json({
+      success: true,
+      data: saved,
     });
   },
 };

@@ -2,6 +2,8 @@ import "dotenv/config";
 
 import { z } from "zod";
 
+import { refreshTokenRotationGraceMsSchema } from "./refresh-token-rotation-grace-ms.schema";
+
 const browserOriginSchema = z
   .string()
   .trim()
@@ -96,6 +98,8 @@ const envSchema = z.object({
   OAUTH_STATE_SECRET: z.string().min(32, {
     error: "OAUTH_STATE_SECRET must be at least 32 characters",
   }),
+
+  REFRESH_TOKEN_ROTATION_GRACE_MS: refreshTokenRotationGraceMsSchema,
 });
 
 const parsed = envSchema.safeParse(process.env);

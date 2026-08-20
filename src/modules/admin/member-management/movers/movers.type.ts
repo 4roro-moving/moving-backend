@@ -4,6 +4,7 @@ import type {
   MoveType,
   ReportReason,
   ReportStatus,
+  SuspensionAction,
 } from "@prisma/client";
 import type { z } from "zod";
 
@@ -13,10 +14,28 @@ import type {
   MemberListBase,
   MemberSuspensionHistoryItem,
 } from "../member.type";
-import type { listMoverQuerySchema, moverIdParamSchema } from "./movers.validator";
+import type {
+  listMoverQuerySchema,
+  moverIdParamSchema,
+  updateMoverStatusBodySchema,
+} from "./movers.validator";
+import type { MemberStatus } from "../member-status.constants";
 
 export type ListMoverQuery = z.infer<typeof listMoverQuerySchema>;
 export type MoverIdParam = z.infer<typeof moverIdParamSchema>;
+export type UpdateMoverStatusBody = z.infer<typeof updateMoverStatusBodySchema>;
+
+export type UpdateMoverStatusResponse = {
+  id: string;
+  status: Exclude<MemberStatus, "WITHDRAWN">;
+  suspension: {
+    id: number;
+    action: SuspensionAction;
+    reason: string;
+    adminId: string;
+    createdAt: Date;
+  };
+};
 
 export type MoverListItem = MemberListBase & {
   nickname: string | null;

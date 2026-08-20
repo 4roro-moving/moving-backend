@@ -8,6 +8,7 @@ import "dotenv/config";
 import { AppError } from "../../../lib/app-error";
 import { prisma } from "../../../lib/prisma";
 import { createRefreshToken } from "../../../utils/jwt";
+import { clearRefreshTokenRotationGraceCache } from "../../../utils/refresh-token-rotation-grace-cache";
 import { tokenHash } from "../../../utils/tokenHash";
 import { authRepository } from "../../auth/auth.repository";
 import { adminAuthRepository } from "./admin-auth.repository";
@@ -215,6 +216,7 @@ describe("adminAuthService refresh token single-flight", () => {
   const originalRevokeRefreshTokenFamily = authRepository.revokeRefreshTokenFamily;
   const originalSaveRefreshToken = authRepository.saveRefreshToken;
   const originalTransaction = prisma.$transaction;
+  const originalGraceTtl = process.env.REFRESH_TOKEN_ROTATION_GRACE_MS;
 
   afterEach(() => {
     authRepository.findRefreshTokenByHash = originalFindRefreshTokenByHash;
@@ -223,6 +225,13 @@ describe("adminAuthService refresh token single-flight", () => {
     authRepository.revokeRefreshTokenFamily = originalRevokeRefreshTokenFamily;
     authRepository.saveRefreshToken = originalSaveRefreshToken;
     prisma.$transaction = originalTransaction;
+    clearRefreshTokenRotationGraceCache();
+
+    if (originalGraceTtl === undefined) {
+      delete process.env.REFRESH_TOKEN_ROTATION_GRACE_MS;
+    } else {
+      process.env.REFRESH_TOKEN_ROTATION_GRACE_MS = originalGraceTtl;
+    }
   });
 
   it("performs one ADMIN rotation and shares the same tokens for concurrent refresh requests", async () => {
@@ -337,6 +346,8 @@ describe("adminAuthService refresh token single-flight", () => {
   });
 
   it("applies reuse detection after single-flight rotation completes and R1 is submitted again", async () => {
+    process.env.REFRESH_TOKEN_ROTATION_GRACE_MS = "30";
+
     const refreshTokenR1 = createAdminRefreshToken();
     const store = createRefreshTokenStore([createActiveStoredAdminToken(refreshTokenR1)]);
 
@@ -363,6 +374,10 @@ describe("adminAuthService refresh token single-flight", () => {
 
     assert.equal(rotatedR1?.revokedReason, RefreshTokenRevokedReason.ROTATED);
     assert.equal(activeR2?.revokedAt, null);
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 40);
+    });
 
     await assert.rejects(
       () => adminAuthService.refresh(refreshTokenR1),
