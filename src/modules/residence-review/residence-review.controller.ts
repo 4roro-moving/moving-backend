@@ -20,9 +20,9 @@ function getCustomerId(req: Request): string {
 }
 
 export const residenceReviewController = {
-  getPublicResidenceReviewList: async (_req: Request, res: Response) => {
+  getPublicResidenceReviewList: async (req: Request, res: Response) => {
     const query = res.locals.query as ListResidenceReviewQuery;
-    const result = await residenceReviewService.getPublicResidenceReviewList(query);
+    const result = await residenceReviewService.getPublicResidenceReviewList(query, req.user?.id);
 
     res.status(200).json({
       success: true,
@@ -31,9 +31,12 @@ export const residenceReviewController = {
     });
   },
 
-  getPublicResidenceReviewById: async (_req: Request, res: Response) => {
+  getPublicResidenceReviewById: async (req: Request, res: Response) => {
     const { residenceReviewId } = res.locals.params as ResidenceReviewIdParam;
-    const review = await residenceReviewService.getPublicResidenceReviewById(residenceReviewId);
+    const review = await residenceReviewService.getPublicResidenceReviewById(
+      residenceReviewId,
+      req.user?.id,
+    );
 
     res.status(200).json({
       success: true,

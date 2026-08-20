@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { RESIDENCE_REVIEW_LIST_SORT } from "./residence-review.type";
+
 export const RESIDENCE_REVIEW_RATING = {
   MIN: 1,
   MAX: 5,
@@ -20,6 +22,8 @@ export const RESIDENCE_REVIEW_LIST_QUERY = {
   DEFAULT_LIMIT: 10,
   MAX_PAGE: 10000,
   MAX_LIMIT: 50,
+  MAX_CURSOR_LENGTH: 500,
+  MAX_KEYWORD_LENGTH: 100,
 } as const;
 
 const VALIDATION_MESSAGE = {
@@ -47,6 +51,12 @@ const VALIDATION_MESSAGE = {
   LIMIT_INT: "조회 개수는 정수여야 합니다.",
   LIMIT_POSITIVE: "조회 개수는 1 이상이어야 합니다.",
   LIMIT_MAX: `조회 개수는 ${String(RESIDENCE_REVIEW_LIST_QUERY.MAX_LIMIT)} 이하여야 합니다.`,
+  CURSOR_STRING: "커서는 문자열이어야 합니다.",
+  CURSOR_EMPTY: "커서는 비어 있을 수 없습니다.",
+  CURSOR_MAX: `커서는 최대 ${String(RESIDENCE_REVIEW_LIST_QUERY.MAX_CURSOR_LENGTH)}자까지 입력할 수 있습니다.`,
+  KEYWORD_STRING: "검색어는 문자열이어야 합니다.",
+  KEYWORD_MAX: `검색어는 ${String(RESIDENCE_REVIEW_LIST_QUERY.MAX_KEYWORD_LENGTH)}자 이하여야 합니다.`,
+  SORT_INVALID: "올바른 정렬 기준이 아닙니다.",
   UPDATE_EMPTY: "수정할 내용을 입력해 주세요.",
 } as const;
 
@@ -119,13 +129,41 @@ export const regionIdParamSchema = z.object({
 });
 
 export const listResidenceReviewQuerySchema = z.object({
-  page: pageSchema,
-  limit: limitSchema,
+  keyword: z
+    .string({ error: VALIDATION_MESSAGE.KEYWORD_STRING })
+    .trim()
+    .max(RESIDENCE_REVIEW_LIST_QUERY.MAX_KEYWORD_LENGTH, VALIDATION_MESSAGE.KEYWORD_MAX)
+    .optional()
+    .transform((value) => (value === "" ? undefined : value)),
   regionId: z.coerce
     .number({ error: VALIDATION_MESSAGE.REGION_ID_NUMBER })
     .int(VALIDATION_MESSAGE.REGION_ID_INT)
     .positive(VALIDATION_MESSAGE.REGION_ID_POSITIVE)
     .optional(),
+  rating: z.coerce
+    .number({ error: VALIDATION_MESSAGE.RATING_NUMBER })
+    .int(VALIDATION_MESSAGE.RATING_INT)
+    .min(RESIDENCE_REVIEW_RATING.MIN, VALIDATION_MESSAGE.RATING_MIN)
+    .max(RESIDENCE_REVIEW_RATING.MAX, VALIDATION_MESSAGE.RATING_MAX)
+    .optional(),
+  sort: z
+    .enum(
+      [
+        RESIDENCE_REVIEW_LIST_SORT.CREATED_AT,
+        RESIDENCE_REVIEW_LIST_SORT.CREATED_AT_ASC,
+        RESIDENCE_REVIEW_LIST_SORT.RATING,
+      ],
+      {
+        error: VALIDATION_MESSAGE.SORT_INVALID,
+      },
+    )
+    .default(RESIDENCE_REVIEW_LIST_SORT.CREATED_AT),
+  cursor: z
+    .string({ error: VALIDATION_MESSAGE.CURSOR_STRING })
+    .min(1, VALIDATION_MESSAGE.CURSOR_EMPTY)
+    .max(RESIDENCE_REVIEW_LIST_QUERY.MAX_CURSOR_LENGTH, VALIDATION_MESSAGE.CURSOR_MAX)
+    .optional(),
+  limit: limitSchema,
 });
 
 export const listMyResidenceReviewQuerySchema = z.object({

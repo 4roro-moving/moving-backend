@@ -2,8 +2,12 @@ import { Prisma } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
-import { RESIDENCE_REVIEW_VISIBILITY } from "./residence-review.type";
-import type { CreateResidenceReviewInput } from "./residence-review.type";
+import { RESIDENCE_REVIEW_LIST_SORT, RESIDENCE_REVIEW_VISIBILITY } from "./residence-review.type";
+import type {
+  CreateResidenceReviewInput,
+  ResidenceReviewCursor,
+  ResidenceReviewListSort,
+} from "./residence-review.type";
 
 const residenceReviewSelect = {
   id: true,
@@ -16,11 +20,22 @@ const residenceReviewSelect = {
     select: {
       id: true,
       name: true,
+      reviewStatistic: {
+        select: {
+          averageRating: true,
+        },
+      },
     },
   },
   author: {
     select: {
+      id: true,
       name: true,
+      customerProfile: {
+        select: {
+          imageUrl: true,
+        },
+      },
     },
   },
 } satisfies Prisma.ResidenceReviewSelect;
@@ -45,6 +60,21 @@ type ListParams = {
   skip: number;
   take: number;
   where: Prisma.ResidenceReviewWhereInput;
+};
+
+type FindPublicListParams = {
+  take: number;
+  sort: ResidenceReviewListSort;
+  regionId?: number | undefined;
+  keyword?: string | undefined;
+  rating?: number | undefined;
+  cursor?: ResidenceReviewCursor | undefined;
+};
+
+type ListWhereParams = {
+  regionId?: number | undefined;
+  keyword?: string | undefined;
+  rating?: number | undefined;
 };
 
 type UpdateResidenceReviewData = {
@@ -97,6 +127,112 @@ async function findManyWithCount({ skip, take, where }: ListParams, db: DbClient
       take,
     }),
     db.residenceReview.count({ where }),
+  ]);
+
+  return { reviews, totalCount };
+}
+
+function buildListWhere({
+  regionId,
+  keyword,
+  rating,
+}: ListWhereParams): Prisma.ResidenceReviewWhereInput {
+  return {
+    isHidden: RESIDENCE_REVIEW_VISIBILITY.PUBLIC,
+    ...(regionId !== undefined ? { regionId } : {}),
+    ...(rating !== undefined ? { rating } : {}),
+    ...(keyword
+      ? {
+          OR: [
+            { title: { contains: keyword, mode: "insensitive" } },
+            { content: { contains: keyword, mode: "insensitive" } },
+          ],
+        }
+      : {}),
+  };
+}
+
+function buildListOrderBy(
+  sort: ResidenceReviewListSort,
+): Prisma.ResidenceReviewOrderByWithRelationInput[] {
+  if (sort === RESIDENCE_REVIEW_LIST_SORT.RATING) {
+    return [{ rating: "desc" }, { createdAt: "desc" }, { id: "desc" }];
+  }
+
+  if (sort === RESIDENCE_REVIEW_LIST_SORT.CREATED_AT_ASC) {
+    return [{ createdAt: "asc" }, { id: "asc" }];
+  }
+
+  return [{ createdAt: "desc" }, { id: "desc" }];
+}
+
+export function buildCursorCondition(
+  cursor: ResidenceReviewCursor,
+): Prisma.ResidenceReviewWhereInput {
+  if (cursor.sort === RESIDENCE_REVIEW_LIST_SORT.RATING) {
+    return {
+      OR: [
+        { rating: { lt: cursor.ratingCursor } },
+        { rating: cursor.ratingCursor, createdAt: { lt: cursor.createdAt } },
+        {
+          rating: cursor.ratingCursor,
+          createdAt: cursor.createdAt,
+          id: { lt: cursor.id },
+        },
+      ],
+    };
+  }
+
+  if (cursor.sort === RESIDENCE_REVIEW_LIST_SORT.CREATED_AT_ASC) {
+    return {
+      OR: [
+        { createdAt: { gt: cursor.createdAt } },
+        {
+          createdAt: cursor.createdAt,
+          id: { gt: cursor.id },
+        },
+      ],
+    };
+  }
+
+  return {
+    OR: [
+      { createdAt: { lt: cursor.createdAt } },
+      {
+        createdAt: cursor.createdAt,
+        id: { lt: cursor.id },
+      },
+    ],
+  };
+}
+
+function applyCursor(
+  where: Prisma.ResidenceReviewWhereInput,
+  cursor?: ResidenceReviewCursor,
+): Prisma.ResidenceReviewWhereInput {
+  if (!cursor) {
+    return where;
+  }
+
+  return {
+    AND: [where, buildCursorCondition(cursor)],
+  };
+}
+
+async function findManyByCursorWithCount(
+  { take, sort, regionId, keyword, rating, cursor }: FindPublicListParams,
+  db: DbClient = prisma,
+): Promise<{ reviews: ResidenceReviewRow[]; totalCount: number | null }> {
+  const where = buildListWhere({ regionId, keyword, rating });
+  const [reviews, totalCount] = await Promise.all([
+    db.residenceReview.findMany({
+      where: applyCursor(where, cursor),
+      select: residenceReviewSelect,
+      orderBy: buildListOrderBy(sort),
+      take,
+    }),
+    // 무한 스크롤 다음 페이지에서는 같은 필터의 전체 건수를 다시 세지 않습니다.
+    cursor == null ? db.residenceReview.count({ where }) : Promise.resolve(null),
   ]);
 
   return { reviews, totalCount };
@@ -196,6 +332,7 @@ export const residenceReviewRepository = {
   findOwnership,
   findPublicById,
   findManyWithCount,
+  findManyByCursorWithCount,
   createResidenceReview,
   updateResidenceReview,
   deleteResidenceReview,

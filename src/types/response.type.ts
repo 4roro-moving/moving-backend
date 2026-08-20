@@ -10,7 +10,8 @@ export interface Pagination {
 
 export interface CursorPagination {
   limit: number;
-  totalCount: number;
+  // 첫 페이지에서만 전체 건수. 커서 다음 페이지는 count를 생략해 null일 수 있습니다.
+  totalCount: number | null;
   hasNext: boolean;
   nextCursor: string | null;
   page?: never;
