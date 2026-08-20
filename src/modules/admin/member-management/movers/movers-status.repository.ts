@@ -104,7 +104,13 @@ export const moversStatusRepository = {
   },
 
   updateChatRoomsLastMessageAt(roomIds: number[], lastMessageAt: Date, db: DbClient = prisma) {
-    return db.chatRoom.updateMany({ where: { id: { in: roomIds } }, data: { lastMessageAt } });
+    return db.chatRoom.updateMany({
+      where: {
+        id: { in: roomIds },
+        OR: [{ lastMessageAt: null }, { lastMessageAt: { lt: lastMessageAt } }],
+      },
+      data: { lastMessageAt },
+    });
   },
 
   createNotifications(data: Prisma.NotificationCreateManyInput[], db: DbClient = prisma) {
