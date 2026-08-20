@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it } from "node:test";
 
 import bcrypt from "bcrypt";
-import { AuthProvider, Prisma, UserRole } from "@prisma/client";
+import type { RefreshTokenRevokedReason } from "@prisma/client";
+import { AuthProvider, Prisma, RefreshTokenSessionType, UserRole } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import { authRepository } from "../auth/auth.repository";
@@ -134,6 +135,11 @@ function createHarness(role: Role): RoleHarness {
     career: 3,
     shortIntro: "test intro",
     description: "test description",
+    activityBaseAddress: null,
+    activityBaseDetailAddress: null,
+    activityBaseZipCode: null,
+    activityBaseLatitude: null,
+    activityBaseLongitude: null,
     confirmedCount: 0,
     averageRating: new Prisma.Decimal(0),
     reviewCount: 0,
@@ -214,7 +220,11 @@ function installStubs(harness: RoleHarness, options: { password?: string | null 
     };
   }
 
-  authRepository.revokeAllRefreshTokensByUserId = async (userId, sessionType) => {
+  authRepository.revokeAllRefreshTokensByUserId = async (
+    userId,
+    sessionType,
+    _revokedReason: RefreshTokenRevokedReason,
+  ) => {
     state.revokeCalls.push({ userId, sessionType });
     return { count: 0 };
   };

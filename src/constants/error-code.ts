@@ -182,6 +182,13 @@ export const ERROR_CODES = {
     message: "확정할 수 없는 견적입니다.",
   },
 
+  // 2026.08.17 김나연 - [추가] 거주후기 API 에러 코드
+  RESIDENCE_REVIEW_NOT_FOUND: {
+    status: 404,
+    code: "RESIDENCE_REVIEW_NOT_FOUND",
+    message: "거주후기를 찾을 수 없습니다.",
+  },
+
   // 2026.07.28 심현수 - [추가]관리자 공지사항
   NOTICE_NOT_FOUND: {
     status: 404,
@@ -286,6 +293,11 @@ export const ERROR_CODES = {
     code: "CUSTOMER_STATUS_ALREADY_PROCESSED",
     message: "이미 요청한 상태로 처리된 회원입니다.",
   },
+  MOVER_STATUS_ALREADY_PROCESSED: {
+    status: 409,
+    code: "MOVER_STATUS_ALREADY_PROCESSED",
+    message: "이미 요청한 상태로 처리된 기사님입니다.",
+  },
   DESIGNATION_ALREADY_REJECTED: {
     status: 409,
     code: "DESIGNATION_ALREADY_REJECTED",
@@ -295,6 +307,88 @@ export const ERROR_CODES = {
     status: 409,
     code: "ADMIN_ESTIMATE_CANCEL_NOT_ALLOWED",
     message: "확정된 진행 거래만 관리자가 취소할 수 있습니다.",
+  },
+
+  GIVEAWAY_NOT_FOUND: {
+    status: 404,
+    code: "GIVEAWAY_NOT_FOUND",
+    message: "나눔 글을 찾을 수 없습니다.",
+  },
+  GIVEAWAY_NOT_EDITABLE: {
+    status: 409,
+    code: "GIVEAWAY_NOT_EDITABLE",
+    message: "신청 가능 상태의 나눔 글만 수정할 수 있습니다.",
+  },
+  GIVEAWAY_NOT_DELETABLE: {
+    status: 409,
+    code: "GIVEAWAY_NOT_DELETABLE",
+    message: "신청 가능 상태의 나눔 글만 삭제할 수 있습니다.",
+  },
+  GIVEAWAY_NOT_REQUESTABLE: {
+    status: 409,
+    code: "GIVEAWAY_NOT_REQUESTABLE",
+    message: "현재 상태에서는 나눔을 신청할 수 없습니다.",
+  },
+  GIVEAWAY_NOT_COMPLETABLE: {
+    status: 409,
+    code: "GIVEAWAY_NOT_COMPLETABLE",
+    message: "진행 중인 나눔만 완료할 수 있습니다.",
+  },
+  GIVEAWAY_ALREADY_COMPLETED: {
+    status: 409,
+    code: "GIVEAWAY_ALREADY_COMPLETED",
+    message: "완료된 나눔은 변경할 수 없습니다.",
+  },
+  GIVEAWAY_RECEIVER_ALREADY_SELECTED: {
+    status: 409,
+    code: "GIVEAWAY_RECEIVER_ALREADY_SELECTED",
+    message: "이미 수령자가 선정된 나눔입니다.",
+  },
+  GIVEAWAY_SELF_REQUEST_NOT_ALLOWED: {
+    status: 403,
+    code: "GIVEAWAY_SELF_REQUEST_NOT_ALLOWED",
+    message: "본인이 작성한 나눔 글에는 신청할 수 없습니다.",
+  },
+  GIVEAWAY_REQUEST_NOT_FOUND: {
+    status: 404,
+    code: "GIVEAWAY_REQUEST_NOT_FOUND",
+    message: "나눔 신청을 찾을 수 없습니다.",
+  },
+  GIVEAWAY_REQUEST_ALREADY_EXISTS: {
+    status: 409,
+    code: "GIVEAWAY_REQUEST_ALREADY_EXISTS",
+    message: "이미 대기 중이거나 선정된 신청이 있습니다.",
+  },
+  GIVEAWAY_REQUEST_NOT_EDITABLE: {
+    status: 409,
+    code: "GIVEAWAY_REQUEST_NOT_EDITABLE",
+    message: "대기 중인 신청만 메시지를 수정할 수 있습니다.",
+  },
+  GIVEAWAY_REQUEST_CANCEL_NOT_ALLOWED: {
+    status: 409,
+    code: "GIVEAWAY_REQUEST_CANCEL_NOT_ALLOWED",
+    message: "현재 상태에서는 나눔 신청을 취소할 수 없습니다.",
+  },
+  GIVEAWAY_REQUEST_NOT_SELECTABLE: {
+    status: 409,
+    code: "GIVEAWAY_REQUEST_NOT_SELECTABLE",
+    message: "대기 중인 신청만 선정할 수 있습니다.",
+  },
+  GIVEAWAY_REQUEST_NOT_REJECTABLE: {
+    status: 409,
+    code: "GIVEAWAY_REQUEST_NOT_REJECTABLE",
+    message: "대기 중인 신청만 거절할 수 있습니다.",
+  },
+  // 이용약관 동의 처리
+  TERMS_AGREEMENT_REQUIRED: {
+    status: 400,
+    code: "TERMS_AGREEMENT_REQUIRED",
+    message: "필수 약관에 동의해야 가입할 수 있습니다.",
+  },
+  TERMS_AGREEMENT_INVALID: {
+    status: 400,
+    code: "TERMS_AGREEMENT_INVALID",
+    message: "약관 동의 정보가 올바르지 않습니다.",
   },
 } as const;
 

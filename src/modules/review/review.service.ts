@@ -154,7 +154,7 @@ export const reviewService = {
 
       // 2026.08.03 정슬기 - [수정] 알림 실패가 리뷰 등록 성공 응답을 덮지 않도록 격리
       try {
-        await notificationService.createNotification({
+        const notification = await notificationService.createNotification({
           userId: estimate.moverId,
           type: "REVIEW_RECEIVED",
           title: "리뷰 도착",
@@ -163,6 +163,8 @@ export const reviewService = {
           linkUrl: null,
           expiresAt: null,
         });
+
+        notificationService.sendNotification(estimate.moverId, notification);
       } catch (notificationError) {
         logger.error("Failed to create REVIEW_RECEIVED notification.", {
           error: notificationError,

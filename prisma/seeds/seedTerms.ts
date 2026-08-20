@@ -42,6 +42,7 @@ export async function seedTerms(prisma: PrismaClient, adminIds: string[]): Promi
         title: terms.title,
         content: terms.content,
         isRequired: terms.isRequired,
+        audience: terms.audience,
         effectiveAt: resolveDate(terms.effectiveOffsetDays),
         publishedAt: resolveDate(terms.publishedOffsetDays),
         authorId: adminId,

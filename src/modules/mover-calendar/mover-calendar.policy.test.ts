@@ -38,8 +38,10 @@ describe("mover calendar policy", () => {
 
 describe("mover calendar validation", () => {
   it("coerces year and month query parameters", () => {
-    assert.deepEqual(calendarMonthQuerySchema.parse({ year: "2026", month: "8" }), {
-      year: 2026,
+    const currentYear = new Date().getUTCFullYear();
+
+    assert.deepEqual(calendarMonthQuerySchema.parse({ year: String(currentYear), month: "8" }), {
+      year: currentYear,
       month: 8,
     });
   });

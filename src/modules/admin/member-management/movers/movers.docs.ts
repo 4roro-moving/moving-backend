@@ -44,5 +44,22 @@ registerRouterDocs(adminMoverRouter, {
       ].join("\n"),
       responses: { 200: "조회 성공", 404: "기사를 찾을 수 없습니다." },
     },
+    "PATCH /{id}/status": {
+      summary: "기사 계정 정지/해제",
+      description: [
+        "관리자가 기사님(MOVER)의 계정 상태를 정지 또는 해제합니다.",
+        "- `SUSPEND`: OPEN 견적 요청에 전송한 SENT 견적과 PENDING 수정 요청을 취소하고, 고객에게 알림을 보냅니다.",
+        "- `RELEASE`: 계정만 활성화하며, 정지 때 취소된 견적 데이터는 복구하지 않습니다.",
+        "- 탈퇴 회원, Customer, 자기 자신은 상태 변경할 수 없습니다.",
+      ].join("\n"),
+      responses: {
+        200: "처리 성공",
+        401: "인증이 필요합니다.",
+        403: "자기 자신의 계정 상태는 변경할 수 없습니다.",
+        404: "기사를 찾을 수 없습니다.",
+        409: "MOVER_STATUS_ALREADY_PROCESSED - 이미 요청한 상태로 처리된 기사님입니다.",
+        422: "입력값이 올바르지 않습니다.",
+      },
+    },
   },
 });

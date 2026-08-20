@@ -1,5 +1,5 @@
 import bcrypt from "bcrypt";
-import { RefreshTokenSessionType } from "@prisma/client";
+import { RefreshTokenSessionType, RefreshTokenRevokedReason } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
 import { runTransaction } from "../../../utils/transaction";
@@ -128,6 +128,7 @@ const createProfile = async (
     career: input.career,
     shortIntro: input.shortIntro,
     description: input.description,
+    activityBase: input.activityBase,
     regionIds: input.regionIds,
     serviceTypes: input.serviceTypes,
   };
@@ -374,6 +375,9 @@ const updateBasicInfo = async (
        * 해당 사용자의 아직 활성 상태인 USER
        * Refresh Token 세션을 모두 폐기한다.
        *
+       * 비밀번호 변경에 따른 보안 목적의 세션 폐기이므로
+       * 폐기 사유는 FORCED로 기록한다.
+       *
        * User.password 수정과 Refresh Token revoke를
        * 동일한 트랜잭션에 포함하여
        * 둘 중 하나만 반영되는 상태를 방지한다.
@@ -382,6 +386,7 @@ const updateBasicInfo = async (
         await authRepository.revokeAllRefreshTokensByUserId(
           user.id,
           RefreshTokenSessionType.USER,
+          RefreshTokenRevokedReason.FORCED,
           tx,
         );
       }
@@ -492,7 +497,8 @@ const updateProfile = async (
         input.imageUrl !== undefined ||
         input.career !== undefined ||
         input.shortIntro !== undefined ||
-        input.description !== undefined;
+        input.description !== undefined ||
+        input.activityBase !== undefined;
 
       if (hasProfileUpdate) {
         await profileRepository.updateProfile(
@@ -516,6 +522,14 @@ const updateProfile = async (
 
             ...(input.description !== undefined && {
               description: input.description,
+            }),
+
+            ...(input.activityBase !== undefined && {
+              activityBaseAddress: input.activityBase.address,
+              activityBaseDetailAddress: input.activityBase.detailAddress ?? null,
+              activityBaseZipCode: input.activityBase.zipCode,
+              activityBaseLatitude: input.activityBase.latitude,
+              activityBaseLongitude: input.activityBase.longitude,
             }),
           },
           tx,
