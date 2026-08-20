@@ -390,7 +390,7 @@ export const estimateRequestService = {
     await Promise.all(
       result.notifyMoverIds.map(async (moverId) => {
         try {
-          await notificationService.createNotification({
+          const notification = await notificationService.createNotification({
             userId: moverId,
             type: "ESTIMATE_REQUEST_CANCELED",
             title: "견적 요청 취소",
@@ -401,6 +401,8 @@ export const estimateRequestService = {
             linkUrl: `/estimate/received-requests`,
             expiresAt: null,
           });
+
+          notificationService.sendNotification(moverId, notification);
         } catch (error) {
           logger.error("Failed to create ESTIMATE_REQUEST_CANCELED notification.", {
             error,
