@@ -14,6 +14,8 @@ import errorHandler from "./middlewares/error-handler";
 import notFoundHandler from "./middlewares/not-found-handler";
 
 import { adminReviewRouter } from "./modules/admin/contents/contents.route";
+import { adminGiveawayRouter } from "./modules/admin/giveaways/giveaways.route";
+import { adminResidenceReviewRouter } from "./modules/admin/residence-reviews/residence-reviews.route";
 import adminEstimateRouter from "./modules/admin/estimates/estimates.route";
 import adminCustomerRouter from "./modules/admin/member-management/customers/customers.route";
 import adminMoverRouter from "./modules/admin/member-management/movers/movers.route";
@@ -182,6 +184,8 @@ app.use("/api/terms", publicTermsRouter);
 app.use("/api/admin/auth", adminAuthRouter);
 app.use("/api/admin/notices", noticeRouter);
 app.use("/api/admin/reviews", adminReviewRouter);
+app.use("/api/admin/residence-reviews", adminResidenceReviewRouter);
+app.use("/api/admin/giveaways", adminGiveawayRouter);
 app.use("/api/admin/estimates", adminEstimateRouter);
 app.use("/api/admin/users", adminCustomerRouter); // 관리자 고객(회원) 라우터
 app.use("/api/admin/movers", adminMoverRouter); // 관리자 기사님 라우터

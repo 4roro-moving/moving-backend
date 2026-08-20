@@ -24,6 +24,10 @@ async function registerModuleDocs(): Promise<void> {
   await import("../modules/admin/notice/notice.docs");
   // 2026.08.03 신영미 - [추가] 관리자 콘텐츠(리뷰) API 문서 등록
   await import("../modules/admin/contents/contents.docs");
+  // 2026.08.13 신영미 - [추가] 관리자 거주후기 API 문서 등록
+  await import("../modules/admin/residence-reviews/residence-reviews.docs");
+  // 2026.08.13 신영미 - [추가] 관리자 나눔글 API 문서 등록
+  await import("../modules/admin/giveaways/giveaways.docs");
   // 2026.08.06 유서현 - [추가] 관리자 고객 목록 API 문서 등록
   await import("../modules/admin/member-management/customers/customers.docs");
   await import("../modules/admin/member-management/movers/movers.docs");
