@@ -318,6 +318,7 @@ const moverSentEstimateSelect = {
   id: true,
   price: true,
   comment: true,
+  moveDate: true,
   status: true,
   isDesignated: true,
   createdAt: true,

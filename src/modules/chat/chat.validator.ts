@@ -73,3 +73,38 @@ export const sendChatImageMessagePayloadSchema = z.object({
     .max(100, "클라이언트 메시지 ID는 최대 100자까지 입력할 수 있습니다.")
     .optional(),
 });
+
+export const requestEstimateRevisionPayloadSchema = z.object({
+  roomId: z.number().int().positive("유효하지 않은 채팅방 ID입니다."),
+  requestedMoveDate: z.iso.date("이사 예정일은 YYYY-MM-DD 형식의 유효한 날짜여야 합니다."),
+  requestedPrice: z
+    .number()
+    .int("견적가는 정수로 입력해주세요.")
+    .positive("견적가는 0원보다 커야 합니다.")
+    .max(100_000_000, "견적가는 1억 원 이하로 입력해주세요."),
+  requestedComment: z
+    .string()
+    .trim()
+    .min(10, "코멘트는 최소 10자 이상 입력해주세요.")
+    .max(1000, "코멘트는 최대 1000자까지 입력할 수 있습니다."),
+  clientMessageId: z
+    .string()
+    .trim()
+    .min(1, "클라이언트 메시지 ID는 비어 있을 수 없습니다.")
+    .max(100, "클라이언트 메시지 ID는 최대 100자까지 입력할 수 있습니다.")
+    .optional(),
+});
+
+export const respondEstimateRevisionPayloadSchema = z.object({
+  roomId: z.number().int().positive("유효하지 않은 채팅방 ID입니다."),
+  revisionId: z.number().int().positive("유효하지 않은 견적 수정 요청 ID입니다."),
+  response: z.enum(["APPROVED", "REJECTED"], {
+    error: "견적 수정 요청 응답은 승인 또는 거절만 가능합니다.",
+  }),
+  clientMessageId: z
+    .string()
+    .trim()
+    .min(1, "클라이언트 메시지 ID는 비어 있을 수 없습니다.")
+    .max(100, "클라이언트 메시지 ID는 최대 100자까지 입력할 수 있습니다.")
+    .optional(),
+});

@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
+import { escapeLikePattern } from "../../../utils/search.util";
 
 import { runTransaction } from "../../../utils/transaction";
 import { notificationService } from "../../notification/notification.service";
@@ -58,9 +59,16 @@ export const noticeService = {
    * 고정 공지 우선, 그다음 최신순으로 정렬됩니다.
    */
   async getNoticeList(query: ListNoticeQuery) {
-    const { page, limit, audience, isVisible } = query;
+    const { page, limit, keyword, audience, isVisible } = query;
 
     const where: Prisma.NoticeWhereInput = {};
+
+    if (keyword !== undefined) {
+      where.title = {
+        contains: escapeLikePattern(keyword),
+        mode: "insensitive",
+      };
+    }
 
     if (audience !== undefined) {
       where.audience = audience;

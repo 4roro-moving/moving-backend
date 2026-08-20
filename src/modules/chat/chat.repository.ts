@@ -50,10 +50,88 @@ const chatMessageSelect = {
       role: true,
     },
   },
+  revision: {
+    select: {
+      id: true,
+      estimateId: true,
+      requesterId: true,
+      responderId: true,
+      previousPrice: true,
+      requestedPrice: true,
+      previousMoveDate: true,
+      requestedMoveDate: true,
+      previousComment: true,
+      requestedComment: true,
+      status: true,
+      createdAt: true,
+      respondedAt: true,
+    },
+  },
 } satisfies Prisma.ChatMessageSelect;
 
 export type ChatRoomRow = Prisma.ChatRoomGetPayload<{ select: typeof chatRoomSelect }>;
 export type ChatMessageRow = Prisma.ChatMessageGetPayload<{ select: typeof chatMessageSelect }>;
+
+const chatRoomForRevisionSelect = {
+  ...chatRoomSelect,
+  estimate: {
+    select: {
+      id: true,
+      price: true,
+      comment: true,
+      moveDate: true,
+      status: true,
+      estimateRequest: {
+        select: {
+          status: true,
+          id: true,
+          moveDate: true,
+        },
+      },
+    },
+  },
+} satisfies Prisma.ChatRoomSelect;
+
+export type ChatRoomForRevisionRow = Prisma.ChatRoomGetPayload<{
+  select: typeof chatRoomForRevisionSelect;
+}>;
+
+const estimateRevisionForResponseSelect = {
+  id: true,
+  chatRoomId: true,
+  estimateId: true,
+  requesterId: true,
+  responderId: true,
+  messageId: true,
+  previousPrice: true,
+  requestedPrice: true,
+  previousMoveDate: true,
+  requestedMoveDate: true,
+  previousComment: true,
+  requestedComment: true,
+  status: true,
+  estimate: {
+    select: {
+      id: true,
+      status: true,
+      moveDate: true,
+      estimateRequest: {
+        select: {
+          id: true,
+          status: true,
+          moveDate: true,
+        },
+      },
+    },
+  },
+  chatRoom: {
+    select: chatRoomSelect,
+  },
+} satisfies Prisma.EstimateRevisionSelect;
+
+export type EstimateRevisionForResponseRow = Prisma.EstimateRevisionGetPayload<{
+  select: typeof estimateRevisionForResponseSelect;
+}>;
 
 type ChatMessageCursor = {
   createdAt: Date;
@@ -90,6 +168,13 @@ export const chatRepository = {
     return db.chatRoom.findUnique({
       where: { id: roomId },
       select: chatRoomSelect,
+    });
+  },
+
+  findRoomForRevision(roomId: number, db: DbClient = prisma) {
+    return db.chatRoom.findUnique({
+      where: { id: roomId },
+      select: chatRoomForRevisionSelect,
     });
   },
 
@@ -209,6 +294,140 @@ export const chatRepository = {
         imageUrl: data.imageUrl,
       },
       select: chatMessageSelect,
+    });
+  },
+
+  findMessageById(messageId: number, db: DbClient = prisma) {
+    return db.chatMessage.findUnique({
+      where: { id: messageId },
+      select: chatMessageSelect,
+    });
+  },
+
+  findPendingEstimateRevision(estimateId: number, db: DbClient = prisma) {
+    return db.estimateRevision.findFirst({
+      where: {
+        estimateId,
+        status: "PENDING",
+      },
+      select: {
+        id: true,
+      },
+    });
+  },
+
+  createEstimateRevision(
+    data: {
+      roomId: number;
+      estimateId: number;
+      requesterId: string;
+      previousPrice: number;
+      requestedPrice: number;
+      previousMoveDate: Date;
+      requestedMoveDate: Date;
+      previousComment: string;
+      requestedComment: string;
+    },
+    db: DbClient = prisma,
+  ) {
+    return db.estimateRevision.create({
+      data: {
+        chatRoomId: data.roomId,
+        estimateId: data.estimateId,
+        requesterId: data.requesterId,
+        previousPrice: data.previousPrice,
+        requestedPrice: data.requestedPrice,
+        previousMoveDate: data.previousMoveDate,
+        requestedMoveDate: data.requestedMoveDate,
+        previousComment: data.previousComment,
+        requestedComment: data.requestedComment,
+      },
+      select: {
+        id: true,
+      },
+    });
+  },
+
+  createEstimateRevisionMessage(
+    data: {
+      roomId: number;
+      senderId: string;
+      content: string;
+    },
+    db: DbClient = prisma,
+  ) {
+    return db.chatMessage.create({
+      data: {
+        roomId: data.roomId,
+        senderId: data.senderId,
+        type: "ESTIMATE_REVISION",
+        content: data.content,
+      },
+      select: {
+        id: true,
+        createdAt: true,
+      },
+    });
+  },
+
+  updateEstimateRevisionMessageId(
+    data: {
+      revisionId: number;
+      messageId: number;
+    },
+    db: DbClient = prisma,
+  ) {
+    return db.estimateRevision.update({
+      where: { id: data.revisionId },
+      data: { messageId: data.messageId },
+      select: { id: true },
+    });
+  },
+
+  findEstimateRevisionForResponse(revisionId: number, db: DbClient = prisma) {
+    return db.estimateRevision.findUnique({
+      where: { id: revisionId },
+      select: estimateRevisionForResponseSelect,
+    });
+  },
+
+  updateEstimateRevisionResponse(
+    data: {
+      revisionId: number;
+      responderId: string;
+      status: "APPROVED" | "REJECTED";
+      respondedAt: Date;
+    },
+    db: DbClient = prisma,
+  ) {
+    return db.estimateRevision.update({
+      where: { id: data.revisionId },
+      data: {
+        responderId: data.responderId,
+        status: data.status,
+        respondedAt: data.respondedAt,
+      },
+      select: { id: true },
+    });
+  },
+
+  updateEstimateForRevision(
+    data: {
+      estimateId: number;
+      price: number;
+      comment: string;
+      moveDate: Date;
+    },
+    db: DbClient = prisma,
+  ) {
+    return db.estimate.update({
+      where: { id: data.estimateId },
+      data: {
+        price: data.price,
+        comment: data.comment,
+        moveDate: data.moveDate,
+      },
+      select: { id: true },
     });
   },
 

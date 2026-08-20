@@ -7,6 +7,8 @@ import type { ChatMessageResponse, ChatRoomSummary, MissedChatMessagesResponse }
 import {
   joinChatRoomPayloadSchema,
   leaveChatRoomPayloadSchema,
+  requestEstimateRevisionPayloadSchema,
+  respondEstimateRevisionPayloadSchema,
   sendChatImageMessagePayloadSchema,
   sendChatMessagePayloadSchema,
 } from "./chat.validator";
@@ -219,6 +221,115 @@ export const registerChatSocketHandlers = (io: SocketIOServer, socket: Socket): 
           senderId,
           messageId: message.id,
           skip: hasReceiverSocketInRoom(io, input.roomId, senderId),
+        });
+
+        callback?.({
+          ok: true,
+          message,
+          ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
+        });
+      } catch (error) {
+        callback?.({
+          ok: false,
+          error: emitSocketError(socket, error),
+          ...(clientMessageId ? { clientMessageId } : {}),
+        });
+      }
+    },
+  );
+
+  socket.on(
+    "chat:estimate-revision:request",
+    async (payload: unknown, callback?: (response: SendMessageAck) => void) => {
+      const clientMessageId =
+        typeof payload === "object" &&
+        payload !== null &&
+        "clientMessageId" in payload &&
+        typeof payload.clientMessageId === "string"
+          ? payload.clientMessageId
+          : undefined;
+
+      try {
+        const input = requestEstimateRevisionPayloadSchema.parse(payload);
+        const requesterId = getSocketUserId(socket);
+
+        if (socket.data.roomId !== input.roomId) {
+          throw new AppError("FORBIDDEN", {
+            message: "채팅방 입장 후 견적 수정을 요청할 수 있습니다.",
+          });
+        }
+
+        const message = await chatService.createEstimateRevisionForJoinedRoom(
+          requesterId,
+          input.roomId,
+          {
+            requestedMoveDate: input.requestedMoveDate,
+            requestedPrice: input.requestedPrice,
+            requestedComment: input.requestedComment,
+          },
+        );
+
+        io.to(toRoomName(input.roomId)).emit("chat:message:new", message);
+        void chatService.createEstimateRevisionRequestedNotification({
+          roomId: input.roomId,
+          requesterId,
+          messageId: message.id,
+          skip: hasReceiverSocketInRoom(io, input.roomId, requesterId),
+        });
+
+        callback?.({
+          ok: true,
+          message,
+          ...(input.clientMessageId ? { clientMessageId: input.clientMessageId } : {}),
+        });
+      } catch (error) {
+        callback?.({
+          ok: false,
+          error: emitSocketError(socket, error),
+          ...(clientMessageId ? { clientMessageId } : {}),
+        });
+      }
+    },
+  );
+
+  socket.on(
+    "chat:estimate-revision:respond",
+    async (payload: unknown, callback?: (response: SendMessageAck) => void) => {
+      const clientMessageId =
+        typeof payload === "object" &&
+        payload !== null &&
+        "clientMessageId" in payload &&
+        typeof payload.clientMessageId === "string"
+          ? payload.clientMessageId
+          : undefined;
+
+      try {
+        const input = respondEstimateRevisionPayloadSchema.parse(payload);
+        const responderId = getSocketUserId(socket);
+
+        if (socket.data.roomId !== input.roomId) {
+          throw new AppError("FORBIDDEN", {
+            message: "채팅방 입장 후 견적 수정 요청에 응답할 수 있습니다.",
+          });
+        }
+
+        const message = await chatService.respondEstimateRevisionForJoinedRoom(
+          responderId,
+          input.roomId,
+          {
+            revisionId: input.revisionId,
+            response: input.response,
+          },
+        );
+
+        io.to(toRoomName(input.roomId)).emit("chat:message:new", message);
+        void chatService.createEstimateRevisionResponseNotification({
+          roomId: input.roomId,
+          responderId,
+          messageId: message.id,
+          revisionId: input.revisionId,
+          response: input.response,
+          skip: hasReceiverSocketInRoom(io, input.roomId, responderId),
         });
 
         callback?.({

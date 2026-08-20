@@ -916,6 +916,8 @@ model Estimate {
   price             Int
   /// 견적 내용. 20자 이상 150자 이하(서비스 검증).
   comment           String         @db.Text
+  /// 이 견적에 개별 적용된 이사일. 없으면 원 견적 요청 이사일을 사용합니다.
+  moveDate          DateTime?      @map("move_date") @db.Date
   /// 견적 상태. 기본 SENT(제출됨).
   status            EstimateStatus @default(SENT)
   /// 지정 요청에 대한 견적인지 여부.
@@ -1234,50 +1236,54 @@ model ChatMessage {
 
 /// 견적 수정 요청 (합의 기반)
 ///
-/// 고객과 기사님이 채팅으로 협의해 견적 금액/내용을 바꾸는 요청입니다.
+/// 고객과 기사님이 채팅으로 협의해 견적 이사일/금액/내용을 바꾸는 요청입니다.
 /// 주요 정책
 /// - 확정 또는 완료된 견적은 수정할 수 없습니다.
 /// - 요청은 승인/거절/취소 상태를 가집니다.
-/// - 승인 시 기존 견적 금액·내용을 Transaction 으로 함께 갱신합니다.
+/// - 승인 시 기존 견적 이사일·금액·내용을 Transaction 으로 함께 갱신합니다.
 model EstimateRevision {
   /// PK.
-  id               Int                    @id @default(autoincrement())
+  id                Int                    @id @default(autoincrement())
   /// 협의가 이뤄진 채팅방.
-  chatRoomId       Int                    @map("chat_room_id")
+  chatRoomId        Int                    @map("chat_room_id")
   /// 수정 대상 견적.
-  estimateId       Int                    @map("estimate_id")
+  estimateId        Int                    @map("estimate_id")
   /// 수정을 요청한 사람.
-  requesterId      String                 @map("requester_id") @db.Uuid
+  requesterId       String                 @map("requester_id") @db.Uuid
   /// 요청에 응답(승인/거절)한 사람. 응답 전에는 null.
-  responderId      String?                @map("responder_id") @db.Uuid
+  responderId       String?                @map("responder_id") @db.Uuid
   /// 이 요청을 표시하는 채팅 메시지. 1:1 이므로 unique, 없을 수도 있음.
-  messageId        Int?                   @unique @map("message_id")
+  messageId         Int?                   @unique @map("message_id")
   /// 변경 전 금액(스냅샷).
-  previousPrice    Int                    @map("previous_price")
+  previousPrice     Int                    @map("previous_price")
   /// 요청한(변경 후) 금액.
-  requestedPrice   Int                    @map("requested_price")
+  requestedPrice    Int                    @map("requested_price")
+  /// 변경 전 이사일(스냅샷).
+  previousMoveDate  DateTime               @map("previous_move_date") @db.Date
+  /// 요청한(변경 후) 이사일.
+  requestedMoveDate DateTime               @map("requested_move_date") @db.Date
   /// 변경 전 내용(스냅샷).
-  previousComment  String                 @map("previous_comment") @db.Text
+  previousComment   String                 @map("previous_comment") @db.Text
   /// 요청한(변경 후) 내용.
-  requestedComment String                 @map("requested_comment") @db.Text
+  requestedComment  String                 @map("requested_comment") @db.Text
   /// 요청 상태. 기본 PENDING.
-  status           EstimateRevisionStatus @default(PENDING)
+  status            EstimateRevisionStatus @default(PENDING)
   /// 채팅방 관계. 방 삭제 시 함께 삭제(Cascade).
-  chatRoom         ChatRoom               @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
+  chatRoom          ChatRoom               @relation(fields: [chatRoomId], references: [id], onDelete: Cascade)
   /// 대상 견적 관계. 견적 삭제 시 함께 삭제(Cascade).
-  estimate         Estimate               @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  estimate          Estimate               @relation(fields: [estimateId], references: [id], onDelete: Cascade)
   /// 요청자 관계. 계정 삭제 시 함께 삭제(Cascade).
-  requester        User                   @relation("RevisionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
+  requester         User                   @relation("RevisionRequester", fields: [requesterId], references: [id], onDelete: Cascade)
   /// 응답자 관계. 계정 삭제 시 이 필드만 null 로(SetNull).
-  responder        User?                  @relation("RevisionResponder", fields: [responderId], references: [id], onDelete: SetNull)
+  responder         User?                  @relation("RevisionResponder", fields: [responderId], references: [id], onDelete: SetNull)
   /// 표시 메시지 관계. 메시지 삭제 시 이 필드만 null 로(SetNull).
-  message          ChatMessage?           @relation(fields: [messageId], references: [id], onDelete: SetNull)
+  message           ChatMessage?           @relation(fields: [messageId], references: [id], onDelete: SetNull)
   /// 생성 시각.
-  createdAt        DateTime               @default(now()) @map("created_at")
+  createdAt         DateTime               @default(now()) @map("created_at")
   /// 응답 시각. 응답 전에는 null.
-  respondedAt      DateTime?              @map("responded_at")
+  respondedAt       DateTime?              @map("responded_at")
   /// 수정 시각.
-  updatedAt        DateTime               @updatedAt @map("updated_at")
+  updatedAt         DateTime               @updatedAt @map("updated_at")
 
   /// 방별 수정 요청 시간순 조회 최적화.
   @@index([chatRoomId, createdAt])

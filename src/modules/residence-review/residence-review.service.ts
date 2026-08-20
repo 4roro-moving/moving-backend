@@ -1,9 +1,17 @@
 import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
+import type { CursorPagination } from "../../types/response.type";
+import { getProfileImageUrl } from "../../utils/image-url";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
+import {
+  decodeResidenceReviewCursor,
+  encodeResidenceReviewNextCursor,
+  sliceResidenceReviewCursorPage,
+  toResidenceReviewCursorQuery,
+} from "./residence-review.cursor";
 import { residenceReviewRepository } from "./residence-review.repository";
 import type { ResidenceReviewRow } from "./residence-review.repository";
 import { REGION_REVIEW_STATISTIC, RESIDENCE_REVIEW_VISIBILITY } from "./residence-review.type";
@@ -11,21 +19,41 @@ import type {
   CreateResidenceReviewInput,
   ListMyResidenceReviewQuery,
   ListResidenceReviewQuery,
+  MyResidenceReview,
   PublicResidenceReview,
   RegionReviewStatistic,
   UpdateResidenceReviewInput,
 } from "./residence-review.type";
 
-function toPublicResidenceReview(row: ResidenceReviewRow): PublicResidenceReview {
+function toResidenceReviewItem(row: ResidenceReviewRow, averageRating?: number): MyResidenceReview {
   return {
     id: row.id,
     title: row.title,
     content: row.content,
     rating: row.rating,
-    region: row.region,
-    author: row.author,
+    region: {
+      id: row.region.id,
+      name: row.region.name,
+      averageRating: averageRating ?? Number(row.region.reviewStatistic?.averageRating ?? 0),
+    },
+    author: {
+      id: row.author.id,
+      name: row.author.name,
+      imageUrl: getProfileImageUrl(row.author.customerProfile?.imageUrl ?? null),
+    },
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
+  };
+}
+
+function toPublicResidenceReview(
+  row: ResidenceReviewRow,
+  viewerId?: string,
+  averageRating?: number,
+): PublicResidenceReview {
+  return {
+    ...toResidenceReviewItem(row, averageRating),
+    isMine: viewerId !== undefined && viewerId === row.author.id,
   };
 }
 
@@ -44,20 +72,23 @@ function roundAverageRating(ratingSum: number, reviewCount: number): number {
  * 관리자 숨김/해제에서 ResidenceReview.isHidden 을 바꿀 때도
  * 같은 트랜잭션 안에서 반드시 호출해야 통계와 공개 목록이 일치합니다.
  */
-async function refreshRegionReviewStatistic(regionId: number, db: DbClient): Promise<void> {
+async function refreshRegionReviewStatistic(regionId: number, db: DbClient): Promise<number> {
   const aggregated = await residenceReviewRepository.aggregateVisibleRatingByRegion(regionId, db);
   const reviewCount = aggregated._count._all;
   const ratingSum = aggregated._sum.rating ?? 0;
+  const averageRating = roundAverageRating(ratingSum, reviewCount);
 
   await residenceReviewRepository.upsertRegionReviewStatistic(
     {
       regionId,
       ratingSum,
       reviewCount,
-      averageRating: roundAverageRating(ratingSum, reviewCount),
+      averageRating,
     },
     db,
   );
+
+  return averageRating;
 }
 
 async function assertRegionExists(regionId: number, db?: DbClient): Promise<void> {
@@ -86,38 +117,46 @@ async function findOwnedVisibleResidenceReviewOrThrow(
   return review;
 }
 
-async function getPublicResidenceReviewList(query: ListResidenceReviewQuery) {
-  const { page, limit, regionId } = query;
+async function getPublicResidenceReviewList(query: ListResidenceReviewQuery, viewerId?: string) {
+  const { cursor, limit, regionId, keyword, rating, sort } = query;
 
   if (regionId !== undefined) {
     await assertRegionExists(regionId);
   }
 
-  const where: Prisma.ResidenceReviewWhereInput = {
-    isHidden: RESIDENCE_REVIEW_VISIBILITY.PUBLIC,
-    ...(regionId !== undefined ? { regionId } : {}),
-  };
+  const cursorQuery = toResidenceReviewCursorQuery({ sort, keyword, regionId, rating });
+  const decodedCursor = decodeResidenceReviewCursor(cursor, cursorQuery);
 
-  const { reviews, totalCount } = await residenceReviewRepository.findManyWithCount({
-    skip: (page - 1) * limit,
-    take: limit,
-    where,
+  const { reviews, totalCount } = await residenceReviewRepository.findManyByCursorWithCount({
+    take: limit + 1,
+    sort,
+    ...(regionId !== undefined ? { regionId } : {}),
+    ...(keyword !== undefined ? { keyword } : {}),
+    ...(rating !== undefined ? { rating } : {}),
+    ...(decodedCursor ? { cursor: decodedCursor } : {}),
   });
 
+  const { pageReviews, hasNext } = sliceResidenceReviewCursorPage(reviews, limit);
+
   return {
-    reviews: reviews.map(toPublicResidenceReview),
-    pagination: buildPagination(totalCount, page, limit),
+    reviews: pageReviews.map((review) => toPublicResidenceReview(review, viewerId)),
+    pagination: {
+      limit,
+      totalCount,
+      hasNext,
+      nextCursor: encodeResidenceReviewNextCursor(pageReviews.at(-1), hasNext, cursorQuery),
+    } satisfies CursorPagination,
   };
 }
 
-async function getPublicResidenceReviewById(residenceReviewId: number) {
+async function getPublicResidenceReviewById(residenceReviewId: number, viewerId?: string) {
   const review = await residenceReviewRepository.findPublicById(residenceReviewId);
 
   if (!review) {
     throw new AppError("RESIDENCE_REVIEW_NOT_FOUND");
   }
 
-  return toPublicResidenceReview(review);
+  return toPublicResidenceReview(review, viewerId);
 }
 
 async function getRegionReviewStatistic(regionId: number): Promise<RegionReviewStatistic> {
@@ -146,6 +185,11 @@ async function getRegionReviewStatistic(regionId: number): Promise<RegionReviewS
   };
 }
 
+/**
+ * 내 후기는 본인 작성분만 보고, 보통 건수가 많지 않아
+ * 페이지 번호로 특정 위치를 바로 열 수 있는 offset 페이지네이션을 유지합니다.
+ * 공개 목록의 무한 스크롤(cursor)과는 조회 목적이 다릅니다.
+ */
 async function getMyResidenceReviewList(authorId: string, query: ListMyResidenceReviewQuery) {
   const { page, limit } = query;
 
@@ -159,7 +203,7 @@ async function getMyResidenceReviewList(authorId: string, query: ListMyResidence
   });
 
   return {
-    reviews: reviews.map(toPublicResidenceReview),
+    reviews: reviews.map((review) => toResidenceReviewItem(review)),
     pagination: buildPagination(totalCount, page, limit),
   };
 }
@@ -170,10 +214,9 @@ async function createResidenceReview(authorId: string, input: CreateResidenceRev
       await assertRegionExists(input.regionId, tx);
 
       const review = await residenceReviewRepository.createResidenceReview(authorId, input, tx);
+      const averageRating = await refreshRegionReviewStatistic(input.regionId, tx);
 
-      await refreshRegionReviewStatistic(input.regionId, tx);
-
-      return toPublicResidenceReview(review);
+      return toPublicResidenceReview(review, authorId, averageRating);
     },
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -224,11 +267,11 @@ async function updateResidenceReview(
         tx,
       );
 
-      if (shouldRefreshStatisticOnUpdate(owned.rating, input)) {
-        await refreshRegionReviewStatistic(owned.regionId, tx);
-      }
+      const averageRating = shouldRefreshStatisticOnUpdate(owned.rating, input)
+        ? await refreshRegionReviewStatistic(owned.regionId, tx)
+        : undefined;
 
-      return toPublicResidenceReview(review);
+      return toPublicResidenceReview(review, authorId, averageRating);
     },
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,

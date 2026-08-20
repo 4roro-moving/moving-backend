@@ -43,13 +43,20 @@ export const moverCalendarRepository = {
       where: {
         moverId,
         status: "CONFIRMED",
-        estimateRequest: {
-          status: { in: ["CONFIRMED", "COMPLETED"] },
-          moveDate: { gte: start, lt: end },
-        },
+        estimateRequest: { status: { in: ["CONFIRMED", "COMPLETED"] } },
+        OR: [
+          { moveDate: { gte: start, lt: end } },
+          {
+            moveDate: null,
+            estimateRequest: {
+              moveDate: { gte: start, lt: end },
+            },
+          },
+        ],
       },
       select: {
         id: true,
+        moveDate: true,
         estimateRequest: {
           select: {
             id: true,
@@ -88,10 +95,16 @@ export const moverCalendarRepository = {
       where: {
         moverId,
         status: "CONFIRMED",
-        estimateRequest: {
-          status: { in: ["CONFIRMED", "COMPLETED"] },
-          moveDate: { gte: date, lt: nextDate },
-        },
+        estimateRequest: { status: { in: ["CONFIRMED", "COMPLETED"] } },
+        OR: [
+          { moveDate: { gte: date, lt: nextDate } },
+          {
+            moveDate: null,
+            estimateRequest: {
+              moveDate: { gte: date, lt: nextDate },
+            },
+          },
+        ],
       },
     });
   },

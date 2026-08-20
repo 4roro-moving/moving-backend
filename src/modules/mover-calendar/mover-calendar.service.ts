@@ -6,6 +6,7 @@ import {
   parseCalendarDate,
   toDateKey,
 } from "./mover-calendar.policy";
+import { resolveEstimateMoveDate } from "../estimate/estimate-date";
 import { moverCalendarRepository } from "./mover-calendar.repository";
 import type { CalendarDayStatus, CalendarMonthQuery } from "./mover-calendar.type";
 
@@ -45,9 +46,7 @@ export const moverCalendarService = {
 
     // 확정 일정을 날짜별 Map으로 변환
     const confirmedByDate = new Map(
-      confirmedMoves.map(
-        (estimate) => [toDateKey(estimate.estimateRequest.moveDate), estimate] as const,
-      ),
+      confirmedMoves.map((estimate) => [toDateKey(resolveEstimateMoveDate(estimate)), estimate]),
     );
 
     // 기사 본인 여부

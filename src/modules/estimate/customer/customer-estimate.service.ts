@@ -5,6 +5,7 @@ import { buildPagination } from "../../../utils/pagination.util";
 import { runTransaction } from "../../../utils/transaction";
 import { notificationService } from "../../notification/notification.service";
 import { moverCalendarRepository } from "../../mover-calendar/mover-calendar.repository";
+import { resolveEstimateMoveDate } from "../estimate-date";
 import { mapDetailEstimate, mapListEstimate } from "./customer-estimate.mapper";
 import { assertConfirmableReceivedEstimate } from "./customer-estimate.policy";
 import { receivedEstimateRepository } from "./customer-estimate.repository";
@@ -233,9 +234,10 @@ export const receivedEstimateService = {
         confirmedEstimateId: estimate.estimateRequest.confirmedEstimateId,
       });
 
+      const effectiveMoveDate = resolveEstimateMoveDate(estimate);
       //캘린더 검증 추가
       //견적을 확정하기 전에 이사 날짜를 받아와서 날짜 단위로 정규화함
-      const moveDate = new Date(estimate.estimateRequest.moveDate);
+      const moveDate = new Date(effectiveMoveDate);
       moveDate.setUTCHours(0, 0, 0, 0);
 
       //해당 기사와 날짜 잠금
@@ -332,13 +334,13 @@ export const receivedEstimateService = {
       const notificationPayload = buildEstimateConfirmedNotificationPayload({
         moverId: confirmedEstimate.mover.id,
         customerName: estimate.estimateRequest.customer.name,
-        moveDate: estimate.estimateRequest.moveDate,
+        moveDate: effectiveMoveDate,
       });
 
       //확정 응답 형태 가공
       return {
         estimateRequest: confirmedEstimateRequest,
-        moveDate: estimate.estimateRequest.moveDate,
+        moveDate: effectiveMoveDate,
         customerName: estimate.estimateRequest.customer.name,
         notificationPayload,
         estimate: {
