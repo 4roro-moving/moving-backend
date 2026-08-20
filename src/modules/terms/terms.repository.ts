@@ -6,7 +6,7 @@ import type { DbClient } from "../../utils/transaction";
 import type { TermsAudienceRole } from "./terms.type";
 
 /**
- * 약관 조회에 공통으로 사용하는 select.
+ * 상세 조회용 select. 본문(content)을 포함한다.
  */
 const termsSelect = {
   id: true,
@@ -16,6 +16,28 @@ const termsSelect = {
   title: true,
   content: true,
   isRequired: true,
+  effectiveAt: true,
+  publishedAt: true,
+  authorId: true,
+  author: { select: { id: true, name: true } },
+  createdAt: true,
+  updatedAt: true,
+  deletedAt: true,
+} satisfies Prisma.TermsSelect;
+
+/**
+ * 목록 조회용 select.
+ * 약관 본문은 수천 자라 목록 응답에 실을 필요가 없어 제외한다.
+ * (검색은 where 에서 content 를 보지만 응답에는 포함하지 않는다)
+ */
+const termsListSelect = {
+  id: true,
+  type: true,
+  version: true,
+  status: true,
+  title: true,
+  isRequired: true,
+  audience: true,
   effectiveAt: true,
   publishedAt: true,
   authorId: true,
@@ -74,7 +96,7 @@ export const termsRepository = {
     const [terms, totalCount] = await Promise.all([
       db.terms.findMany({
         where,
-        select: termsSelect,
+        select: termsListSelect,
         orderBy: [
           { publishedAt: { sort: "desc", nulls: "last" } },
           { createdAt: "desc" },
