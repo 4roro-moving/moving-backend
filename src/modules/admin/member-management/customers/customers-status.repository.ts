@@ -61,8 +61,8 @@ export const customersStatusRepository = {
   },
 
   /**
-   * Prisma는 FOR UPDATE 행 잠금을 지원하지 않아 raw SQL을 사용합니다.
-   * 정지 처리와 견적 전송·고객 직접 취소가 같은 요청을 동시에 변경하지 않도록 대상 행을 잠급니다.
+   * Prisma에서는 FOR UPDATE row lock을 직접 표현할 수 없어 raw SQL을 사용합니다.
+   * 계정 정지 처리와 견적 전송·고객 직접 취소가 같은 견적 요청을 동시에 변경하지 않도록 대상 행을 잠급니다.
    */
   async lockCancelableRequestsForSuspension(
     customerId: string,
@@ -166,7 +166,22 @@ export const customersStatusRepository = {
 
   /** 견적 기사·지정 기사에게 보낼 취소 알림을 중복 키는 건너뛰며 일괄 저장합니다. */
   createNotifications(data: Prisma.NotificationCreateManyInput[], db: DbClient = prisma) {
-    return db.notification.createMany({ data, skipDuplicates: true });
+    return db.notification.createManyAndReturn({
+      data,
+      skipDuplicates: true,
+      select: {
+        userId: true,
+        id: true,
+        type: true,
+        title: true,
+        content: true,
+        linkUrl: true,
+        isRead: true,
+        readAt: true,
+        expiresAt: true,
+        createdAt: true,
+      },
+    });
   },
 
   /**

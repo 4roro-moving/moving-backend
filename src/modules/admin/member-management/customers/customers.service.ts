@@ -11,6 +11,7 @@ import {
 
 import { AppError } from "../../../../lib/app-error";
 import { authRepository } from "../../../auth/auth.repository";
+import { notificationService } from "../../../notification/notification.service";
 import { disconnectUserSockets } from "../../../../socket";
 import { buildPagination } from "../../../../utils/pagination.util";
 import { runTransaction } from "../../../../utils/transaction";
@@ -95,31 +96,32 @@ export const customersService = {
   }): Promise<UpdateCustomerStatusResponse> {
     assertAdminCanChangeMemberStatus(customerId, adminId);
 
-    // 상태 변경과 정지 후속 DB 작업(견적 요청/견적 상태, 이력·알림·토큰 폐기)을 하나의 트랜잭션으로 처리
-    const result = await runTransaction<UpdateCustomerStatusResponse>(async (tx) => {
-      const customer = await customersStatusRepository.findCustomerForStatusChange(customerId, tx);
+    const { result, createdNotifications } = await runTransaction(async (tx) => {
+      // 트랜잭션 안에서 실제로 생성된 알림들만 모아둠. 트랜잭션 커밋 후 SSE로 전송하기 위함.
+      const createdNotifications: Awaited<
+        ReturnType<typeof customersStatusRepository.createNotifications>
+      > = [];
 
+      const customer = await customersStatusRepository.findCustomerForStatusChange(customerId, tx);
       if (!customer) {
         throw new AppError("USER_NOT_FOUND");
       }
 
+      // 현재 상태가 변경 대상일 때만 변경해 중복 요청을 방지
       const shouldBeActive = resolveIsActiveForSuspensionAction(input.action);
-
-      // 이미 요청한 상태라면 다시 변경하지 않도록 현재 상태를 where 조건에 포함
       const { count } = await customersStatusRepository.updateCustomerIsActiveIfCurrent(
         { customerId, isActive: shouldBeActive },
         tx,
       );
-
       if (count === 0) {
         throw new AppError("CUSTOMER_STATUS_ALREADY_PROCESSED");
       }
 
       const now = new Date();
 
+      // SUSPEND일 때만 진행 중인 견적 요청을 정리
       if (input.action === SuspensionAction.SUSPEND) {
-        // 해당 고객의 활성 PENDING·OPEN 견적 요청 행을 잠그고 ID를 가져옴
-        // 잠근 뒤 알림·이력 생성에 필요한 상세 정보 조회
+        // 해당 고객의 활성 PENDING·OPEN 견적 요청 행을 잠근 뒤 알림·이력 생성에 필요한 상세 정보 조회
         const lockedRequestIds =
           await customersStatusRepository.lockCancelableRequestsForSuspension(customerId, tx);
         const cancelableRequests =
@@ -128,14 +130,13 @@ export const customersService = {
         const requestIds = cancelableRequests.map((request) => request.id);
 
         if (requestIds.length > 0) {
-          // 상태 조건을 다시 확인해 여전히 PENDING·OPEN이고 활성된 요청만 취소한 후, 실제로 취소된 요청 ID만 반환받음
+          // 상태 조건을 다시 확인해 여전히 취소 가능한 견적 요청만 취소
           const canceledRequestIds =
             await customersStatusRepository.cancelPendingOrOpenEstimateRequests(
               requestIds,
               now,
               tx,
             );
-          // 실제 취소된 요청의 상세 정보만 후속 이력·알림 생성에 사용
           const canceledRequestIdSet = new Set(canceledRequestIds.map((request) => request.id));
           const canceledRequests = cancelableRequests.filter((request) =>
             canceledRequestIdSet.has(request.id),
@@ -151,7 +152,7 @@ export const customersService = {
             })),
           );
 
-          // 이미 견적을 보낸 기사와 지정 견적 대상으로 선택된 기사에게 알림 전송
+          // 이미 견적을 보낸 기사와 지정 견적 대상으로 선택된 기사에게 보낼 알림 생성
           const notifications = canceledRequests.flatMap((request) => {
             // 한 기사가 견적·지정 대상에 모두 포함될 수 있으므로 Set으로 ID를 중복 제거해 한 번만 알림
             const moverIds = new Set([
@@ -196,7 +197,10 @@ export const customersService = {
           );
           await customersStatusRepository.createEstimateRequestHistories(histories, tx);
           await customersStatusRepository.createSystemMessages(systemMessages, tx);
-          await customersStatusRepository.createNotifications(notifications, tx);
+          // createManyAndReturn을 통해 실제 INSERT된 알림만 받아, 이를 createdNotifications에 push함
+          createdNotifications.push(
+            ...(await customersStatusRepository.createNotifications(notifications, tx)),
+          );
         }
       }
 
@@ -217,7 +221,7 @@ export const customersService = {
       );
 
       if (input.action === SuspensionAction.SUSPEND) {
-        // 새 토큰 재발급을 막아 정지된 고객이 즉시 다시 인증되도록 함
+        // 정지 후 기존 Refresh Token으로 Access Token을 재발급하지 못하도록 폐기
         await authRepository.revokeAllRefreshTokensByUserId(
           customerId,
           RefreshTokenSessionType.USER,
@@ -227,15 +231,23 @@ export const customersService = {
       }
 
       return {
-        id: customerId,
-        status: shouldBeActive ? MEMBER_STATUS.ACTIVE : MEMBER_STATUS.SUSPENDED,
-        suspension,
+        result: {
+          id: customerId,
+          status: shouldBeActive ? MEMBER_STATUS.ACTIVE : MEMBER_STATUS.SUSPENDED,
+          suspension,
+        } satisfies UpdateCustomerStatusResponse,
+        createdNotifications,
       };
     });
 
-    // DB 트랜잭션이 커밋된 뒤에 기존 실시간 소켓 연결 종료
+    // 트랜잭션 커밋이 끝난 뒤에 기존 실시간 소켓 연결 종료
     if (input.action === SuspensionAction.SUSPEND) {
       disconnectUserSockets(customerId);
+    }
+
+    // 트랜잭션 커밋이 끝난 뒤에 실시간 알림 전송
+    for (const { userId, ...notification } of createdNotifications) {
+      notificationService.sendNotification(userId, notification);
     }
 
     return result;

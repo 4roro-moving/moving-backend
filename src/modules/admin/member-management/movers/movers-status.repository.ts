@@ -108,7 +108,22 @@ export const moversStatusRepository = {
   },
 
   createNotifications(data: Prisma.NotificationCreateManyInput[], db: DbClient = prisma) {
-    return db.notification.createMany({ data, skipDuplicates: true });
+    return db.notification.createManyAndReturn({
+      data,
+      skipDuplicates: true,
+      select: {
+        userId: true,
+        id: true,
+        type: true,
+        title: true,
+        content: true,
+        linkUrl: true,
+        isRead: true,
+        readAt: true,
+        expiresAt: true,
+        createdAt: true,
+      },
+    });
   },
 
   createMoverSuspension(
