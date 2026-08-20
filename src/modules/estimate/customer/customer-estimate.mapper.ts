@@ -1,5 +1,6 @@
 import { getProfileImageUrl } from "../../../utils/image-url";
 
+import { resolveEstimateMoveDate } from "../estimate-date";
 import { getReceivedEstimateConfirmState } from "./customer-estimate.policy";
 
 import type { receivedEstimateRepository } from "./customer-estimate.repository";
@@ -59,7 +60,7 @@ export function mapDetailEstimate(estimate: ReceivedEstimateDetailItem) {
     estimateRequest: {
       id: estimate.estimateRequest.id,
       moveType: estimate.estimateRequest.moveType,
-      moveDate: estimate.moveDate ?? estimate.estimateRequest.moveDate,
+      moveDate: resolveEstimateMoveDate(estimate),
       fromZipCode: estimate.estimateRequest.fromZipCode,
       fromAddress: estimate.estimateRequest.fromAddress,
       fromDetailAddress: estimate.estimateRequest.fromDetailAddress,

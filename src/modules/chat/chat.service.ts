@@ -10,7 +10,9 @@ import { AppError } from "../../lib/app-error";
 import { getImageUrl } from "../../utils/image-url";
 import { isPastInKst } from "../../utils/kst";
 import { runTransaction } from "../../utils/transaction";
+import { resolveEstimateMoveDate } from "../estimate/estimate-date";
 import { resolveMoveDate } from "../estimate-request/estimateRequest.policy";
+import { moverCalendarRepository } from "../mover-calendar/mover-calendar.repository";
 import { notificationService } from "../notification/notification.service";
 import { chatImageService } from "./chat-image.service";
 import {
@@ -30,13 +32,6 @@ const CHAT_ROOM_BLOCKED_REQUEST_STATUSES: readonly EstimateRequestStatus[] = [
   "CANCELED",
 ];
 const ESTIMATE_REVISION_CONTENT = "견적 수정 요청이 도착했습니다.";
-
-function getEstimateMoveDate(estimate: {
-  moveDate: Date | null;
-  estimateRequest: { moveDate: Date };
-}): Date {
-  return estimate.moveDate ?? estimate.estimateRequest.moveDate;
-}
 
 function isParticipant(room: Pick<ChatRoomRow, "customerId" | "moverId">, userId: string): boolean {
   return room.customerId === userId || room.moverId === userId;
@@ -506,7 +501,7 @@ export const chatService = {
 
         assertParticipant(lockedRoom, requesterId);
         assertEstimateRevisionRequestable(lockedRoom, requesterId);
-        const previousMoveDate = getEstimateMoveDate(lockedRoom.estimate);
+        const previousMoveDate = resolveEstimateMoveDate(lockedRoom.estimate);
         assertEstimateRevisionHasChanges({
           previousMoveDate,
           requestedMoveDate,
@@ -618,6 +613,31 @@ export const chatService = {
 
         if (input.response === "APPROVED") {
           assertRevisionMoveDateStillValid(lockedRevision.requestedMoveDate);
+          await moverCalendarRepository.lockMoverDate(
+            lockedRevision.chatRoom.moverId,
+            lockedRevision.requestedMoveDate,
+            tx,
+          );
+
+          const unavailableDate = await moverCalendarRepository.findUnavailableDate(
+            lockedRevision.chatRoom.moverId,
+            lockedRevision.requestedMoveDate,
+            tx,
+          );
+
+          if (unavailableDate) {
+            throw new AppError("MOVER_DATE_OFF");
+          }
+
+          const confirmedMoveCount = await moverCalendarRepository.countConfirmedMoves(
+            lockedRevision.chatRoom.moverId,
+            lockedRevision.requestedMoveDate,
+            tx,
+          );
+
+          if (confirmedMoveCount > 0) {
+            throw new AppError("MOVER_DATE_FULL");
+          }
 
           await chatRepository.updateEstimateForRevision(
             {
