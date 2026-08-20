@@ -8,12 +8,13 @@ import { authRepository } from "../../auth/auth.repository";
 
 import { profileImageService } from "../profile-image.service";
 import { hasUniqueConstraintField, PASSWORD_SALT_ROUNDS } from "../profile.shared";
-import { mapProfileResponse } from "./profile.mapper";
+import { mapMyProfileResponse, mapProfileResponse } from "./profile.mapper";
 import { assertActiveMover } from "./profile.policy";
 import { profileRepository } from "./profile.repository";
 
 import type {
   CreateProfileInput,
+  MyProfileResponse,
   ProfileResponse,
   UpdateBasicInfoInput,
   UpdateProfileInput,
@@ -191,10 +192,14 @@ const createProfile = async (
 /*
  * 내 무버 프로필을 조회한다.
  */
-const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
+const getMyProfile = async (userId: string): Promise<MyProfileResponse> => {
   const user = assertActiveMover(await profileRepository.findUserById(userId));
 
-  const profile = await profileRepository.findProfileByUserId(user.id);
+  const [profile, hasPassword, completedCount] = await Promise.all([
+    profileRepository.findProfileByUserId(user.id),
+    profileRepository.hasPasswordByUserId(user.id),
+    profileRepository.countCompletedMovesByUserId(user.id),
+  ]);
 
   if (!profile) {
     throw new AppError("NOT_FOUND", {
@@ -202,7 +207,7 @@ const getMyProfile = async (userId: string): Promise<ProfileResponse> => {
     });
   }
 
-  return mapProfileResponse(profile, await profileRepository.hasPasswordByUserId(user.id));
+  return mapMyProfileResponse(profile, hasPassword, completedCount);
 };
 
 /*

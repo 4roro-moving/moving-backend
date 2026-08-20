@@ -4,6 +4,7 @@ import { describe, it } from "node:test";
 import { Prisma, UserRole } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
+import type { DbClient } from "../../utils/transaction";
 
 import type { ReportRepository } from "./report.repository";
 import { createReportService } from "./report.service";
@@ -16,17 +17,48 @@ function createRepositoryStub(overrides: Partial<ReportRepository> = {}): Report
     findReviewTargetById: async () => null,
     findUserById: async () => null,
     findExistingReport: async () => null,
-    createReport: async ({ targetType, targetId, reason, status, detail }) => ({
+    createReport: async ({ targetType, targetId, reason, status, detail, imageKeys }) => ({
       id: 1,
       targetType,
       targetId,
       reason,
       status,
       detail,
+      images: (imageKeys ?? []).map((imageKey, index) => ({
+        id: index + 1,
+        imageKey,
+      })),
       createdAt: new Date("2026-08-04T00:00:00.000Z"),
     }),
     ...overrides,
   };
+}
+
+function createTransactionRunner() {
+  const tx = {} as DbClient;
+
+  return {
+    run: async <T>(callback: (db: DbClient) => Promise<T>) => callback(tx),
+  };
+}
+
+function createImageValidatorStub() {
+  return {
+    validateUploadedImages: async (_userId: string, _imageKeys: string[] | undefined) => {},
+  };
+}
+
+function createService(
+  repositoryOverrides: Partial<ReportRepository> = {},
+  imageValidator = createImageValidatorStub(),
+) {
+  const transaction = createTransactionRunner();
+
+  return createReportService(
+    createRepositoryStub(repositoryOverrides),
+    imageValidator,
+    transaction.run,
+  );
 }
 
 function createUniqueConstraintError(meta: {
@@ -47,15 +79,13 @@ function createUniqueConstraintError(meta: {
 
 describe("reportService.createReport", () => {
   it("creates a review report with normalized targetId", async () => {
-    const service = createReportService(
-      createRepositoryStub({
-        findReviewTargetById: async (reviewId) => ({
-          id: reviewId,
-          customerId: "customer-2",
-          moverId: "mover-1",
-        }),
+    const service = createService({
+      findReviewTargetById: async (reviewId) => ({
+        id: reviewId,
+        customerId: "customer-2",
+        moverId: "mover-1",
       }),
-    );
+    });
 
     const result = await service.createReport({
       reporterId: "customer-1",
@@ -72,18 +102,17 @@ describe("reportService.createReport", () => {
     assert.equal(result.reason, "ABUSE");
     assert.equal(result.status, "PENDING");
     assert.equal(result.description, "욕설이 포함되어 있습니다.");
+    assert.deepEqual(result.images, []);
   });
 
   it("creates a mover report with normalized UUID casing", async () => {
-    const service = createReportService(
-      createRepositoryStub({
-        findUserById: async (userId) => ({
-          id: userId,
-          role: UserRole.MOVER,
-          deletedAt: null,
-        }),
+    const service = createService({
+      findUserById: async (userId) => ({
+        id: userId,
+        role: UserRole.MOVER,
+        deletedAt: null,
       }),
-    );
+    });
 
     const result = await service.createReport({
       reporterId: "customer-1",
@@ -100,7 +129,7 @@ describe("reportService.createReport", () => {
   });
 
   it("throws REPORT_TARGET_NOT_FOUND for a missing review", async () => {
-    const service = createReportService(createRepositoryStub());
+    const service = createService();
 
     await assert.rejects(
       () =>
@@ -117,7 +146,7 @@ describe("reportService.createReport", () => {
   });
 
   it("throws REPORT_TARGET_NOT_FOUND for a missing mover", async () => {
-    const service = createReportService(createRepositoryStub());
+    const service = createService();
 
     await assert.rejects(
       () =>
@@ -134,7 +163,7 @@ describe("reportService.createReport", () => {
   });
 
   it("throws REPORT_SELF_NOT_ALLOWED when a mover reports themselves", async () => {
-    const service = createReportService(createRepositoryStub());
+    const service = createService();
 
     await assert.rejects(
       () =>
@@ -151,15 +180,13 @@ describe("reportService.createReport", () => {
   });
 
   it("throws REPORT_SELF_NOT_ALLOWED when a review author reports their own review", async () => {
-    const service = createReportService(
-      createRepositoryStub({
-        findReviewTargetById: async (reviewId) => ({
-          id: reviewId,
-          customerId: "customer-1",
-          moverId: "mover-1",
-        }),
+    const service = createService({
+      findReviewTargetById: async (reviewId) => ({
+        id: reviewId,
+        customerId: "customer-1",
+        moverId: "mover-1",
       }),
-    );
+    });
 
     await assert.rejects(
       () =>
@@ -176,15 +203,13 @@ describe("reportService.createReport", () => {
   });
 
   it("allows the mover who received the review to report that review", async () => {
-    const service = createReportService(
-      createRepositoryStub({
-        findReviewTargetById: async (reviewId) => ({
-          id: reviewId,
-          customerId: "customer-1",
-          moverId: "mover-1",
-        }),
+    const service = createService({
+      findReviewTargetById: async (reviewId) => ({
+        id: reviewId,
+        customerId: "customer-1",
+        moverId: "mover-1",
       }),
-    );
+    });
 
     const result = await service.createReport({
       reporterId: "mover-1",
@@ -201,16 +226,14 @@ describe("reportService.createReport", () => {
   });
 
   it("throws REPORT_ALREADY_EXISTS when a duplicate report is found before create", async () => {
-    const service = createReportService(
-      createRepositoryStub({
-        findReviewTargetById: async (reviewId) => ({
-          id: reviewId,
-          customerId: "customer-2",
-          moverId: "mover-1",
-        }),
-        findExistingReport: async () => ({ id: 9 }),
+    const service = createService({
+      findReviewTargetById: async (reviewId) => ({
+        id: reviewId,
+        customerId: "customer-2",
+        moverId: "mover-1",
       }),
-    );
+      findExistingReport: async () => ({ id: 9 }),
+    });
 
     await assert.rejects(
       () =>
@@ -227,15 +250,13 @@ describe("reportService.createReport", () => {
   });
 
   it("throws REPORT_TARGET_NOT_REPORTABLE when the target user is not a mover", async () => {
-    const service = createReportService(
-      createRepositoryStub({
-        findUserById: async (userId) => ({
-          id: userId,
-          role: UserRole.CUSTOMER,
-          deletedAt: null,
-        }),
+    const service = createService({
+      findUserById: async (userId) => ({
+        id: userId,
+        role: UserRole.CUSTOMER,
+        deletedAt: null,
       }),
-    );
+    });
 
     await assert.rejects(
       () =>
@@ -253,20 +274,18 @@ describe("reportService.createReport", () => {
   });
 
   it("maps a default camelCase P2002 target to REPORT_ALREADY_EXISTS", async () => {
-    const service = createReportService(
-      createRepositoryStub({
-        findUserById: async (userId) => ({
-          id: userId,
-          role: UserRole.MOVER,
-          deletedAt: null,
-        }),
-        createReport: async () => {
-          throw createUniqueConstraintError({
-            target: ["targetType", "targetId", "reporterId"],
-          });
-        },
+    const service = createService({
+      findUserById: async (userId) => ({
+        id: userId,
+        role: UserRole.MOVER,
+        deletedAt: null,
       }),
-    );
+      createReport: async () => {
+        throw createUniqueConstraintError({
+          target: ["targetType", "targetId", "reporterId"],
+        });
+      },
+    });
 
     await assert.rejects(
       () =>
@@ -283,20 +302,18 @@ describe("reportService.createReport", () => {
   });
 
   it("maps a snake_case P2002 target to REPORT_ALREADY_EXISTS", async () => {
-    const service = createReportService(
-      createRepositoryStub({
-        findUserById: async (userId) => ({
-          id: userId,
-          role: UserRole.MOVER,
-          deletedAt: null,
-        }),
-        createReport: async () => {
-          throw createUniqueConstraintError({
-            target: ["target_type", "target_id", "reporter_id"],
-          });
-        },
+    const service = createService({
+      findUserById: async (userId) => ({
+        id: userId,
+        role: UserRole.MOVER,
+        deletedAt: null,
       }),
-    );
+      createReport: async () => {
+        throw createUniqueConstraintError({
+          target: ["target_type", "target_id", "reporter_id"],
+        });
+      },
+    });
 
     await assert.rejects(
       () =>
@@ -313,20 +330,18 @@ describe("reportService.createReport", () => {
   });
 
   it("maps a constraint-name P2002 target to REPORT_ALREADY_EXISTS", async () => {
-    const service = createReportService(
-      createRepositoryStub({
-        findUserById: async (userId) => ({
-          id: userId,
-          role: UserRole.MOVER,
-          deletedAt: null,
-        }),
-        createReport: async () => {
-          throw createUniqueConstraintError({
-            target: "reports_target_type_target_id_reporter_id_key",
-          });
-        },
+    const service = createService({
+      findUserById: async (userId) => ({
+        id: userId,
+        role: UserRole.MOVER,
+        deletedAt: null,
       }),
-    );
+      createReport: async () => {
+        throw createUniqueConstraintError({
+          target: "reports_target_type_target_id_reporter_id_key",
+        });
+      },
+    });
 
     await assert.rejects(
       () =>
@@ -343,21 +358,19 @@ describe("reportService.createReport", () => {
   });
 
   it("maps a partial target to REPORT_ALREADY_EXISTS only when it is clearly the Report model", async () => {
-    const service = createReportService(
-      createRepositoryStub({
-        findUserById: async (userId) => ({
-          id: userId,
-          role: UserRole.MOVER,
-          deletedAt: null,
-        }),
-        createReport: async () => {
-          throw createUniqueConstraintError({
-            target: ["targetId"],
-            modelName: "Report",
-          });
-        },
+    const service = createService({
+      findUserById: async (userId) => ({
+        id: userId,
+        role: UserRole.MOVER,
+        deletedAt: null,
       }),
-    );
+      createReport: async () => {
+        throw createUniqueConstraintError({
+          target: ["targetId"],
+          modelName: "Report",
+        });
+      },
+    });
 
     await assert.rejects(
       () =>
@@ -374,21 +387,19 @@ describe("reportService.createReport", () => {
   });
 
   it("rethrows P2002 for a different model even if the target fields look the same", async () => {
-    const service = createReportService(
-      createRepositoryStub({
-        findUserById: async (userId) => ({
-          id: userId,
-          role: UserRole.MOVER,
-          deletedAt: null,
-        }),
-        createReport: async () => {
-          throw createUniqueConstraintError({
-            target: ["targetType", "targetId", "reporterId"],
-            modelName: "OtherModel",
-          });
-        },
+    const service = createService({
+      findUserById: async (userId) => ({
+        id: userId,
+        role: UserRole.MOVER,
+        deletedAt: null,
       }),
-    );
+      createReport: async () => {
+        throw createUniqueConstraintError({
+          target: ["targetType", "targetId", "reporterId"],
+          modelName: "OtherModel",
+        });
+      },
+    });
 
     await assert.rejects(
       () =>
@@ -403,5 +414,46 @@ describe("reportService.createReport", () => {
       (error: unknown) =>
         error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002",
     );
+  });
+
+  it("validates uploaded images before creation and returns mapped image items", async () => {
+    let receivedUserId: string | undefined;
+    let receivedImageKeys: string[] | undefined;
+
+    const imageValidator = {
+      validateUploadedImages: async (userId: string, imageKeys: string[] | undefined) => {
+        receivedUserId = userId;
+        receivedImageKeys = imageKeys;
+      },
+    };
+
+    const service = createService(
+      {
+        findUserById: async (userId) => ({
+          id: userId,
+          role: UserRole.MOVER,
+          deletedAt: null,
+        }),
+      },
+      imageValidator,
+    );
+
+    const result = await service.createReport({
+      reporterId: "customer-1",
+      input: {
+        targetType: "MOVER",
+        targetId: VALID_MOVER_ID,
+        reason: "SPAM",
+        imageKeys: [
+          "reports/11111111-1111-4111-8111-111111111111/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg",
+        ],
+      },
+    });
+
+    assert.equal(receivedUserId, "customer-1");
+    assert.deepEqual(receivedImageKeys, [
+      "reports/11111111-1111-4111-8111-111111111111/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg",
+    ]);
+    assert.equal(result.images.length, 1);
   });
 });

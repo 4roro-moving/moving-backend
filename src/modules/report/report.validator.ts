@@ -1,6 +1,8 @@
 import { ReportReason, ReportTargetType } from "@prisma/client";
 import { z } from "zod";
 
+import { reportImageKeysSchema } from "./report-image.validator";
+
 export const MAX_REPORT_DESCRIPTION_LENGTH = 1000;
 export const MAX_REVIEW_TARGET_ID = 2_147_483_647;
 const MAX_SAFE_REVIEW_TARGET_ID = BigInt(Number.MAX_SAFE_INTEGER);
@@ -52,6 +54,7 @@ export const createReportSchema = z
         `신고 상세 내용은 최대 ${String(MAX_REPORT_DESCRIPTION_LENGTH)}자까지 입력할 수 있습니다.`,
       )
       .optional(),
+    imageKeys: reportImageKeysSchema.optional(),
   })
   .superRefine((value, ctx) => {
     // REVIEW는 서비스에서 안전하게 number로 변환할 수 있도록 DB Int 범위로 제한합니다.
