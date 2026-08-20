@@ -30,6 +30,13 @@ export const ERROR_CODES = {
     message: "이용이 제한된 계정입니다. 자세한 사항은 고객센터로 문의해 주세요.",
   },
 
+  // 26.08.20 김나연 - [추가] 소셜 로그인으로 접근한 계정이 존재하지 않을 때 에러
+  OAUTH_ACCOUNT_NOT_FOUND: {
+    status: 404,
+    code: "OAUTH_ACCOUNT_NOT_FOUND",
+    message: "가입된 소셜 계정이 없습니다. 회원가입을 진행해 주세요.",
+  },
+
   NOT_FOUND: {
     status: 404,
     code: "NOT_FOUND",

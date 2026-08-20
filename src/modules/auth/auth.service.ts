@@ -20,6 +20,7 @@ import type {
   KakaoOAuthInput,
   NaverOAuthInput,
   LoginInput,
+  OAuthIntent,
   SignUpInput,
 } from "./auth.validator";
 
@@ -41,6 +42,7 @@ import { runTransaction } from "../../utils/transaction";
 
 import { termsService } from "../terms/terms.service";
 import type { TermsAgreementInput } from "../terms/terms.type";
+import { ERROR_CODES } from "../../constants/error-code";
 
 const PASSWORD_SALT_ROUNDS = 10;
 const REFRESH_TOKEN_RETENTION_DAYS = 30;
@@ -412,8 +414,10 @@ const createOAuthLoginResponse = async (
 /*
  * OAuth 로그인 공통 처리
  *
- * provider와 providerUserId가 일치하는 사용자가 있으면 로그인하고,
- * 없으면 이메일 중복 여부를 확인한 뒤 신규 OAuth 사용자를 생성한다.
+ * provider와 providerUserId가 일치하는 사용자가 있으면 intent와 상관없이 로그인한다.
+ * 계정이 없으면 intent에 따라 분기한다.
+ * - login: 가입하지 않고 OAUTH_ACCOUNT_NOT_FOUND를 반환한다.
+ * - signup: 이메일 중복 여부를 확인한 뒤 신규 OAuth 사용자를 생성한다.
  *
  * 동일한 OAuth 계정으로 요청이 동시에 들어와 신규 생성이 충돌한 경우에는
  * 충돌 후 해당 계정을 다시 조회하여 기존 사용자 로그인 흐름으로 이어간다.
@@ -422,6 +426,7 @@ const loginWithOAuth = async (
   profile: OAuthProfile,
   requestedRole: SignUpRole,
   agreements: TermsAgreementInput[] = [],
+  intent: OAuthIntent,
 ): Promise<AuthResponse> => {
   const existingOAuthUser = await authRepository.findByProviderAndProviderId(
     profile.provider,
@@ -434,6 +439,13 @@ const loginWithOAuth = async (
    */
   if (existingOAuthUser) {
     return createOAuthLoginResponse(existingOAuthUser, requestedRole);
+  }
+
+  // 26.08.20 김나연 - [수정] 계정 존재하지 않을 시 intent 가 login 일 경우 OAUTH_ACCOUNT_NOT_FOUND 오류를 반환한다.
+  if (intent === "login") {
+    throw new AppError(ERROR_CODES.OAUTH_ACCOUNT_NOT_FOUND.code, {
+      message: ERROR_CODES.OAUTH_ACCOUNT_NOT_FOUND.message,
+    });
   }
 
   const email = profile.email.trim().toLowerCase();
@@ -546,7 +558,7 @@ const loginWithOAuth = async (
 const loginWithGoogle = async (input: GoogleOAuthInput): Promise<AuthResponse> => {
   const profile = await googleOAuth.getGoogleOAuthProfile(input.code);
 
-  return loginWithOAuth(profile, input.role, input.agreements ?? []);
+  return loginWithOAuth(profile, input.role, input.agreements ?? [], input.intent);
 };
 
 /*
@@ -558,7 +570,7 @@ const loginWithGoogle = async (input: GoogleOAuthInput): Promise<AuthResponse> =
 const loginWithKakao = async (input: KakaoOAuthInput): Promise<AuthResponse> => {
   const profile = await kakaoOAuth.getKakaoOAuthProfile(input.code);
 
-  return loginWithOAuth(profile, input.role, input.agreements ?? []);
+  return loginWithOAuth(profile, input.role, input.agreements ?? [], input.intent);
 };
 
 /*
@@ -570,7 +582,7 @@ const loginWithKakao = async (input: KakaoOAuthInput): Promise<AuthResponse> => 
 const loginWithNaver = async (input: NaverOAuthInput): Promise<AuthResponse> => {
   const profile = await naverOAuth.getNaverOAuthProfile(input.code, input.state);
 
-  return loginWithOAuth(profile, input.role, input.agreements ?? []);
+  return loginWithOAuth(profile, input.role, input.agreements ?? [], input.intent);
 };
 
 /*
