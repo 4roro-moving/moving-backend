@@ -10,6 +10,7 @@ const suspensionHistorySelect = {
   id: true,
   action: true,
   reason: true,
+  internalNote: true,
   createdAt: true,
   admin: {
     select: {
