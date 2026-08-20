@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
+import { escapeLikePattern } from "../../../utils/search.util";
 
 import { faqRepository } from "./faq.repository";
 import type { CreateFaqInput, ListFaqQuery, UpdateFaqInput } from "./faq.type";
@@ -32,9 +33,28 @@ export const faqService = {
    * 관리자 FAQ 목록을 조회합니다. (숨김 포함, 페이지네이션)
    */
   async getFaqList(query: ListFaqQuery) {
-    const { page, limit, isVisible } = query;
+    const { page, limit, keyword, isVisible } = query;
 
     const where: Prisma.FaqWhereInput = {};
+
+    if (keyword !== undefined) {
+      const escapedKeyword = escapeLikePattern(keyword);
+
+      where.OR = [
+        {
+          question: {
+            contains: escapedKeyword,
+            mode: "insensitive",
+          },
+        },
+        {
+          answer: {
+            contains: escapedKeyword,
+            mode: "insensitive",
+          },
+        },
+      ];
+    }
 
     if (isVisible !== undefined) {
       where.isVisible = isVisible;

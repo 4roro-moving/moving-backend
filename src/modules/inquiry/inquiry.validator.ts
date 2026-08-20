@@ -71,6 +71,13 @@ export const listInquiryQuerySchema = z.object({
  * 미종료(OPEN/ANSWERED)만 보기 등 상태 필터를 지원한다.
  */
 export const adminListInquiryQuerySchema = listInquiryQuerySchema.extend({
+  keyword: z
+    .string({ error: "검색어는 문자열이어야 합니다." })
+    .trim()
+    .min(1, "검색어를 입력해 주세요.")
+    .max(100, "검색어는 100자 이하여야 합니다.")
+    .optional(),
+
   openOnly: z
     .enum(["true", "false"])
     .transform((value) => value === "true")

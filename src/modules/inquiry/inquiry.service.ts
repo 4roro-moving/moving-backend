@@ -2,6 +2,7 @@ import type { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
+import { escapeLikePattern } from "../../utils/search.util";
 import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
 
@@ -161,9 +162,16 @@ export const inquiryService = {
 export const adminInquiryService = {
   /** 관리자 문의 목록 (상태 필터 + 미종료 필터) */
   async getInquiryList(query: AdminListInquiryQuery) {
-    const { page, limit, status, openOnly } = query;
+    const { page, limit, status, openOnly, keyword } = query;
 
     const where: Prisma.InquiryWhereInput = {};
+
+    if (keyword !== undefined) {
+      where.title = {
+        contains: escapeLikePattern(keyword),
+        mode: "insensitive",
+      };
+    }
 
     if (status !== undefined) {
       where.status = status;
