@@ -7,12 +7,17 @@ import { escapeLikePattern } from "../../utils/search.util";
 import { noticeRepository } from "./notice.repository";
 import type { ListNoticeQuery, NoticeUserRole } from "./notice.type";
 
-function buildNoticeWhere(role: NoticeUserRole, keyword?: string): Prisma.NoticeWhereInput {
+function buildNoticeWhere(
+  role: NoticeUserRole | undefined,
+  keyword?: string,
+): Prisma.NoticeWhereInput {
   const where: Prisma.NoticeWhereInput = {
     isVisible: true,
-    audience: {
-      in: ["ALL", role],
-    },
+    audience: role
+      ? {
+          in: ["ALL", role],
+        }
+      : "ALL",
   };
 
   if (keyword !== undefined) {
@@ -25,8 +30,15 @@ function buildNoticeWhere(role: NoticeUserRole, keyword?: string): Prisma.Notice
   return where;
 }
 
+function canReadNotice(
+  audience: "ALL" | NoticeUserRole,
+  role: NoticeUserRole | undefined,
+): boolean {
+  return audience === "ALL" || audience === role;
+}
+
 export const noticeService = {
-  async getNoticeList(role: NoticeUserRole, query: ListNoticeQuery) {
+  async getNoticeList(role: NoticeUserRole | undefined, query: ListNoticeQuery) {
     const { page, limit, keyword } = query;
 
     const { notices, totalCount } = await noticeRepository.findManyWithCount({
@@ -36,20 +48,18 @@ export const noticeService = {
     });
 
     return {
-      notices: notices.map(({ isVisible: _isVisible, ...notice }) => notice),
+      notices,
       pagination: buildPagination(totalCount, page, limit),
     };
   },
 
-  async getNoticeById(role: NoticeUserRole, noticeId: number) {
+  async getNoticeById(role: NoticeUserRole | undefined, noticeId: number) {
     const notice = await noticeRepository.findById(noticeId);
 
-    if (!notice || !notice.isVisible || (notice.audience !== "ALL" && notice.audience !== role)) {
+    if (!notice || !notice.isVisible || !canReadNotice(notice.audience, role)) {
       throw new AppError("NOTICE_NOT_FOUND");
     }
 
-    const { isVisible: _isVisible, ...publicNotice } = notice;
-
-    return publicNotice;
+    return noticeRepository.incrementViewCount(noticeId);
   },
 };

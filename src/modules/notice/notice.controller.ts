@@ -1,32 +1,26 @@
 import type { Request, Response } from "express";
 
-import { AppError } from "../../lib/app-error";
+import { sendResponse } from "../../utils/response.util";
 
 import { noticeService } from "./notice.service";
 import type { ListNoticeQuery, NoticeIdParam, NoticeUserRole } from "./notice.type";
 
-function getNoticeUserRole(req: Request): NoticeUserRole {
-  if (!req.user) {
-    throw new AppError("UNAUTHORIZED");
+function getOptionalNoticeUserRole(req: Request): NoticeUserRole | undefined {
+  if (req.user?.role === "CUSTOMER" || req.user?.role === "MOVER") {
+    return req.user.role;
   }
 
-  if (req.user.role !== "CUSTOMER" && req.user.role !== "MOVER") {
-    throw new AppError("FORBIDDEN");
-  }
-
-  return req.user.role;
+  return undefined;
 }
 
 export const noticeController = {
   getNoticeList: async (req: Request, res: Response) => {
     const result = await noticeService.getNoticeList(
-      getNoticeUserRole(req),
+      getOptionalNoticeUserRole(req),
       res.locals.query as ListNoticeQuery,
     );
 
-    res.status(200).json({
-      success: true,
-      data: result.notices,
+    return sendResponse(res, 200, result.notices, {
       pagination: result.pagination,
     });
   },
@@ -34,11 +28,8 @@ export const noticeController = {
   getNoticeById: async (req: Request, res: Response) => {
     const { noticeId } = res.locals.params as NoticeIdParam;
 
-    const notice = await noticeService.getNoticeById(getNoticeUserRole(req), noticeId);
+    const notice = await noticeService.getNoticeById(getOptionalNoticeUserRole(req), noticeId);
 
-    res.status(200).json({
-      success: true,
-      data: notice,
-    });
+    return sendResponse(res, 200, notice);
   },
 };

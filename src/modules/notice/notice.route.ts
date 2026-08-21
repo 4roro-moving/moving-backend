@@ -1,6 +1,6 @@
 import { Router } from "express";
 
-import { authenticate, authorize } from "../../middlewares/auth";
+import { optionalAuthenticate } from "../../middlewares/auth";
 import { validate } from "../../middlewares/validate";
 import { asyncHandler } from "../../utils/async-handler.util";
 
@@ -9,7 +9,7 @@ import { listNoticeQuerySchema, noticeIdParamSchema } from "./notice.validator";
 
 const noticeRouter = Router();
 
-noticeRouter.use(authenticate, authorize("CUSTOMER", "MOVER"));
+noticeRouter.use(optionalAuthenticate);
 
 noticeRouter.get(
   "/",

@@ -3,16 +3,20 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
 
-const noticeSelect = {
+const noticeListSelect = {
   id: true,
   title: true,
   content: true,
   audience: true,
   isPinned: true,
-  isVisible: true,
   viewCount: true,
   createdAt: true,
   updatedAt: true,
+} satisfies Prisma.NoticeSelect;
+
+const noticeDetailSelect = {
+  ...noticeListSelect,
+  isVisible: true,
 } satisfies Prisma.NoticeSelect;
 
 type ListParams = {
@@ -25,7 +29,19 @@ export const noticeRepository = {
   findById(noticeId: number, db: DbClient = prisma) {
     return db.notice.findUnique({
       where: { id: noticeId },
-      select: noticeSelect,
+      select: noticeDetailSelect,
+    });
+  },
+
+  incrementViewCount(noticeId: number, db: DbClient = prisma) {
+    return db.notice.update({
+      where: { id: noticeId },
+      data: {
+        viewCount: {
+          increment: 1,
+        },
+      },
+      select: noticeListSelect,
     });
   },
 
@@ -33,7 +49,7 @@ export const noticeRepository = {
     const [notices, totalCount] = await Promise.all([
       db.notice.findMany({
         where,
-        select: noticeSelect,
+        select: noticeListSelect,
         orderBy: [{ isPinned: "desc" }, { createdAt: "desc" }, { id: "asc" }],
         skip,
         take,
