@@ -30,7 +30,7 @@ registerRouterDocs(giveawayRouter, {
       summary: "나눔 이미지 업로드 URL 발급",
       description: [
         "S3 직접 업로드용 Presigned URL과 임시 imageKey를 발급합니다.",
-        "업로드 경로는 `temp/giveaways/{userId}/{uuid}.{ext}`이며, 글 저장 성공 시 `giveaways/{userId}/...`로 이동합니다.",
+        "업로드 경로는 `temp/giveaways/{userId}/{uuid}.{ext}`이며, 글 저장 시 새로운 `giveaways/{userId}/{uuid}.{ext}`로 복사합니다.",
       ].join("\n"),
       responses: { 201: "발급 성공" },
     },

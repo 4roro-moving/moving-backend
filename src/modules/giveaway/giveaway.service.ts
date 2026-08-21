@@ -261,12 +261,12 @@ async function createGiveaway(authorId: string, input: CreateGiveawayInput) {
   await assertRegionExists(input.regionId);
 
   const tempKeys = input.imageKeys;
-  let finalizedKeys: string[] = [];
+  const finalizedKeys = await giveawayImageService.finalizeUploadedImages(authorId, tempKeys);
+
+  let giveaway;
 
   try {
-    finalizedKeys = await giveawayImageService.finalizeUploadedImages(authorId, tempKeys);
-
-    const giveaway = await runTransaction(async (tx) => {
+    giveaway = await runTransaction(async (tx) => {
       await assertRegionExists(input.regionId, tx);
 
       const createData: Parameters<typeof giveawayRepository.createGiveaway>[0] = {
@@ -282,14 +282,14 @@ async function createGiveaway(authorId: string, input: CreateGiveawayInput) {
 
       return giveawayRepository.createGiveaway(createData, tx);
     });
-
-    await cleanupTemporaryImages(authorId, tempKeys);
-
-    return toGiveawayDetail(giveaway, { id: authorId }, null);
   } catch (error) {
     await giveawayImageService.rollbackFinalizedImages(authorId, finalizedKeys);
     throw error;
   }
+
+  await cleanupTemporaryImages(authorId, tempKeys);
+
+  return toGiveawayDetail(giveaway, { id: authorId }, null);
 }
 
 async function updateGiveaway(giveawayId: number, authorId: string, input: UpdateGiveawayInput) {
@@ -311,26 +311,24 @@ async function updateGiveaway(giveawayId: number, authorId: string, input: Updat
     });
   }
 
-  let finalizedKeys: string[] = [];
+  const current = await findVisibleGiveawayOrThrow(giveawayId);
+
+  assertGiveawayAuthor(current, authorId);
+  assertGiveawayEditable(current);
+  await assertRegionExists(input.regionId);
+
+  const currentKeys = current.images.map((image) => image.imageKey);
+  const prepared = await giveawayImageService.prepareUpdatedImages(
+    authorId,
+    input.imageKeys,
+    currentKeys,
+  );
+  const newlyCopied = new Set(prepared.finalizedKeys);
+
+  let giveaway;
 
   try {
-    const current = await findVisibleGiveawayOrThrow(giveawayId);
-
-    assertGiveawayAuthor(current, authorId);
-    assertGiveawayEditable(current);
-    await assertRegionExists(input.regionId);
-
-    const currentKeys = current.images.map((image) => image.imageKey);
-    const prepared = await giveawayImageService.prepareUpdatedImages(
-      authorId,
-      input.imageKeys,
-      currentKeys,
-    );
-
-    finalizedKeys = prepared.finalizedKeys;
-    const newlyCopied = new Set(prepared.finalizedKeys);
-
-    const giveaway = await runTransaction(async (tx) => {
+    giveaway = await runTransaction(async (tx) => {
       const locked = await findGiveawayOwnershipOrThrow(giveawayId, tx);
 
       assertGiveawayAuthor(locked, authorId);
@@ -354,17 +352,17 @@ async function updateGiveaway(giveawayId: number, authorId: string, input: Updat
         tx,
       );
     });
-
-    const removedKeys = currentKeys.filter((key) => !prepared.nextKeys.includes(key));
-
-    await cleanupTemporaryImages(authorId, prepared.tempKeys);
-    await cleanupPreviousImages(authorId, removedKeys);
-
-    return toGiveawayDetail(giveaway, { id: authorId }, null);
   } catch (error) {
-    await giveawayImageService.rollbackFinalizedImages(authorId, finalizedKeys);
+    await giveawayImageService.rollbackFinalizedImages(authorId, prepared.finalizedKeys);
     throw error;
   }
+
+  const removedKeys = currentKeys.filter((key) => !prepared.nextKeys.includes(key));
+
+  await cleanupTemporaryImages(authorId, prepared.tempKeys);
+  await cleanupPreviousImages(authorId, removedKeys);
+
+  return toGiveawayDetail(giveaway, { id: authorId }, null);
 }
 
 async function deleteGiveaway(giveawayId: number, authorId: string) {

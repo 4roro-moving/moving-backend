@@ -100,16 +100,22 @@ function createCopySource(key: string): string {
   return `${getBucketName()}/${encodedKey}`;
 }
 
-function getFinalImageKey(tempKey: string): string {
-  const tempPrefix = "temp/";
-
-  if (!tempKey.startsWith(tempPrefix)) {
+function getFinalImageKey(userId: string, tempKey: string): string {
+  if (!isTemporaryImageKey(tempKey)) {
     throw new AppError("BAD_REQUEST", {
       message: "올바른 임시 나눔 이미지 Key가 아닙니다.",
     });
   }
 
-  return tempKey.slice(tempPrefix.length);
+  const extension = tempKey.slice(tempKey.lastIndexOf(".") + 1);
+
+  if (!extension || extension === tempKey) {
+    throw new AppError("BAD_REQUEST", {
+      message: "올바른 임시 나눔 이미지 Key가 아닙니다.",
+    });
+  }
+
+  return `${GIVEAWAY_IMAGE.FINAL_PREFIX}/${userId}/${randomUUID()}.${extension}`;
 }
 
 async function validateUploadedImage(userId: string, key: string): Promise<void> {
@@ -158,7 +164,7 @@ async function validateUploadedImage(userId: string, key: string): Promise<void>
 async function finalizeUploadedImage(userId: string, tempKey: string): Promise<string> {
   await validateUploadedImage(userId, tempKey);
 
-  const finalKey = getFinalImageKey(tempKey);
+  const finalKey = getFinalImageKey(userId, tempKey);
 
   try {
     await s3Client.send(

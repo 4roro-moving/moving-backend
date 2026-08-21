@@ -57,7 +57,7 @@ export const GIVEAWAY_TEXT_LENGTH = {
 export const GIVEAWAY_PAGINATION = {
   DEFAULT_LIMIT: 10,
   MAX_LIMIT: 50,
-  MAX_CURSOR_LENGTH: 500,
+  MAX_CURSOR_LENGTH: 1024,
 } as const;
 
 export const GIVEAWAY_USER_ROLE = {

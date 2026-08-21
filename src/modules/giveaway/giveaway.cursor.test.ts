@@ -13,7 +13,13 @@ import {
   toGiveawayRequestCursorQuery,
 } from "./giveaway.cursor";
 import { buildCursorCondition } from "./giveaway.repository";
-import { GIVEAWAY_LIST_SORT, GIVEAWAY_REQUEST_STATUS, GIVEAWAY_STATUS } from "./giveaway.type";
+import {
+  GIVEAWAY_LIST_SORT,
+  GIVEAWAY_PAGINATION,
+  GIVEAWAY_REQUEST_STATUS,
+  GIVEAWAY_STATUS,
+  GIVEAWAY_TEXT_LENGTH,
+} from "./giveaway.type";
 import { listGiveawayQuerySchema } from "./giveaway.validator";
 
 const createdAt = new Date("2026-08-20T00:00:00.000Z");
@@ -155,6 +161,23 @@ describe("encode/decodeGiveawayCursor", () => {
         ),
       isInvalidGiveawayCursorError,
     );
+  });
+
+  it("최대 한글 keyword를 포함한 커서는 MAX_CURSOR_LENGTH 이하다", () => {
+    const query = toGiveawayCursorQuery({
+      sort: GIVEAWAY_LIST_SORT.OLDEST,
+      status: GIVEAWAY_STATUS.IN_PROGRESS,
+      regionId: 99_999,
+      keyword: "가".repeat(GIVEAWAY_TEXT_LENGTH.KEYWORD_MAX),
+    });
+    const encoded = encodeGiveawayCursor({
+      ...query,
+      createdAt,
+      id: 2_147_483_647,
+    });
+
+    assert.ok(encoded.length <= GIVEAWAY_PAGINATION.MAX_CURSOR_LENGTH);
+    assert.equal(listGiveawayQuerySchema.parse({ cursor: encoded }).cursor, encoded);
   });
 
   it("잘못된 커서는 VALIDATION_ERROR이다", () => {
