@@ -36,8 +36,10 @@ function toInProgressEstimateItem(item: InProgressEstimateRow) {
     estimateRequestId: item.estimateRequestId,
     status: item.status,
     price: item.price,
+    customer: item.estimateRequest.customer,
     moveType: item.estimateRequest.moveType,
     moveDate: item.estimateRequest.moveDate,
+    confirmedAt: item.confirmedAt,
     // 관리자 취소는 현재 활성화된 확정 거래에만 허용됩니다.
     cancelable:
       item.status === EstimateStatus.CONFIRMED &&
@@ -57,6 +59,7 @@ function toRecentEstimateItem(item: RecentEstimateRow) {
         ? EstimateRequestStatus.COMPLETED
         : item.status,
     price: item.price,
+    customer: item.estimateRequest.customer,
     moveType: item.estimateRequest.moveType,
     moveDate: item.estimateRequest.moveDate,
     confirmedAt: item.confirmedAt,

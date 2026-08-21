@@ -60,8 +60,13 @@ export type MoverInProgressEstimateItem = {
   estimateRequestId: number;
   status: EstimateStatus;
   price: number;
+  customer: {
+    id: string;
+    name: string;
+  };
   moveType: MoveType;
   moveDate: Date;
+  confirmedAt: Date | null;
   cancelable: boolean;
   /** 기사가 견적을 전송한 시각입니다. */
   createdAt: Date;
@@ -75,6 +80,10 @@ export type MoverRecentEstimateItem = {
   estimateRequestId: number;
   status: MoverEstimateActivityStatus;
   price: number;
+  customer: {
+    id: string;
+    name: string;
+  };
   moveType: MoveType;
   moveDate: Date;
   confirmedAt: Date | null;

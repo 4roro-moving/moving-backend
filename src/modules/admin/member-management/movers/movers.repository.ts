@@ -53,9 +53,16 @@ const inProgressEstimateSelect = {
   estimateRequestId: true,
   status: true,
   price: true,
+  confirmedAt: true,
   createdAt: true,
   estimateRequest: {
     select: {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       moveType: true,
       moveDate: true,
       status: true,
@@ -76,6 +83,12 @@ const recentEstimateSelect = {
   createdAt: true,
   estimateRequest: {
     select: {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
       moveType: true,
       moveDate: true,
       status: true,
