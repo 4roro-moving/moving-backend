@@ -9,6 +9,10 @@ import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { getImageUrl } from "../../utils/image-url";
 import { isPastInKst } from "../../utils/kst";
+import {
+  lockEstimateForUpdate,
+  lockEstimateRequestForUpdate,
+} from "../../utils/estimate-request-lock.util";
 import { runTransaction } from "../../utils/transaction";
 import { resolveEstimateMoveDate } from "../estimate/estimate-date";
 import { resolveMoveDate } from "../estimate-request/estimateRequest.policy";
@@ -421,6 +425,15 @@ export const chatService = {
     assertChatRoomActive(room.estimate);
 
     const message = await runTransaction(async (tx) => {
+      const requestLocked = await lockEstimateRequestForUpdate(tx, room.estimateRequestId);
+      const estimateLocked = await lockEstimateForUpdate(tx, room.estimateId);
+
+      if (!requestLocked || !estimateLocked) {
+        throw new AppError("NOT_FOUND", {
+          message: "채팅방을 찾을 수 없습니다.",
+        });
+      }
+
       const currentRoom = await chatRepository.findRoomForRevision(roomId, tx);
 
       if (!currentRoom) {
@@ -465,6 +478,15 @@ export const chatService = {
     const finalImageKey = await chatImageService.finalizeUploadedImage(senderId, roomId, imageKey);
 
     const message = await runTransaction(async (tx) => {
+      const requestLocked = await lockEstimateRequestForUpdate(tx, room.estimateRequestId);
+      const estimateLocked = await lockEstimateForUpdate(tx, room.estimateId);
+
+      if (!requestLocked || !estimateLocked) {
+        throw new AppError("NOT_FOUND", {
+          message: "채팅방을 찾을 수 없습니다.",
+        });
+      }
+
       const currentRoom = await chatRepository.findRoomForRevision(roomId, tx);
 
       if (!currentRoom) {
