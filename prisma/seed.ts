@@ -106,32 +106,41 @@ async function main(): Promise<void> {
   );
 
   await loadMany("users", prisma.user, userBundle.rows.users as never[]);
+
+  await loadMany("admin_profiles", prisma.adminProfile, userBundle.rows.adminProfiles as never[]);
+
   await loadMany(
     "customer_profiles",
     prisma.customerProfile,
     userBundle.rows.customerProfiles as never[],
   );
+
   await loadMany("mover_profiles", prisma.moverProfile, userBundle.rows.moverProfiles as never[]);
+
   await loadMany(
     "customer_service_areas",
     prisma.customerServiceArea,
     userBundle.rows.customerServiceAreas as never[],
   );
+
   await loadMany(
     "customer_service_types",
     prisma.customerServiceType,
     userBundle.rows.customerServiceTypes as never[],
   );
+
   await loadMany(
     "mover_service_areas",
     prisma.moverServiceArea,
     userBundle.rows.moverServiceAreas as never[],
   );
+
   await loadMany(
     "mover_service_types",
     prisma.moverServiceType,
     userBundle.rows.moverServiceTypes as never[],
   );
+
   await loadMany(
     "mover_unavailable_dates",
     prisma.moverUnavailableDate,
@@ -141,6 +150,7 @@ async function main(): Promise<void> {
   /* ── 3. 약관 + 동의 이력 ────────────────────────────────────────── */
 
   section("약관");
+
   const termsResult = generateTerms(
     userBundle.admins,
     [...userBundle.customers, ...userBundle.movers],
@@ -148,6 +158,7 @@ async function main(): Promise<void> {
   );
 
   await loadMany("terms", prisma.terms, termsResult.rows.terms as never[]);
+
   await loadMany(
     "terms_agreements",
     prisma.termsAgreement,
@@ -164,7 +175,10 @@ async function main(): Promise<void> {
     regions,
     userBundle.customers,
     userBundle.movers,
-    userBundle.rows.moverUnavailableDates as { moverId: string; date: Date }[],
+    userBundle.rows.moverUnavailableDates as {
+      moverId: string;
+      date: Date;
+    }[],
     now,
   );
 
@@ -177,17 +191,21 @@ async function main(): Promise<void> {
     prisma.estimateRequest,
     flow.rows.estimateRequests as never[],
   );
+
   await loadMany(
     "estimate_request_histories",
     prisma.estimateRequestHistory,
     flow.rows.estimateRequestHistories as never[],
   );
+
   await loadMany(
     "designated_movers",
     prisma.designatedMover,
     flow.rows.designatedMovers as never[],
   );
+
   await loadMany("estimates", prisma.estimate, flow.rows.estimates as never[]);
+
   await loadMany(
     "estimate_request_rejections",
     prisma.estimateRequestRejection,
@@ -198,12 +216,15 @@ async function main(): Promise<void> {
   await linkConfirmedEstimates(prisma, flow.confirmedLinks);
 
   await loadMany("reviews", prisma.review, flow.rows.reviews as never[]);
+
   await loadMany("chat_rooms", prisma.chatRoom, flow.rows.chatRooms as never[]);
+
   await loadMany("chat_messages", prisma.chatMessage, flow.rows.chatMessages as never[]);
 
   /* ── 5. 커뮤니티 ────────────────────────────────────────────────── */
 
   section("커뮤니티");
+
   const community = generateCommunity(
     config,
     regions,
@@ -213,18 +234,23 @@ async function main(): Promise<void> {
   );
 
   await loadMany("favorite_movers", prisma.favoriteMover, community.rows.favoriteMovers as never[]);
+
   await loadMany(
     "residence_reviews",
     prisma.residenceReview,
     community.rows.residenceReviews as never[],
   );
+
   await loadMany(
     "region_review_statistics",
     prisma.regionReviewStatistic,
     community.rows.regionReviewStatistics as never[],
   );
+
   await loadMany("giveaways", prisma.giveaway, community.rows.giveaways as never[]);
+
   await loadMany("giveaway_images", prisma.giveawayImage, community.rows.giveawayImages as never[]);
+
   await loadMany(
     "giveaway_requests",
     prisma.giveawayRequest,
@@ -235,7 +261,11 @@ async function main(): Promise<void> {
 
   section("관리자 콘텐츠");
 
-  const reviewRows = flow.rows.reviews as { id: number; isHidden: boolean; createdAt: Date }[];
+  const reviewRows = flow.rows.reviews as {
+    id: number;
+    isHidden: boolean;
+    createdAt: Date;
+  }[];
 
   const adminContent = generateAdminContent(
     config,
@@ -243,14 +273,31 @@ async function main(): Promise<void> {
     userBundle.customers,
     userBundle.movers,
     {
-      reviews: reviewRows.map((r) => ({ id: r.id, createdAt: r.createdAt })),
+      reviews: reviewRows.map((r) => ({
+        id: r.id,
+        createdAt: r.createdAt,
+      })),
       hiddenReviews: reviewRows
         .filter((r) => r.isHidden)
-        .map((r) => ({ id: r.id, createdAt: r.createdAt })),
-      residenceReviews: (community.rows.residenceReviews as { id: number; createdAt: Date }[]).map(
-        (r) => ({ id: r.id, createdAt: r.createdAt }),
-      ),
-      giveaways: (community.rows.giveaways as { id: number; createdAt: Date }[]).map((g) => ({
+        .map((r) => ({
+          id: r.id,
+          createdAt: r.createdAt,
+        })),
+      residenceReviews: (
+        community.rows.residenceReviews as {
+          id: number;
+          createdAt: Date;
+        }[]
+      ).map((r) => ({
+        id: r.id,
+        createdAt: r.createdAt,
+      })),
+      giveaways: (
+        community.rows.giveaways as {
+          id: number;
+          createdAt: Date;
+        }[]
+      ).map((g) => ({
         id: g.id,
         createdAt: g.createdAt,
       })),
@@ -260,25 +307,33 @@ async function main(): Promise<void> {
   );
 
   await loadMany("notices", prisma.notice, adminContent.rows.notices as never[]);
+
   await loadMany("faqs", prisma.faq, adminContent.rows.faqs as never[]);
+
   await loadMany("inquiries", prisma.inquiry, adminContent.rows.inquiries as never[]);
+
   await loadMany(
     "inquiry_messages",
     prisma.inquiryMessage,
     adminContent.rows.inquiryMessages as never[],
   );
+
   await loadMany("reports", prisma.report, adminContent.rows.reports as never[]);
+
   await loadMany(
     "user_suspensions",
     prisma.userSuspension,
     adminContent.rows.userSuspensions as never[],
   );
+
   await loadMany("activity_logs", prisma.activityLog, adminContent.rows.activityLogs as never[]);
 
   /* ── 7. 알림 ────────────────────────────────────────────────────── */
 
   section("알림");
+
   const notifications = generateNotifications(userBundle.customers, userBundle.movers, now);
+
   await loadMany("notifications", prisma.notification, notifications as never[]);
 
   /* ── 8. 비정규화 캐시 정리 ──────────────────────────────────────── */
