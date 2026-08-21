@@ -56,6 +56,7 @@ const inProgressEstimateSelect = {
   createdAt: true,
   estimateRequest: {
     select: {
+      moveType: true,
       moveDate: true,
       status: true,
       isActive: true,
@@ -66,10 +67,20 @@ const inProgressEstimateSelect = {
 
 const recentEstimateSelect = {
   id: true,
+  estimateRequestId: true,
   status: true,
   price: true,
   confirmedAt: true,
-  estimateRequest: { select: { status: true } },
+  expiredAt: true,
+  canceledAt: true,
+  createdAt: true,
+  estimateRequest: {
+    select: {
+      moveType: true,
+      moveDate: true,
+      status: true,
+    },
+  },
 } satisfies Prisma.EstimateSelect;
 
 const reviewHistorySelect = {
