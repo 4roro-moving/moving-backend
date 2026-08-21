@@ -8,12 +8,16 @@ import {
   UserRole,
 } from "@prisma/client";
 
+import { comparePassword, hashPassword } from "../../utils/password";
+
 import { authRepository } from "./auth.repository";
 import { googleOAuth } from "./oauth/google.oauth";
 import { kakaoOAuth } from "./oauth/kakao.oauth";
 import { naverOAuth } from "./oauth/naver.oauth";
 
 import type { AuthResponse, IssuedAuthTokens, OAuthProfile, RefreshResponse } from "./auth.type";
+
+import { isUniqueConstraintError } from "../../utils/prisma-error";
 
 import type {
   GoogleOAuthInput,
@@ -42,7 +46,6 @@ import { runTransaction } from "../../utils/transaction";
 import { termsService } from "../terms/terms.service";
 import type { TermsAgreementInput } from "../terms/terms.type";
 
-const PASSWORD_SALT_ROUNDS = 10;
 const REFRESH_TOKEN_RETENTION_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -60,31 +63,6 @@ const getAuthProviderName = (provider: AuthProvider): string => {
 };
 
 type SignUpRole = typeof UserRole.CUSTOMER | typeof UserRole.MOVER;
-
-/*
- * Prisma P2002 UNIQUE 제약조건 에러인지 확인하고,
- * 어떤 필드에서 발생했는지 판별한다.
- *
- * 회원가입 전 중복 조회는 빠른 응답을 위한 처리이며,
- * 실제 동시 가입 요청을 막는 것은 DB의 UNIQUE 제약조건이다.
- */
-const isUniqueConstraintError = (
-  error: unknown,
-  fieldName: string,
-): error is Prisma.PrismaClientKnownRequestError => {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
-    return false;
-  }
-
-  const target = error.meta?.target;
-  const normalizedFieldName = fieldName.toLowerCase();
-
-  if (Array.isArray(target)) {
-    return target.some((field) => String(field).toLowerCase() === normalizedFieldName);
-  }
-
-  return String(target).toLowerCase().includes(normalizedFieldName);
-};
 
 /*
  * Access Token과 Refresh Token을 발급하고,
@@ -156,7 +134,7 @@ const createLocalUser = async (input: SignUpInput, role: SignUpRole): Promise<Au
    * bcrypt 연산은 트랜잭션 밖에서 처리한다.
    * DB 트랜잭션이 커넥션을 점유하는 시간을 줄이기 위함이다.
    */
-  const hashedPassword = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
+  const hashedPassword = await hashPassword(password);
 
   try {
     return await runTransaction(async (tx) => {
@@ -292,7 +270,7 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
     });
   }
 
-  const isPasswordMatched = await bcrypt.compare(input.password, user.password);
+  const isPasswordMatched = await comparePassword(input.password, user.password);
 
   if (!isPasswordMatched) {
     throw new AppError("UNAUTHORIZED", {
