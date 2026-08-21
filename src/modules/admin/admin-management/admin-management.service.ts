@@ -8,8 +8,11 @@ import {
 import { AppError } from "../../../lib/app-error";
 
 import { buildPagination } from "../../../utils/pagination.util";
+
 import { hashPassword } from "../../../utils/password";
+
 import { isUniqueConstraintError } from "../../../utils/prisma-error";
+
 import { runTransaction } from "../../../utils/transaction";
 
 import { authRepository } from "../../auth/auth.repository";
@@ -17,6 +20,7 @@ import { authRepository } from "../../auth/auth.repository";
 import { adminManagementRepository } from "./admin-management.repository";
 
 import type {
+  AdminDetail,
   AdminListItem,
   CreateAdminBody,
   CreateAdminResponse,
@@ -67,6 +71,45 @@ export const adminManagementService = {
     return {
       items,
       pagination: buildPagination(totalCount, page, limit),
+    };
+  },
+
+  /**
+   * SUPER_ADMIN이 일반 ADMIN의 상세 정보를 조회합니다.
+   *
+   * SUPER_ADMIN은 관리 대상에서 제외하며,
+   * 관리자 기본 정보와 최근 정지/해제 이력 5건을 함께 반환합니다.
+   */
+  async getAdminDetail(adminId: string): Promise<AdminDetail> {
+    const admin = await adminManagementRepository.findAdminDetailById(adminId);
+
+    if (!admin) {
+      throw new AppError("USER_NOT_FOUND", {
+        message: "해당 관리자 계정을 찾을 수 없습니다.",
+      });
+    }
+
+    /**
+     * Repository에서 AdminRole.ADMIN인 관리자만 조회하므로
+     * 정상적인 데이터라면 AdminProfile은 반드시 존재합니다.
+     */
+    if (!admin.adminProfile) {
+      throw new AppError("INTERNAL_SERVER_ERROR", {
+        message: "관리자 권한 정보를 확인할 수 없습니다.",
+      });
+    }
+
+    const suspensionHistory = await adminManagementRepository.findAdminSuspensionHistory(adminId);
+
+    return {
+      id: admin.id,
+      email: admin.email,
+      name: admin.name,
+      phone: admin.phone,
+      adminRole: admin.adminProfile.adminRole,
+      isActive: admin.isActive,
+      createdAt: admin.createdAt,
+      suspensionHistory,
     };
   },
 

@@ -202,10 +202,90 @@ export const adminManagementRepository = {
   },
 
   /**
+   * 일반 ADMIN 상세 정보를 조회합니다.
+   *
+   * 관리자 계정 관리 대상인 AdminRole.ADMIN만 조회하며,
+   * SUPER_ADMIN은 상세 조회 대상에서 제외합니다.
+   */
+  findAdminDetailById(id: string, db: DbClient = prisma) {
+    return db.user.findFirst({
+      where: {
+        id,
+        role: UserRole.ADMIN,
+        deletedAt: null,
+        adminProfile: {
+          is: {
+            adminRole: AdminRole.ADMIN,
+          },
+        },
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        phone: true,
+        isActive: true,
+        createdAt: true,
+        adminProfile: {
+          select: {
+            adminRole: true,
+          },
+        },
+      },
+    });
+  },
+
+  /**
+   * 일반 ADMIN의 정지/해제 이력을 조회합니다.
+   *
+   * 상세 화면에서는 최근 5건만 노출하지만,
+   * 전체 이력 개수도 함께 반환합니다.
+   */
+  async findAdminSuspensionHistory(adminId: string, db: DbClient = prisma) {
+    const [items, totalCount] = await Promise.all([
+      db.userSuspension.findMany({
+        where: {
+          userId: adminId,
+        },
+        orderBy: [
+          {
+            createdAt: "desc",
+          },
+          {
+            id: "desc",
+          },
+        ],
+        take: 5,
+        select: {
+          id: true,
+          action: true,
+          reason: true,
+          adminId: true,
+          createdAt: true,
+        },
+      }),
+
+      db.userSuspension.count({
+        where: {
+          userId: adminId,
+        },
+      }),
+    ]);
+
+    return {
+      items,
+      totalCount,
+    };
+  },
+
+  /**
    * 관리자 상태 변경에 필요한 대상 관리자 정보를 조회합니다.
    *
    * User.role = ADMIN인 계정만 조회하며,
    * AdminProfile을 함께 조회해 SUPER_ADMIN 여부를 확인할 수 있도록 합니다.
+   *
+   * 상태 변경에서는 SUPER_ADMIN 여부를 Service에서 명시적으로 판단해야 하므로
+   * 여기서는 AdminRole.ADMIN으로 제한하지 않습니다.
    */
   findAdminById(id: string, db: DbClient = prisma) {
     return db.user.findFirst({

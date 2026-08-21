@@ -12,6 +12,7 @@ registerRouterDocs(adminManagementRouter, {
   basePath: "/api/admin/admins",
   tag: "Admin Management",
   headers: authHeaderSchema,
+
   commonResponses: {
     401: "인증이 필요합니다.",
     403: "해당 요청을 수행할 관리자 권한이 없습니다.",
@@ -19,7 +20,11 @@ registerRouterDocs(adminManagementRouter, {
     409: "이미 요청한 상태로 처리된 관리자 계정입니다.",
     422: "입력값이 올바르지 않습니다.",
   },
+
   endpoints: {
+    /**
+     * 일반 관리자 목록 조회
+     */
     "GET /": {
       summary: "일반 관리자 목록 조회",
       description: [
@@ -42,6 +47,35 @@ registerRouterDocs(adminManagementRouter, {
       },
     },
 
+    /**
+     * 일반 관리자 상세 조회
+     */
+    "GET /:id": {
+      summary: "일반 관리자 상세 조회",
+      description: [
+        "SUPER_ADMIN이 관리 대상인 일반 ADMIN의 상세 정보를 조회합니다.",
+        "",
+        "- SUPER_ADMIN만 호출할 수 있습니다.",
+        "- 대상은 `AdminRole.ADMIN`인 일반 관리자만 가능합니다.",
+        "- SUPER_ADMIN 계정은 일반 관리자 관리 대상에서 제외됩니다.",
+        "- 관리자 ID는 UUID 형식이어야 합니다.",
+        "- 관리자 이름, 이메일, 휴대전화 번호, 활성 상태, 생성일을 조회합니다.",
+        "- 현재 상태는 User.isActive 값을 기준으로 판단합니다.",
+        "- 해당 관리자의 정지/해제 이력(UserSuspension)을 함께 조회합니다.",
+        "- 정지/해제 이력은 최신순으로 최대 5건을 반환합니다.",
+        "- suspensionHistory.totalCount를 통해 전체 정지/해제 이력 개수를 확인할 수 있습니다.",
+      ].join("\n"),
+      responses: {
+        200: "관리자 상세 조회 성공",
+        403: "SUPER_ADMIN 권한이 없습니다.",
+        404: "해당 관리자 계정을 찾을 수 없습니다.",
+        422: "관리자 ID가 올바르지 않습니다.",
+      },
+    },
+
+    /**
+     * 일반 관리자 계정 생성
+     */
     "POST /": {
       summary: "일반 관리자 계정 생성",
       description: [
@@ -63,6 +97,9 @@ registerRouterDocs(adminManagementRouter, {
       },
     },
 
+    /**
+     * 일반 관리자 계정 정지/해제
+     */
     "PATCH /:id/status": {
       summary: "일반 관리자 계정 정지/해제",
       description: [

@@ -1,4 +1,5 @@
-import type { AdminRole } from "@prisma/client";
+import type { AdminRole, SuspensionAction } from "@prisma/client";
+
 import type { z } from "zod";
 
 import type {
@@ -47,4 +48,26 @@ export type AdminListItem = {
   adminRole: AdminRole;
   isActive: boolean;
   createdAt: Date;
+};
+
+export type AdminSuspensionHistoryItem = {
+  id: number;
+  action: SuspensionAction;
+  reason: string;
+  adminId: string;
+  createdAt: Date;
+};
+
+export type AdminDetail = {
+  id: string;
+  email: string;
+  name: string;
+  phone: string | null;
+  adminRole: AdminRole;
+  isActive: boolean;
+  createdAt: Date;
+  suspensionHistory: {
+    totalCount: number;
+    items: AdminSuspensionHistoryItem[];
+  };
 };

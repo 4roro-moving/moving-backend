@@ -25,6 +25,15 @@ export const adminManagementController = {
     });
   },
 
+  // GET /api/admin/admins/:id
+  getAdminDetail: async (_req: Request, res: Response) => {
+    const { id } = res.locals.params as AdminIdParam;
+
+    const result = await adminManagementService.getAdminDetail(id);
+
+    return sendResponse(res, 200, result);
+  },
+
   // POST /api/admin/admins
   createAdmin: async (req: Request, res: Response) => {
     const input = req.body as CreateAdminBody;
