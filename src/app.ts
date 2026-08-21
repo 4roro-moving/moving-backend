@@ -44,6 +44,7 @@ import { adminInquiryRouter, inquiryRouter } from "./modules/inquiry/inquiry.rou
 import { adminAuthRouter } from "./modules/admin/auth/admin-auth.route";
 import { adminTermsRouter, publicTermsRouter } from "./modules/terms/terms.route";
 import { adminReportRouter } from "./modules/admin/reports/reports.route";
+import adminManagementRouter from "./modules/admin/admin-management/admin-management.route";
 
 // Swagger UI로 전환할 때 사용
 // import type { RequestHandler } from "express";

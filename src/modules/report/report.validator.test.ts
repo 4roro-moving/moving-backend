@@ -134,4 +134,53 @@ describe("createReportSchema", () => {
 
     assert.equal(result.success, true);
   });
+
+  it("accepts up to 5 image keys", () => {
+    const result = createReportSchema.safeParse({
+      targetType: "MOVER",
+      targetId: "6F9619FF-8B86-4D11-B42D-00CF4FC964FF",
+      reason: "SPAM",
+      imageKeys: [
+        "temp/reports/11111111-1111-4111-8111-111111111111/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg",
+        "temp/reports/11111111-1111-4111-8111-111111111111/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.png",
+        "temp/reports/11111111-1111-4111-8111-111111111111/cccccccc-cccc-4ccc-8ccc-cccccccccccc.webp",
+        "temp/reports/11111111-1111-4111-8111-111111111111/dddddddd-dddd-4ddd-8ddd-dddddddddddd.jpg",
+        "temp/reports/11111111-1111-4111-8111-111111111111/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee.png",
+      ],
+    });
+
+    assert.equal(result.success, true);
+  });
+
+  it("fails when imageKeys exceed 5", () => {
+    const result = createReportSchema.safeParse({
+      targetType: "MOVER",
+      targetId: "6F9619FF-8B86-4D11-B42D-00CF4FC964FF",
+      reason: "SPAM",
+      imageKeys: [
+        "temp/reports/11111111-1111-4111-8111-111111111111/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg",
+        "temp/reports/11111111-1111-4111-8111-111111111111/bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb.png",
+        "temp/reports/11111111-1111-4111-8111-111111111111/cccccccc-cccc-4ccc-8ccc-cccccccccccc.webp",
+        "temp/reports/11111111-1111-4111-8111-111111111111/dddddddd-dddd-4ddd-8ddd-dddddddddddd.jpg",
+        "temp/reports/11111111-1111-4111-8111-111111111111/eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee.png",
+        "temp/reports/11111111-1111-4111-8111-111111111111/ffffffff-ffff-4fff-8fff-ffffffffffff.webp",
+      ],
+    });
+
+    assert.equal(result.success, false);
+  });
+
+  it("fails when imageKeys contain duplicates", () => {
+    const result = createReportSchema.safeParse({
+      targetType: "MOVER",
+      targetId: "6F9619FF-8B86-4D11-B42D-00CF4FC964FF",
+      reason: "SPAM",
+      imageKeys: [
+        "temp/reports/11111111-1111-4111-8111-111111111111/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg",
+        "temp/reports/11111111-1111-4111-8111-111111111111/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg",
+      ],
+    });
+
+    assert.equal(result.success, false);
+  });
 });

@@ -70,3 +70,7 @@ export interface ProfileResponse {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export interface MyProfileResponse extends ProfileResponse {
+  completedCount: number;
+}

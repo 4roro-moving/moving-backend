@@ -8,6 +8,8 @@ import {
   UserRole,
 } from "@prisma/client";
 
+import { comparePassword, hashPassword } from "../../utils/password";
+
 import { authRepository } from "./auth.repository";
 import { googleOAuth } from "./oauth/google.oauth";
 import { kakaoOAuth } from "./oauth/kakao.oauth";
@@ -15,11 +17,14 @@ import { naverOAuth } from "./oauth/naver.oauth";
 
 import type { AuthResponse, IssuedAuthTokens, OAuthProfile, RefreshResponse } from "./auth.type";
 
+import { isUniqueConstraintError } from "../../utils/prisma-error";
+
 import type {
   GoogleOAuthInput,
   KakaoOAuthInput,
   NaverOAuthInput,
   LoginInput,
+  OAuthIntent,
   SignUpInput,
 } from "./auth.validator";
 
@@ -41,8 +46,8 @@ import { runTransaction } from "../../utils/transaction";
 
 import { termsService } from "../terms/terms.service";
 import type { TermsAgreementInput } from "../terms/terms.type";
+import { ERROR_CODES } from "../../constants/error-code";
 
-const PASSWORD_SALT_ROUNDS = 10;
 const REFRESH_TOKEN_RETENTION_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -60,31 +65,6 @@ const getAuthProviderName = (provider: AuthProvider): string => {
 };
 
 type SignUpRole = typeof UserRole.CUSTOMER | typeof UserRole.MOVER;
-
-/*
- * Prisma P2002 UNIQUE 제약조건 에러인지 확인하고,
- * 어떤 필드에서 발생했는지 판별한다.
- *
- * 회원가입 전 중복 조회는 빠른 응답을 위한 처리이며,
- * 실제 동시 가입 요청을 막는 것은 DB의 UNIQUE 제약조건이다.
- */
-const isUniqueConstraintError = (
-  error: unknown,
-  fieldName: string,
-): error is Prisma.PrismaClientKnownRequestError => {
-  if (!(error instanceof Prisma.PrismaClientKnownRequestError) || error.code !== "P2002") {
-    return false;
-  }
-
-  const target = error.meta?.target;
-  const normalizedFieldName = fieldName.toLowerCase();
-
-  if (Array.isArray(target)) {
-    return target.some((field) => String(field).toLowerCase() === normalizedFieldName);
-  }
-
-  return String(target).toLowerCase().includes(normalizedFieldName);
-};
 
 /*
  * Access Token과 Refresh Token을 발급하고,
@@ -156,7 +136,7 @@ const createLocalUser = async (input: SignUpInput, role: SignUpRole): Promise<Au
    * bcrypt 연산은 트랜잭션 밖에서 처리한다.
    * DB 트랜잭션이 커넥션을 점유하는 시간을 줄이기 위함이다.
    */
-  const hashedPassword = await bcrypt.hash(password, PASSWORD_SALT_ROUNDS);
+  const hashedPassword = await hashPassword(password);
 
   try {
     return await runTransaction(async (tx) => {
@@ -292,7 +272,7 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
     });
   }
 
-  const isPasswordMatched = await bcrypt.compare(input.password, user.password);
+  const isPasswordMatched = await comparePassword(input.password, user.password);
 
   if (!isPasswordMatched) {
     throw new AppError("UNAUTHORIZED", {
@@ -412,8 +392,10 @@ const createOAuthLoginResponse = async (
 /*
  * OAuth 로그인 공통 처리
  *
- * provider와 providerUserId가 일치하는 사용자가 있으면 로그인하고,
- * 없으면 이메일 중복 여부를 확인한 뒤 신규 OAuth 사용자를 생성한다.
+ * provider와 providerUserId가 일치하는 사용자가 있으면 intent와 상관없이 로그인한다.
+ * 계정이 없으면 intent에 따라 분기한다.
+ * - login: 가입하지 않고 OAUTH_ACCOUNT_NOT_FOUND를 반환한다.
+ * - signup: 이메일 중복 여부를 확인한 뒤 신규 OAuth 사용자를 생성한다.
  *
  * 동일한 OAuth 계정으로 요청이 동시에 들어와 신규 생성이 충돌한 경우에는
  * 충돌 후 해당 계정을 다시 조회하여 기존 사용자 로그인 흐름으로 이어간다.
@@ -422,6 +404,7 @@ const loginWithOAuth = async (
   profile: OAuthProfile,
   requestedRole: SignUpRole,
   agreements: TermsAgreementInput[] = [],
+  intent: OAuthIntent,
 ): Promise<AuthResponse> => {
   const existingOAuthUser = await authRepository.findByProviderAndProviderId(
     profile.provider,
@@ -434,6 +417,13 @@ const loginWithOAuth = async (
    */
   if (existingOAuthUser) {
     return createOAuthLoginResponse(existingOAuthUser, requestedRole);
+  }
+
+  // 26.08.20 김나연 - [수정] 계정 존재하지 않을 시 intent 가 login 일 경우 OAUTH_ACCOUNT_NOT_FOUND 오류를 반환한다.
+  if (intent === "login") {
+    throw new AppError(ERROR_CODES.OAUTH_ACCOUNT_NOT_FOUND.code, {
+      message: ERROR_CODES.OAUTH_ACCOUNT_NOT_FOUND.message,
+    });
   }
 
   const email = profile.email.trim().toLowerCase();
@@ -546,7 +536,7 @@ const loginWithOAuth = async (
 const loginWithGoogle = async (input: GoogleOAuthInput): Promise<AuthResponse> => {
   const profile = await googleOAuth.getGoogleOAuthProfile(input.code);
 
-  return loginWithOAuth(profile, input.role, input.agreements ?? []);
+  return loginWithOAuth(profile, input.role, input.agreements ?? [], input.intent);
 };
 
 /*
@@ -558,7 +548,7 @@ const loginWithGoogle = async (input: GoogleOAuthInput): Promise<AuthResponse> =
 const loginWithKakao = async (input: KakaoOAuthInput): Promise<AuthResponse> => {
   const profile = await kakaoOAuth.getKakaoOAuthProfile(input.code);
 
-  return loginWithOAuth(profile, input.role, input.agreements ?? []);
+  return loginWithOAuth(profile, input.role, input.agreements ?? [], input.intent);
 };
 
 /*
@@ -570,7 +560,7 @@ const loginWithKakao = async (input: KakaoOAuthInput): Promise<AuthResponse> => 
 const loginWithNaver = async (input: NaverOAuthInput): Promise<AuthResponse> => {
   const profile = await naverOAuth.getNaverOAuthProfile(input.code, input.state);
 
-  return loginWithOAuth(profile, input.role, input.agreements ?? []);
+  return loginWithOAuth(profile, input.role, input.agreements ?? [], input.intent);
 };
 
 /*

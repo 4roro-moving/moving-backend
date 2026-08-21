@@ -50,6 +50,11 @@ export interface AdminReportListItem {
   updatedAt: Date;
 }
 
+export interface AdminReportImageItem {
+  id: number;
+  imageUrl: string;
+}
+
 export interface AdminReviewReportTarget {
   type: "REVIEW";
   id: number;
@@ -129,4 +134,5 @@ export type AdminReportTarget =
 
 export interface AdminReportDetail extends AdminReportListItem {
   target: AdminReportTarget | null;
+  images: AdminReportImageItem[];
 }

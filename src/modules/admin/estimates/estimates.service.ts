@@ -77,16 +77,6 @@ async function createCancellationSideEffects({
     expiresAt: null,
     sourceId: notificationSourceId,
   }));
-  // 다른 기사의 채팅방에는 안내하지 않고, 취소된 확정 견적의 채팅방만 대상으로 합니다.
-  const chatRoomIds = estimate.chatRoom ? [estimate.chatRoom.id] : [];
-  const systemMessages: Prisma.ChatMessageCreateManyInput[] = chatRoomIds.map((roomId) => ({
-    roomId,
-    // SYSTEM 메시지는 고객·기사·관리자 중 누구의 발화도 아니므로 발신자를 두지 않습니다.
-    senderId: null,
-    type: "SYSTEM",
-    content: "관리자 확인으로 확정된 견적 거래가 취소되었습니다.",
-  }));
-
   await adminEstimatesRepository.cancelPendingRevisions(estimate.id, tx);
   await adminEstimatesRepository.createRequestCancellationHistory(
     {
@@ -107,8 +97,6 @@ async function createCancellationSideEffects({
     },
     tx,
   );
-  await adminEstimatesRepository.createSystemMessages(systemMessages, tx);
-  await adminEstimatesRepository.updateChatRoomsLastMessageAt(chatRoomIds, canceledAt, tx);
   const createdNotifications = await adminEstimatesRepository.createNotifications(
     notifications,
     tx,
@@ -176,7 +164,6 @@ export const adminEstimatesService = {
     for (const { userId, ...notification } of createdNotifications) {
       notificationService.sendNotification(userId, notification);
     }
-
     return result;
   },
 };

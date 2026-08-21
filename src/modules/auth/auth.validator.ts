@@ -1,11 +1,12 @@
 import { UserRole } from "@prisma/client";
+
 import { z } from "zod";
 
 import { termsAgreementsSchema } from "../terms/terms.validator";
 
 const BCRYPT_PASSWORD_MAX_BYTES = 72;
 
-const emailSchema = z
+export const emailSchema = z
   .string({
     error: "이메일을 입력해주세요.",
   })
@@ -21,7 +22,7 @@ const emailSchema = z
   })
   .transform((email) => email.toLowerCase());
 
-const passwordSchema = z
+export const passwordSchema = z
   .string({
     error: "비밀번호를 입력해주세요.",
   })
@@ -46,7 +47,7 @@ const loginPasswordSchema = z
     error: "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다.",
   });
 
-const nameSchema = z
+export const nameSchema = z
   .string({
     error: "이름을 입력해주세요.",
   })
@@ -58,7 +59,7 @@ const nameSchema = z
     error: "이름은 50자 이하여야 합니다.",
   });
 
-const phoneSchema = z
+export const phoneSchema = z
   .string({
     error: "휴대전화 번호를 입력해주세요.",
   })
@@ -90,6 +91,14 @@ const userRoleSchema = z.enum([UserRole.CUSTOMER, UserRole.MOVER], {
   error: "회원 역할은 CUSTOMER 또는 MOVER여야 합니다.",
 });
 
+/*
+ * 로그인 페이지와 회원가입 페이지의 OAuth 요청을 구분한다.
+ * login: 기존 회원만 로그인 / signup: 없으면 신규 생성
+ */
+const oauthIntentSchema = z.enum(["login", "signup"], {
+  error: "OAuth intent는 login 또는 signup이어야 합니다.",
+});
+
 export const signUpSchema = z.strictObject({
   email: emailSchema,
   password: passwordSchema,
@@ -104,7 +113,7 @@ export const loginSchema = z.strictObject({
   role: userRoleSchema,
 });
 
-/*
+/**
  * Google OAuth Authorization Code 로그인 요청
  *
  * role은 신규 OAuth 회원 생성 시에만 사용한다.
@@ -117,9 +126,10 @@ export const googleOAuthSchema = z.strictObject({
   code: authorizationCodeSchema,
   role: userRoleSchema,
   agreements: termsAgreementsSchema.optional(),
+  intent: oauthIntentSchema,
 });
 
-/*
+/**
  * Kakao OAuth Authorization Code 로그인 요청
  *
  * role은 신규 OAuth 회원 생성 시에만 사용한다.
@@ -132,9 +142,10 @@ export const kakaoOAuthSchema = z.strictObject({
   code: authorizationCodeSchema,
   role: userRoleSchema,
   agreements: termsAgreementsSchema.optional(),
+  intent: oauthIntentSchema,
 });
 
-/*
+/**
  * Naver OAuth Authorization Code 로그인 요청
  *
  * 네이버는 Authorization Code와 함께
@@ -148,6 +159,7 @@ export const naverOAuthSchema = z.strictObject({
   state: stateSchema,
   role: userRoleSchema,
   agreements: termsAgreementsSchema.optional(),
+  intent: oauthIntentSchema,
 });
 
 export const authValidator = {
@@ -160,6 +172,7 @@ export const authValidator = {
 
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type OAuthIntent = z.infer<typeof oauthIntentSchema>;
 export type GoogleOAuthInput = z.infer<typeof googleOAuthSchema>;
 export type KakaoOAuthInput = z.infer<typeof kakaoOAuthSchema>;
 export type NaverOAuthInput = z.infer<typeof naverOAuthSchema>;
