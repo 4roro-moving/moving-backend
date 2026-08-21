@@ -15,12 +15,12 @@
     "prepare": "husky",
     "test": "tsx --test \"src/**/*.test.ts\"",
     "test:db": "tsx --env-file=.env --import ./scripts/enable-db-integration.mjs --test \"src/modules/estimate-request/estimateRequest.cancelRace.test.ts\" \"src/modules/admin/member-management/customers/customers.status-race.test.ts\" \"src/modules/admin/member-management/movers/movers.status-race.test.ts\" \"src/modules/profile/profile.updateBasicInfo.password-revoke.integration.test.ts\"",
-    "prisma:seed": "tsx --tsconfig prisma/tsconfig.json prisma/seed.ts",
-    "seed:audit": "tsx scripts/seed-audit/dryrun.ts && tsx scripts/seed-audit/date-audit.ts && tsx scripts/seed-audit/date-audit2.ts && tsx scripts/seed-audit/date-audit3.ts",
+    "prisma:seed": "tsx --tsconfig prisma/tsconfig.json --max-old-space-size=12288 prisma/seed.ts",
+    "seed:audit": "tsx --max-old-space-size=12288 scripts/seed-audit/dryrun.ts && tsx --max-old-space-size=12288 scripts/seed-audit/date-audit.ts && tsx --max-old-space-size=12288 scripts/seed-audit/date-audit2.ts && tsx --max-old-space-size=12288 scripts/seed-audit/date-audit3.ts",
     "seed:images": "tsx --tsconfig prisma/tsconfig.json prisma/seeds/images/sync-images.ts"
   },
   "prisma": {
-    "seed": "tsx --tsconfig prisma/tsconfig.json prisma/seed.ts"
+    "seed": "tsx --tsconfig prisma/tsconfig.json --max-old-space-size=12288 prisma/seed.ts"
   },
   "keywords": [],
   "author": "",
