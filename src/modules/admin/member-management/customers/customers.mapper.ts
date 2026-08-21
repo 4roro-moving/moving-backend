@@ -1,4 +1,4 @@
-import { EstimateRequestStatus, EstimateStatus } from "@prisma/client";
+import { EstimateRequestStatus, EstimateStatus, UserRole } from "@prisma/client";
 
 import {
   toMemberDetailAccount,
@@ -38,6 +38,7 @@ function toEstimateHistoryItem(item: EstimateHistoryRow) {
   );
 
   const confirmedEstimate = item.confirmedEstimate;
+  const canceledByRole = item.histories[0]?.changedByUser.role;
 
   return {
     id: item.id,
@@ -47,6 +48,11 @@ function toEstimateHistoryItem(item: EstimateHistoryRow) {
     expiresAt: item.expiresAt,
     expiredAt: item.expiredAt,
     canceledAt: item.canceledAt,
+    canceledBy:
+      item.status === EstimateRequestStatus.CANCELED &&
+      (canceledByRole === UserRole.CUSTOMER || canceledByRole === UserRole.ADMIN)
+        ? canceledByRole
+        : null,
     completedAt: item.completedAt,
     createdAt: item.createdAt,
     estimateSummary: {

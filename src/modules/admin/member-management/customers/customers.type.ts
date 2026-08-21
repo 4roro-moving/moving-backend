@@ -51,6 +51,8 @@ export type CustomerEstimateHistoryItem = {
   expiresAt: Date;
   expiredAt: Date | null;
   canceledAt: Date | null;
+  /** CANCELED 요청의 취소 주체. 취소 이력이 없는 과거 데이터는 null입니다. */
+  canceledBy: "CUSTOMER" | "ADMIN" | null;
   completedAt: Date | null;
   createdAt: Date;
   estimateSummary: {
