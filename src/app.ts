@@ -195,6 +195,7 @@ app.use("/api/notices", publicNoticeRouter);
  * 관리자 API
  */
 app.use("/api/admin/auth", adminAuthRouter);
+app.use("/api/admin/admins", adminManagementRouter);
 app.use("/api/admin/notices", adminNoticeRouter);
 app.use("/api/admin/reviews", adminReviewRouter);
 app.use("/api/admin/residence-reviews", adminResidenceReviewRouter);

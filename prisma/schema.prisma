@@ -268,6 +268,16 @@ enum NoticeAudience {
   MOVER
 }
 
+/// 공지 카테고리
+///
+/// 사용자 공지 목록에서 공지 유형별 필터링에 사용합니다.
+/// SERVICE: 서비스 안내, MAINTENANCE: 점검 안내, EVENT: 이벤트 안내
+enum NoticeCategory {
+  SERVICE
+  MAINTENANCE
+  EVENT
+}
+
 /// 활동 로그의 동작 종류
 ///
 /// ActivityLog.action 에 저장되며 targetType 과 조합해
@@ -1764,6 +1774,8 @@ model Notice {
   content          String         @db.Text
   /// 노출 대상 그룹. 기본 ALL.
   audience         NoticeAudience @default(ALL)
+  /// 공지 카테고리. 기본 SERVICE.
+  category NoticeCategory         @default(SERVICE)
   /// 목록 상단 고정 여부.
   isPinned         Boolean        @default(false) @map("is_pinned")
   /// 노출 여부. false 면 숨김.
