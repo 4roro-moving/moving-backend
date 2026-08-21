@@ -3,7 +3,8 @@ export const REPORT_IMAGE_CONTENT_TYPES = ["image/jpeg", "image/png", "image/web
 export type ReportImageContentType = (typeof REPORT_IMAGE_CONTENT_TYPES)[number];
 
 export const REPORT_IMAGE = {
-  KEY_PREFIX: "reports",
+  TEMP_KEY_PREFIX: "temp/reports",
+  FINAL_KEY_PREFIX: "reports",
   MAX_COUNT: 5,
   MAX_SIZE: 5 * 1024 * 1024,
   UPLOAD_URL_EXPIRES_IN: 180,

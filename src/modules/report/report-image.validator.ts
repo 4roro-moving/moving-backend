@@ -8,7 +8,10 @@ export const reportImageKeySchema = z
   .string({ error: "이미지 Key는 문자열이어야 합니다." })
   .trim()
   .regex(
-    new RegExp(`^${REPORT_IMAGE.KEY_PREFIX}/${uuidPattern}/${uuidPattern}\\.(jpg|png|webp)$`, "i"),
+    new RegExp(
+      `^${REPORT_IMAGE.TEMP_KEY_PREFIX}/${uuidPattern}/${uuidPattern}\\.(jpg|png|webp)$`,
+      "i",
+    ),
     {
       error: "올바른 신고 이미지 Key 형식이 아닙니다.",
     },

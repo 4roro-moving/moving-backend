@@ -42,21 +42,26 @@ function createTransactionRunner() {
   };
 }
 
-function createImageValidatorStub() {
+function createImageManagerStub() {
   return {
-    validateUploadedImages: async (_userId: string, _imageKeys: string[] | undefined) => {},
+    promoteUploadedImages: async (_userId: string, imageKeys: string[] | undefined) => ({
+      tempKeys: imageKeys ?? [],
+      finalKeys: imageKeys?.map((key) => key.replace("temp/reports/", "reports/")) ?? [],
+    }),
+    cleanupTempImages: async (_tempKeys: string[]) => {},
+    cleanupFinalImages: async (_finalKeys: string[]) => {},
   };
 }
 
 function createService(
   repositoryOverrides: Partial<ReportRepository> = {},
-  imageValidator = createImageValidatorStub(),
+  imageManager = createImageManagerStub(),
 ) {
   const transaction = createTransactionRunner();
 
   return createReportService(
     createRepositoryStub(repositoryOverrides),
-    imageValidator,
+    imageManager,
     transaction.run,
   );
 }
@@ -416,14 +421,31 @@ describe("reportService.createReport", () => {
     );
   });
 
-  it("validates uploaded images before creation and returns mapped image items", async () => {
-    let receivedUserId: string | undefined;
-    let receivedImageKeys: string[] | undefined;
+  it("promotes temp images, stores final keys, and cleans up temp images after creation", async () => {
+    const tempKey = "temp/reports/customer-1/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg";
+    const finalKey = "reports/customer-1/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg";
 
-    const imageValidator = {
-      validateUploadedImages: async (userId: string, imageKeys: string[] | undefined) => {
+    let receivedUserId: string | undefined;
+    let receivedTempKeys: string[] | undefined;
+    let receivedCreateImageKeys: string[] | undefined;
+    let cleanedTempKeys: string[] = [];
+    let cleanedFinalKeys: string[] = [];
+
+    const imageManager = {
+      promoteUploadedImages: async (userId: string, imageKeys: string[] | undefined) => {
         receivedUserId = userId;
-        receivedImageKeys = imageKeys;
+        receivedTempKeys = imageKeys;
+
+        return {
+          tempKeys: imageKeys ?? [],
+          finalKeys: imageKeys ? [finalKey] : [],
+        };
+      },
+      cleanupTempImages: async (tempKeys: string[]) => {
+        cleanedTempKeys = tempKeys;
+      },
+      cleanupFinalImages: async (finalKeys: string[]) => {
+        cleanedFinalKeys = finalKeys;
       },
     };
 
@@ -434,8 +456,25 @@ describe("reportService.createReport", () => {
           role: UserRole.MOVER,
           deletedAt: null,
         }),
+        createReport: async ({ targetType, targetId, reason, status, detail, imageKeys }) => {
+          receivedCreateImageKeys = imageKeys;
+
+          return {
+            id: 1,
+            targetType,
+            targetId,
+            reason,
+            status,
+            detail,
+            images: (imageKeys ?? []).map((imageKey, index) => ({
+              id: index + 1,
+              imageKey,
+            })),
+            createdAt: new Date("2026-08-04T00:00:00.000Z"),
+          };
+        },
       },
-      imageValidator,
+      imageManager,
     );
 
     const result = await service.createReport({
@@ -444,16 +483,117 @@ describe("reportService.createReport", () => {
         targetType: "MOVER",
         targetId: VALID_MOVER_ID,
         reason: "SPAM",
-        imageKeys: [
-          "reports/11111111-1111-4111-8111-111111111111/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg",
-        ],
+        imageKeys: [tempKey],
       },
     });
 
     assert.equal(receivedUserId, "customer-1");
-    assert.deepEqual(receivedImageKeys, [
-      "reports/11111111-1111-4111-8111-111111111111/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg",
-    ]);
+    assert.deepEqual(receivedTempKeys, [tempKey]);
+    assert.deepEqual(receivedCreateImageKeys, [finalKey]);
+    assert.deepEqual(cleanedTempKeys, [tempKey]);
+    assert.deepEqual(cleanedFinalKeys, []);
     assert.equal(result.images.length, 1);
+  });
+
+  it("cleans up promoted final images when report creation fails", async () => {
+    const tempKey = "temp/reports/customer-1/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg";
+    const finalKey = "reports/customer-1/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg";
+
+    let cleanedTempKeys: string[] = [];
+    let cleanedFinalKeys: string[] = [];
+
+    const imageManager = {
+      promoteUploadedImages: async () => ({
+        tempKeys: [tempKey],
+        finalKeys: [finalKey],
+      }),
+      cleanupTempImages: async (tempKeys: string[]) => {
+        cleanedTempKeys = tempKeys;
+      },
+      cleanupFinalImages: async (finalKeys: string[]) => {
+        cleanedFinalKeys = finalKeys;
+      },
+    };
+
+    const service = createService(
+      {
+        findUserById: async (userId) => ({
+          id: userId,
+          role: UserRole.MOVER,
+          deletedAt: null,
+        }),
+        createReport: async () => {
+          throw new AppError("INTERNAL_SERVER_ERROR");
+        },
+      },
+      imageManager,
+    );
+
+    await assert.rejects(
+      () =>
+        service.createReport({
+          reporterId: "customer-1",
+          input: {
+            targetType: "MOVER",
+            targetId: VALID_MOVER_ID,
+            reason: "SPAM",
+            imageKeys: [tempKey],
+          },
+        }),
+      (error: unknown) => error instanceof AppError && error.code === "INTERNAL_SERVER_ERROR",
+    );
+
+    assert.deepEqual(cleanedTempKeys, []);
+    assert.deepEqual(cleanedFinalKeys, [finalKey]);
+  });
+
+  it("maps a report unique constraint error after cleaning up promoted final images", async () => {
+    const tempKey = "temp/reports/customer-1/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg";
+    const finalKey = "reports/customer-1/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg";
+
+    let cleanedFinalKeys: string[] = [];
+
+    const imageManager = {
+      promoteUploadedImages: async () => ({
+        tempKeys: [tempKey],
+        finalKeys: [finalKey],
+      }),
+      cleanupTempImages: async (_tempKeys: string[]) => {},
+      cleanupFinalImages: async (finalKeys: string[]) => {
+        cleanedFinalKeys = finalKeys;
+      },
+    };
+
+    const service = createService(
+      {
+        findUserById: async (userId) => ({
+          id: userId,
+          role: UserRole.MOVER,
+          deletedAt: null,
+        }),
+        createReport: async () => {
+          throw createUniqueConstraintError({
+            target: ["targetType", "targetId", "reporterId"],
+          });
+        },
+      },
+      imageManager,
+    );
+
+    await assert.rejects(
+      () =>
+        service.createReport({
+          reporterId: "customer-1",
+          input: {
+            targetType: "MOVER",
+            targetId: VALID_MOVER_ID,
+            reason: "SPAM",
+            imageKeys: [tempKey],
+          },
+        }),
+      (error: unknown) => error instanceof AppError && error.code === "REPORT_ALREADY_EXISTS",
+    );
+
+    assert.deepEqual(cleanedFinalKeys, [finalKey]);
   });
 });

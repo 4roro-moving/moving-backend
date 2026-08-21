@@ -125,13 +125,22 @@ function isReportUniqueConstraintError(
 
 type TransactionRunner = <T>(callback: (tx: DbClient) => Promise<T>) => Promise<T>;
 
-interface ReportImageValidator {
-  validateUploadedImages(userId: string, imageKeys: string[] | undefined): Promise<void>;
+interface ReportImageManager {
+  promoteUploadedImages(
+    userId: string,
+    imageKeys: string[] | undefined,
+  ): Promise<{
+    tempKeys: string[];
+    finalKeys: string[];
+  }>;
+
+  cleanupTempImages(tempKeys: string[]): Promise<void>;
+  cleanupFinalImages(finalKeys: string[]): Promise<void>;
 }
 
 export function createReportService(
   repository: ReportRepository = reportRepository,
-  imageValidator: ReportImageValidator = reportImageService,
+  imageManager: ReportImageManager = reportImageService,
   transactionRunner: TransactionRunner = runTransaction,
 ) {
   return {
@@ -182,7 +191,7 @@ export function createReportService(
         throw new AppError("REPORT_ALREADY_EXISTS");
       }
 
-      await imageValidator.validateUploadedImages(reporterId, input.imageKeys);
+      const promoted = await imageManager.promoteUploadedImages(reporterId, input.imageKeys);
 
       try {
         const created = await transactionRunner((tx) =>
@@ -194,16 +203,20 @@ export function createReportService(
               reason: input.reason,
               detail,
               status: "PENDING",
-              ...(input.imageKeys !== undefined && {
-                imageKeys: input.imageKeys,
+              ...(promoted.finalKeys.length > 0 && {
+                imageKeys: promoted.finalKeys,
               }),
             },
             tx,
           ),
         );
 
+        await imageManager.cleanupTempImages(promoted.tempKeys);
+
         return toReportItem(created);
       } catch (error) {
+        await imageManager.cleanupFinalImages(promoted.finalKeys);
+
         if (isReportUniqueConstraintError(error)) {
           throw new AppError("REPORT_ALREADY_EXISTS");
         }
