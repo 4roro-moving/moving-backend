@@ -90,9 +90,24 @@ export const adminEstimatesRepository = {
     });
   },
 
-  /** 재시도 시 알림 중복 생성을 막습니다. */
+  /** 재시도 시 중복을 제외하고 실제 생성된 알림만 반환합니다. */
   createNotifications(data: Prisma.NotificationCreateManyInput[], db: DbClient = prisma) {
-    return db.notification.createMany({ data, skipDuplicates: true });
+    return db.notification.createManyAndReturn({
+      data,
+      skipDuplicates: true,
+      select: {
+        userId: true,
+        id: true,
+        type: true,
+        title: true,
+        content: true,
+        linkUrl: true,
+        isRead: true,
+        readAt: true,
+        expiresAt: true,
+        createdAt: true,
+      },
+    });
   },
 
   /** 관리자 취소 조치와 사유를 운영 감사 로그에 저장합니다. */

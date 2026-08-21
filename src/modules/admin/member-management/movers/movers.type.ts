@@ -8,26 +8,21 @@ import type {
 } from "@prisma/client";
 import type { z } from "zod";
 
+import type { MEMBER_STATUS, MemberStatus } from "../member-status.constants";
 import type {
   HistorySummary,
   MemberDetailAccount,
   MemberListBase,
   MemberSuspensionHistoryItem,
 } from "../member.type";
-import type {
-  listMoverQuerySchema,
-  moverIdParamSchema,
-  updateMoverStatusBodySchema,
-} from "./movers.validator";
-import type { MemberStatus } from "../member-status.constants";
+import type { listMoverQuerySchema, moverIdParamSchema } from "./movers.validator";
 
 export type ListMoverQuery = z.infer<typeof listMoverQuerySchema>;
 export type MoverIdParam = z.infer<typeof moverIdParamSchema>;
-export type UpdateMoverStatusBody = z.infer<typeof updateMoverStatusBodySchema>;
 
 export type UpdateMoverStatusResponse = {
   id: string;
-  status: Exclude<MemberStatus, "WITHDRAWN">;
+  status: Exclude<MemberStatus, typeof MEMBER_STATUS.WITHDRAWN>;
   suspension: {
     id: number;
     action: SuspensionAction;
@@ -71,8 +66,7 @@ export type MoverInProgressEstimateItem = {
 };
 
 /** 완료 거래는 Estimate가 아닌 EstimateRequest 상태로 표시합니다. */
-export type MoverEstimateActivityStatus =
-  EstimateStatus | Extract<EstimateRequestStatus, "COMPLETED">;
+export type MoverEstimateActivityStatus = EstimateStatus | typeof EstimateRequestStatus.COMPLETED;
 
 export type MoverRecentEstimateItem = {
   id: number;

@@ -14,7 +14,6 @@ import { authService } from "./auth.service";
 import type { OAuthProfile } from "./auth.type";
 import { googleOAuth } from "./oauth/google.oauth";
 
-const DUMMY_PASSWORD_HASH = "$2b$10$CxtIUUg2JDRWy.TYdu0y0e9bahGlNcJg2F78GaW9lRboxNL/OZpE6";
 const REAL_PASSWORD_HASH = "$2b$10$real-user-password-hash-for-login-role-test";
 const CORRECT_PASSWORD = "correct-password";
 const WRONG_PASSWORD = "wrong-password";
