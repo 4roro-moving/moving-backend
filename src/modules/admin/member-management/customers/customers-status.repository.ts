@@ -161,7 +161,20 @@ export const customersStatusRepository = {
 
   /** 취소된 견적 요청과 연결된 채팅방에 시스템 안내 메시지를 일괄 저장합니다. */
   createSystemMessages(data: Prisma.ChatMessageCreateManyInput[], db: DbClient = prisma) {
-    return db.chatMessage.createMany({ data });
+    return db.chatMessage.createManyAndReturn({
+      data,
+      select: {
+        id: true,
+        roomId: true,
+        senderId: true,
+        type: true,
+        content: true,
+        imageUrl: true,
+        isRead: true,
+        readAt: true,
+        createdAt: true,
+      },
+    });
   },
 
   /** 취소된 견적 요청과 연결된 채팅방들의lastMessageAt을 정지 처리 시각으로 일괄 갱신합니다. */
