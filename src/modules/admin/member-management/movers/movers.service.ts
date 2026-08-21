@@ -61,12 +61,14 @@ export const moversService = {
       inProgressEstimateHistory,
       recentEstimateHistory,
       reviewHistory,
+      filedReports,
       receivedReports,
       suspensionHistory,
     ] = await Promise.all([
       moversRepository.findInProgressEstimateHistory({ moverId }),
       moversRepository.findRecentEstimateHistory({ moverId }),
       moversRepository.findReviewHistory({ moverId }),
+      moversRepository.findFiledReportHistory({ moverId }),
       moversRepository.findReceivedReportHistory({ moverId }),
       memberRepository.findSuspensionHistory({ memberId: moverId }),
     ]);
@@ -75,6 +77,7 @@ export const moversService = {
       inProgressEstimateHistory,
       recentEstimateHistory,
       reviewHistory,
+      filedReports,
       receivedReports,
       suspensionHistory,
     });
