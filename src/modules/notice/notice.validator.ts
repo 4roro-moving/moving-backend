@@ -30,4 +30,6 @@ export const listNoticeQuerySchema = z.object({
     .min(1, "검색어를 입력해 주세요.")
     .max(100, "검색어는 100자 이하여야 합니다.")
     .optional(),
+
+  category: z.enum(["SERVICE", "MAINTENANCE", "EVENT"]).optional(),
 });

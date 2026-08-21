@@ -10,6 +10,7 @@ import type { ListNoticeQuery, NoticeUserRole } from "./notice.type";
 function buildNoticeWhere(
   role: NoticeUserRole | undefined,
   keyword?: string,
+  category?: "SERVICE" | "MAINTENANCE" | "EVENT",
 ): Prisma.NoticeWhereInput {
   const where: Prisma.NoticeWhereInput = {
     isVisible: true,
@@ -27,6 +28,10 @@ function buildNoticeWhere(
     };
   }
 
+  if (category !== undefined) {
+    where.category = category;
+  }
+
   return where;
 }
 
@@ -39,12 +44,12 @@ function canReadNotice(
 
 export const noticeService = {
   async getNoticeList(role: NoticeUserRole | undefined, query: ListNoticeQuery) {
-    const { page, limit, keyword } = query;
+    const { page, limit, keyword, category } = query;
 
     const { notices, totalCount } = await noticeRepository.findManyWithCount({
       skip: (page - 1) * limit,
       take: limit,
-      where: buildNoticeWhere(role, keyword),
+      where: buildNoticeWhere(role, keyword, category),
     });
 
     return {

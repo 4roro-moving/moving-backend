@@ -8,6 +8,7 @@ const noticeListSelect = {
   title: true,
   content: true,
   audience: true,
+  category: true,
   isPinned: true,
   viewCount: true,
   createdAt: true,
