@@ -20,7 +20,7 @@
     "seed:images": "tsx --tsconfig prisma/tsconfig.json prisma/seeds/images/sync-images.ts"
   },
   "prisma": {
-    "seed": "tsx --tsconfig prisma/tsconfig.json prisma/seed.ts --max-old-space-size=12288"
+    "seed": "tsx --tsconfig prisma/tsconfig.json --max-old-space-size=12288 prisma/seed.ts"
   },
   "keywords": [],
   "author": "",

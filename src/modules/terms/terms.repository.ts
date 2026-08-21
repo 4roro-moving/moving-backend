@@ -16,6 +16,7 @@ const termsSelect = {
   title: true,
   content: true,
   isRequired: true,
+  audience: true,
   effectiveAt: true,
   publishedAt: true,
   authorId: true,
@@ -23,7 +24,6 @@ const termsSelect = {
   createdAt: true,
   updatedAt: true,
   deletedAt: true,
-  audience: true,
 } satisfies Prisma.TermsSelect;
 
 /**
