@@ -82,3 +82,20 @@ export const createReportSchema = z
       });
     }
   });
+
+const MAX_REPORT_LIST_PAGE = 10000;
+
+export const listMyReportsQuerySchema = z.object({
+  page: z.coerce
+    .number()
+    .int("페이지 번호는 정수여야 합니다.")
+    .positive("페이지 번호는 1 이상이어야 합니다.")
+    .max(MAX_REPORT_LIST_PAGE, `페이지 번호는 ${String(MAX_REPORT_LIST_PAGE)} 이하여야 합니다.`)
+    .default(1),
+  limit: z.coerce
+    .number()
+    .int("조회 개수는 정수여야 합니다.")
+    .positive("조회 개수는 1 이상이어야 합니다.")
+    .max(50, "조회 개수는 50 이하여야 합니다.")
+    .default(10),
+});

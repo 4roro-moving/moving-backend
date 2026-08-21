@@ -6,11 +6,17 @@ import { asyncHandler } from "../../utils/async-handler.util";
 
 import { reportController } from "./report.controller";
 import { createReportImageUploadUrlSchema } from "./report-image.validator";
-import { createReportSchema } from "./report.validator";
+import { createReportSchema, listMyReportsQuerySchema } from "./report.validator";
 
 const reportRouter = Router();
 
 reportRouter.use(authenticate, authorize("CUSTOMER", "MOVER"));
+
+reportRouter.get(
+  "/me",
+  validate({ query: listMyReportsQuerySchema }),
+  asyncHandler(reportController.getMyReports),
+);
 
 reportRouter.post(
   "/images/upload-url",

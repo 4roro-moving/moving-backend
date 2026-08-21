@@ -2,11 +2,22 @@ import { Prisma, UserRole } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import { getImageUrl } from "../../utils/image-url";
+import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction, type DbClient } from "../../utils/transaction";
 
-import { reportRepository, type ReportRecord, type ReportRepository } from "./report.repository";
+import {
+  reportRepository,
+  type MyReportRecord,
+  type ReportRecord,
+  type ReportRepository,
+} from "./report.repository";
 import { reportImageService } from "./report-image.service";
-import type { CreateReportInput, ReportItem } from "./report.type";
+import type {
+  CreateReportInput,
+  ListMyReportsQuery,
+  MyReportItem,
+  ReportItem,
+} from "./report.type";
 
 function toReviewTargetIdNumber(targetId: string): number {
   return Number(targetId);
@@ -32,6 +43,19 @@ function toReportItem(report: ReportRecord): ReportItem {
       id: image.id,
       imageUrl: getImageUrl(image.imageKey) ?? "",
     })),
+    createdAt: report.createdAt,
+  };
+}
+
+function toMyReportItem(report: MyReportRecord): MyReportItem {
+  return {
+    id: report.id,
+    targetType: report.targetType,
+    targetId: report.targetId,
+    reason: report.reason,
+    status: report.status,
+    description: report.detail ?? null,
+    handledAt: report.handledAt,
     createdAt: report.createdAt,
   };
 }
@@ -144,6 +168,22 @@ export function createReportService(
   transactionRunner: TransactionRunner = runTransaction,
 ) {
   return {
+    async getMyReports(params: { reporterId: string; query: ListMyReportsQuery }) {
+      const { reporterId, query } = params;
+      const { page, limit } = query;
+
+      const { reports, totalCount } = await repository.findMineWithCount({
+        reporterId,
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+
+      return {
+        reports: reports.map(toMyReportItem),
+        pagination: buildPagination(totalCount, page, limit),
+      };
+    },
+
     async createReport(params: {
       reporterId: string;
       input: CreateReportInput;
