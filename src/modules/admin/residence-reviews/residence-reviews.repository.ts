@@ -167,11 +167,14 @@ function buildReportHighOrderBySql(): Prisma.Sql {
  * 신고 건수 정렬이 필요할 때 raw SQL 로 조회합니다.
  * Prisma orderBy 로는 report count 정렬이 불가합니다.
  */
-async function findResidenceReviewsByRawSql(params: {
-  skip: number;
-  take: number;
-  filters: AdminResidenceReviewListFilters;
-}): Promise<{ reviews: AdminResidenceReviewRow[]; totalCount: number }> {
+async function findResidenceReviewsByRawSql(
+  params: {
+    skip: number;
+    take: number;
+    filters: AdminResidenceReviewListFilters;
+  },
+  db: DbClient,
+): Promise<{ reviews: AdminResidenceReviewRow[]; totalCount: number }> {
   const { skip, take, filters } = params;
   const whereSql = buildRawWhereSql(filters);
   const orderSql = buildReportHighOrderBySql();
@@ -180,14 +183,14 @@ async function findResidenceReviewsByRawSql(params: {
     : Prisma.sql`FROM residence_reviews AS rr`;
 
   const [idRows, countRows] = await Promise.all([
-    prisma.$queryRaw<Array<{ id: number }>>(Prisma.sql`
+    db.$queryRaw<Array<{ id: number }>>(Prisma.sql`
       SELECT rr.id
       ${fromSql}
       WHERE ${whereSql}
       ORDER BY ${orderSql}
       LIMIT ${take} OFFSET ${skip}
     `),
-    prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+    db.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
       SELECT COUNT(*)::bigint AS count
       ${fromSql}
       WHERE ${whereSql}
@@ -201,7 +204,7 @@ async function findResidenceReviewsByRawSql(params: {
     return { reviews: [], totalCount };
   }
 
-  const reviews = await prisma.residenceReview.findMany({
+  const reviews = await db.residenceReview.findMany({
     where: { id: { in: ids } },
     select: adminResidenceReviewSelect,
   });
@@ -220,7 +223,7 @@ export const residenceReviewsRepository = {
     db: DbClient = prisma,
   ) {
     if (sort === "REPORT_HIGH") {
-      return findResidenceReviewsByRawSql({ skip, take, filters });
+      return findResidenceReviewsByRawSql({ skip, take, filters }, db);
     }
 
     const where = toPrismaWhere(filters);
