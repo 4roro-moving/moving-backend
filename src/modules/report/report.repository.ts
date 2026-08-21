@@ -10,6 +10,15 @@ const reportSelect = {
   reason: true,
   status: true,
   detail: true,
+  images: {
+    orderBy: {
+      id: "asc",
+    },
+    select: {
+      id: true,
+      imageKey: true,
+    },
+  },
   createdAt: true,
 } as const;
 
@@ -66,6 +75,7 @@ export const reportRepository = {
       reason: ReportReason;
       detail: string | null;
       status: ReportStatus;
+      imageKeys?: string[];
     },
     db: DbClient = prisma,
   ) {
@@ -77,6 +87,14 @@ export const reportRepository = {
         reason: input.reason,
         detail: input.detail,
         status: input.status,
+        ...(input.imageKeys !== undefined &&
+          input.imageKeys.length > 0 && {
+            images: {
+              create: input.imageKeys.map((imageKey) => ({
+                imageKey,
+              })),
+            },
+          }),
       },
       select: reportSelect,
     });
@@ -102,19 +120,26 @@ export type ExistingReport = {
 export type ReportRecord = Awaited<ReturnType<typeof reportRepository.createReport>>;
 
 export interface ReportRepository {
-  findReviewTargetById(reviewId: number): Promise<ReviewReportTarget | null>;
-  findUserById(userId: string): Promise<ReportableUser | null>;
-  findExistingReport(params: {
-    targetType: ReportTargetType;
-    targetId: string;
-    reporterId: string;
-  }): Promise<ExistingReport | null>;
-  createReport(input: {
-    targetType: ReportTargetType;
-    targetId: string;
-    reporterId: string;
-    reason: ReportReason;
-    detail: string | null;
-    status: ReportStatus;
-  }): Promise<ReportRecord>;
+  findReviewTargetById(reviewId: number, db?: DbClient): Promise<ReviewReportTarget | null>;
+  findUserById(userId: string, db?: DbClient): Promise<ReportableUser | null>;
+  findExistingReport(
+    params: {
+      targetType: ReportTargetType;
+      targetId: string;
+      reporterId: string;
+    },
+    db?: DbClient,
+  ): Promise<ExistingReport | null>;
+  createReport(
+    input: {
+      targetType: ReportTargetType;
+      targetId: string;
+      reporterId: string;
+      reason: ReportReason;
+      detail: string | null;
+      status: ReportStatus;
+      imageKeys?: string[];
+    },
+    db?: DbClient,
+  ): Promise<ReportRecord>;
 }
