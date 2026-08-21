@@ -311,7 +311,9 @@ export const customersRepository = {
       db.estimateRequest.findMany({
         where,
         select: estimateHistorySelect,
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+        // 고객은 활성 견적 요청을 최대 1건만 가질 수 있으므로, 현재 진행 거래를
+        // 최신 이력 5건 밖으로 밀어내지 않도록 활성 요청을 먼저 노출합니다.
+        orderBy: [{ isActive: "desc" }, { createdAt: "desc" }, { id: "asc" }],
         take,
       }),
       db.estimateRequest.count({ where }),
