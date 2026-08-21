@@ -850,7 +850,7 @@ describe("reportsService.handleReport", () => {
 
     const notificationService = {
       createNotification: async () => {
-        throw new Error("notification create failed");
+        throw new AppError("INTERNAL_SERVER_ERROR");
       },
       sendNotification: () => {
         sendCalled = true;
@@ -869,7 +869,7 @@ describe("reportsService.handleReport", () => {
             handlerNote: "처리 완료",
           },
         }),
-      /notification create failed/,
+      assertAppError("INTERNAL_SERVER_ERROR"),
     );
 
     assert.equal(sendCalled, false);

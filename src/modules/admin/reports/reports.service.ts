@@ -127,10 +127,6 @@ export function createReportsService(
   transactionRunner: TransactionRunner = runTransaction,
   notifications: ReportsNotificationService = notificationService,
 ) {
-  function resolveNotificationLinkUrl(): string | undefined {
-    return undefined;
-  }
-
   function resolveNotificationExpiresAt(handledAt: Date): Date {
     return new Date(
       handledAt.getTime() + REPORT_RESULT_NOTIFICATION_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000,
@@ -150,16 +146,11 @@ export function createReportsService(
       expiresAt: resolveNotificationExpiresAt(params.handledAt),
     } satisfies Pick<CreateNotificationInput, "userId" | "type" | "sourceId" | "expiresAt">;
 
-    const linkUrl = resolveNotificationLinkUrl();
-
     if (params.status === ReportStatus.RESOLVED) {
       return {
         ...base,
         title: "신고 처리가 완료되었어요",
         content: "신고하신 내용에 대한 조치가 완료되었습니다.",
-        ...(linkUrl !== undefined && {
-          linkUrl,
-        }),
       };
     }
 
@@ -167,9 +158,6 @@ export function createReportsService(
       ...base,
       title: "신고 검토가 완료되었어요",
       content: "신고하신 내용을 검토한 결과 별도 조치 없이 종료되었습니다.",
-      ...(linkUrl !== undefined && {
-        linkUrl,
-      }),
     };
   }
 
