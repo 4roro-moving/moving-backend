@@ -48,7 +48,31 @@ export type CustomerEstimateHistoryItem = {
   moveType: MoveType;
   status: EstimateRequestStatus;
   moveDate: Date;
+  expiresAt: Date;
+  expiredAt: Date | null;
+  canceledAt: Date | null;
+  /** CANCELED 요청의 취소 주체. 취소 이력이 없는 과거 데이터는 null입니다. */
+  canceledBy: "CUSTOMER" | "ADMIN" | null;
+  completedAt: Date | null;
   createdAt: Date;
+  estimateSummary: {
+    totalCount: number;
+    sentCount: number;
+    confirmedCount: number;
+    expiredCount: number;
+    canceledCount: number;
+  };
+  confirmedEstimate: {
+    id: number;
+    mover: {
+      id: string;
+      name: string;
+      nickname: string | null;
+    };
+    price: number;
+    confirmedAt: Date | null;
+    cancelable: boolean;
+  } | null;
 };
 
 export type CustomerReviewHistoryItem = {
@@ -73,7 +97,7 @@ export type CustomerReportHistoryItem = {
 export type CustomerDetail = {
   account: MemberDetailAccount;
   profile: CustomerDetailProfile;
-  estimateHistory: HistorySummary<CustomerEstimateHistoryItem>;
+  estimateRequests: HistorySummary<CustomerEstimateHistoryItem>;
   reviewHistory: HistorySummary<CustomerReviewHistoryItem>;
   reportHistory: {
     filed: HistorySummary<CustomerReportHistoryItem>;

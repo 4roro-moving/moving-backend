@@ -9,6 +9,7 @@ import type { memberRepository } from "../member.repository";
 import type {
   InProgressEstimateRow,
   MoverDetailRow,
+  MoverFiledReportHistoryRow,
   MoverListRow,
   MoverReportHistoryRow,
   MoverReviewHistoryRow,
@@ -36,7 +37,10 @@ function toInProgressEstimateItem(item: InProgressEstimateRow) {
     estimateRequestId: item.estimateRequestId,
     status: item.status,
     price: item.price,
+    customer: item.estimateRequest.customer,
+    moveType: item.estimateRequest.moveType,
     moveDate: item.estimateRequest.moveDate,
+    confirmedAt: item.confirmedAt,
     // 관리자 취소는 현재 활성화된 확정 거래에만 허용됩니다.
     cancelable:
       item.status === EstimateStatus.CONFIRMED &&
@@ -50,12 +54,19 @@ function toInProgressEstimateItem(item: InProgressEstimateRow) {
 function toRecentEstimateItem(item: RecentEstimateRow) {
   return {
     id: item.id,
+    estimateRequestId: item.estimateRequestId,
     status:
       item.estimateRequest.status === EstimateRequestStatus.COMPLETED
         ? EstimateRequestStatus.COMPLETED
         : item.status,
     price: item.price,
+    customer: item.estimateRequest.customer,
+    moveType: item.estimateRequest.moveType,
+    moveDate: item.estimateRequest.moveDate,
     confirmedAt: item.confirmedAt,
+    expiredAt: item.expiredAt,
+    canceledAt: item.canceledAt,
+    createdAt: item.createdAt,
   };
 }
 
@@ -79,12 +90,24 @@ function toReceivedReportHistoryItem(item: MoverReportHistoryRow) {
   };
 }
 
+function toFiledReportHistoryItem(item: MoverFiledReportHistoryRow) {
+  return {
+    id: item.id,
+    targetType: item.targetType,
+    targetId: item.targetId,
+    reason: item.reason,
+    status: item.status,
+    createdAt: item.createdAt,
+  };
+}
+
 type MoverDetailHistories = {
   inProgressEstimateHistory: Awaited<
     ReturnType<typeof moversRepository.findInProgressEstimateHistory>
   >;
   recentEstimateHistory: Awaited<ReturnType<typeof moversRepository.findRecentEstimateHistory>>;
   reviewHistory: Awaited<ReturnType<typeof moversRepository.findReviewHistory>>;
+  filedReports: Awaited<ReturnType<typeof moversRepository.findFiledReportHistory>>;
   receivedReports: Awaited<ReturnType<typeof moversRepository.findReceivedReportHistory>>;
   suspensionHistory: Awaited<ReturnType<typeof memberRepository.findSuspensionHistory>>;
 };
@@ -121,6 +144,10 @@ export function toMoverDetail(mover: MoverDetailRow, histories: MoverDetailHisto
       items: histories.reviewHistory.items.map(toReviewHistoryItem),
     },
     reportHistory: {
+      filed: {
+        totalCount: histories.filedReports.totalCount,
+        items: histories.filedReports.items.map(toFiledReportHistoryItem),
+      },
       received: {
         totalCount: histories.receivedReports.totalCount,
         items: histories.receivedReports.items.map(toReceivedReportHistoryItem),

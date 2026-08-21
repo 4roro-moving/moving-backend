@@ -15,10 +15,12 @@ import { AppError } from "../../lib/app-error";
 import { prisma } from "../../lib/prisma";
 import { createRefreshToken } from "../../utils/jwt";
 import { tokenHash } from "../../utils/tokenHash";
+import { termsService } from "../terms/terms.service";
 import { authRepository } from "./auth.repository";
 import { authService } from "./auth.service";
 import type { OAuthProfile } from "./auth.type";
 import { googleOAuth } from "./oauth/google.oauth";
+import { termsRepository } from "../terms/terms.repository";
 
 const REAL_PASSWORD_HASH = "$2b$10$real-user-password-hash-for-token-family-test";
 const CORRECT_PASSWORD = "correct-password";
@@ -229,6 +231,8 @@ describe("authService refresh token family on login", () => {
   const originalCompare = bcrypt.compare;
   const originalGetGoogleOAuthProfile = googleOAuth.getGoogleOAuthProfile;
   const originalTransaction = prisma.$transaction;
+  const originalFindRequiredPublished = termsRepository.findRequiredPublished;
+  const originalSaveSignUpAgreements = termsService.saveSignUpAgreements;
 
   afterEach(() => {
     authRepository.findByEmail = originalFindByEmail;
@@ -238,6 +242,8 @@ describe("authService refresh token family on login", () => {
     bcrypt.compare = originalCompare;
     googleOAuth.getGoogleOAuthProfile = originalGetGoogleOAuthProfile;
     prisma.$transaction = originalTransaction;
+    termsRepository.findRequiredPublished = originalFindRequiredPublished;
+    termsService.saveSignUpAgreements = originalSaveSignUpAgreements;
   });
 
   function installSuccessfulLocalLogin(role: UserRole) {
@@ -265,6 +271,7 @@ describe("authService refresh token family on login", () => {
     });
   }
 
+  // 26.08.20 김나연 - [수정] 기존 OAuth 회원 로그인 요청에 intent 추가
   it("stores a non-null familyId on existing OAuth member login", async () => {
     const recorder = createSaveRefreshTokenRecorder();
 
@@ -283,12 +290,14 @@ describe("authService refresh token family on login", () => {
     await authService.loginWithGoogle({
       code: "oauth-code",
       role: UserRole.CUSTOMER,
+      intent: "login",
     });
 
     assert.equal(recorder.callCount, 1);
     assert.match(recorder.savedPayloads[0]?.familyId ?? "", UUID_PATTERN);
   });
 
+  // 26.08.20 김나연 - [수정] 신규 OAuth 회원 생성 요청에 intent 추가
   it("stores a non-null familyId when creating a new OAuth member", async () => {
     const recorder = createSaveRefreshTokenRecorder();
 
@@ -311,12 +320,17 @@ describe("authService refresh token family on login", () => {
       deletedAt: null,
     });
     authRepository.saveRefreshToken = recorder.saveRefreshToken;
+    termsRepository.findRequiredPublished =
+      (async () => []) as typeof termsRepository.findRequiredPublished;
+    // 26.08.20 김나연 - [수정] signup intent 경로에서 약관 저장 stub 처리
+    termsService.saveSignUpAgreements = async () => undefined;
     prisma.$transaction = (async (callback: (tx: never) => Promise<unknown>) =>
       callback({} as never)) as unknown as typeof prisma.$transaction;
 
     await authService.loginWithGoogle({
       code: "oauth-code",
       role: UserRole.MOVER,
+      intent: "signup",
     });
 
     assert.equal(recorder.callCount, 1);

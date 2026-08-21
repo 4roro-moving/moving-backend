@@ -4,6 +4,7 @@ import type {
   MoveType,
   ReportReason,
   ReportStatus,
+  ReportTargetType,
   SuspensionAction,
 } from "@prisma/client";
 import type { z } from "zod";
@@ -60,8 +61,15 @@ export type MoverInProgressEstimateItem = {
   estimateRequestId: number;
   status: EstimateStatus;
   price: number;
+  customer: {
+    id: string;
+    name: string;
+  };
+  moveType: MoveType;
   moveDate: Date;
+  confirmedAt: Date | null;
   cancelable: boolean;
+  /** 기사가 견적을 전송한 시각입니다. */
   createdAt: Date;
 };
 
@@ -70,9 +78,20 @@ export type MoverEstimateActivityStatus = EstimateStatus | typeof EstimateReques
 
 export type MoverRecentEstimateItem = {
   id: number;
+  estimateRequestId: number;
   status: MoverEstimateActivityStatus;
   price: number;
+  customer: {
+    id: string;
+    name: string;
+  };
+  moveType: MoveType;
+  moveDate: Date;
   confirmedAt: Date | null;
+  expiredAt: Date | null;
+  canceledAt: Date | null;
+  /** 기사가 견적을 전송한 시각입니다. */
+  createdAt: Date;
 };
 
 export type MoverReviewHistoryItem = {
@@ -91,6 +110,15 @@ export type MoverReceivedReportHistoryItem = {
   createdAt: Date;
 };
 
+export type MoverFiledReportHistoryItem = {
+  id: number;
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: ReportReason;
+  status: ReportStatus;
+  createdAt: Date;
+};
+
 export type MoverDetail = {
   account: MemberDetailAccount;
   profile: MoverDetailProfile;
@@ -100,6 +128,7 @@ export type MoverDetail = {
   };
   reviewHistory: HistorySummary<MoverReviewHistoryItem>;
   reportHistory: {
+    filed: HistorySummary<MoverFiledReportHistoryItem>;
     received: HistorySummary<MoverReceivedReportHistoryItem>;
   };
   suspensionHistory: HistorySummary<MemberSuspensionHistoryItem>;

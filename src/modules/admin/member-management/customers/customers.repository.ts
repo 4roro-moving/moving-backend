@@ -44,8 +44,46 @@ const estimateHistorySelect = {
   id: true,
   moveType: true,
   status: true,
+  isActive: true,
   moveDate: true,
+  expiresAt: true,
+  expiredAt: true,
+  canceledAt: true,
+  completedAt: true,
+  confirmedEstimateId: true,
   createdAt: true,
+  // 취소된 요청은 처리 주체 역할을 조회해 고객 직접 취소와 관리자 조치를 구분합니다.
+  histories: {
+    where: { type: "CANCELED" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 1,
+    select: {
+      changedByUser: {
+        select: { role: true },
+      },
+    },
+  },
+  // 목록 화면에는 개별 견적을 노출하지 않고, 상태별 건수만 조합합니다.
+  estimates: {
+    select: { status: true },
+  },
+  // 확정/완료 거래에서만 존재하는 대표 견적입니다.
+  confirmedEstimate: {
+    select: {
+      id: true,
+      moverId: true,
+      price: true,
+      confirmedAt: true,
+      mover: {
+        select: {
+          name: true,
+          moverProfile: {
+            select: { nickname: true },
+          },
+        },
+      },
+    },
+  },
 } satisfies Prisma.EstimateRequestSelect;
 
 const reviewHistorySelect = {
@@ -273,7 +311,9 @@ export const customersRepository = {
       db.estimateRequest.findMany({
         where,
         select: estimateHistorySelect,
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+        // 고객은 활성 견적 요청을 최대 1건만 가질 수 있으므로, 현재 진행 거래를
+        // 최신 이력 5건 밖으로 밀어내지 않도록 활성 요청을 먼저 노출합니다.
+        orderBy: [{ isActive: "desc" }, { createdAt: "desc" }, { id: "asc" }],
         take,
       }),
       db.estimateRequest.count({ where }),

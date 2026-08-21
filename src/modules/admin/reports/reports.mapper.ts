@@ -1,3 +1,5 @@
+import { getImageUrl } from "../../../utils/image-url";
+
 import type {
   AdminReportRow,
   GiveawayReportTarget,
@@ -7,6 +9,7 @@ import type {
 } from "./reports.repository";
 import type {
   AdminGiveawayReportTarget,
+  AdminReportDetail,
   AdminMoverReportTarget,
   AdminReportListItem,
   AdminResidenceReviewReportTarget,
@@ -42,6 +45,25 @@ export function mapAdminReportListItem(report: AdminReportRow): AdminReportListI
 
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
+  };
+}
+
+export function mapAdminReportDetail(
+  report: AdminReportRow & {
+    images: {
+      id: number;
+      imageKey: string;
+    }[];
+  },
+  target: AdminReportDetail["target"],
+): AdminReportDetail {
+  return {
+    ...mapAdminReportListItem(report),
+    target,
+    images: report.images.map((image) => ({
+      id: image.id,
+      imageUrl: getImageUrl(image.imageKey) ?? "",
+    })),
   };
 }
 

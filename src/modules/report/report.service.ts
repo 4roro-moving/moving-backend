@@ -1,8 +1,11 @@
 import { Prisma, UserRole } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
+import { getImageUrl } from "../../utils/image-url";
+import { runTransaction, type DbClient } from "../../utils/transaction";
 
 import { reportRepository, type ReportRecord, type ReportRepository } from "./report.repository";
+import { reportImageService } from "./report-image.service";
 import type { CreateReportInput, ReportItem } from "./report.type";
 
 function toReviewTargetIdNumber(targetId: string): number {
@@ -25,6 +28,10 @@ function toReportItem(report: ReportRecord): ReportItem {
     reason: report.reason,
     status: report.status,
     description: report.detail ?? null,
+    images: report.images.map((image) => ({
+      id: image.id,
+      imageUrl: getImageUrl(image.imageKey) ?? "",
+    })),
     createdAt: report.createdAt,
   };
 }
@@ -116,7 +123,26 @@ function isReportUniqueConstraintError(
   return isReportModel;
 }
 
-export function createReportService(repository: ReportRepository = reportRepository) {
+type TransactionRunner = <T>(callback: (tx: DbClient) => Promise<T>) => Promise<T>;
+
+interface ReportImageManager {
+  promoteUploadedImages(
+    userId: string,
+    imageKeys: string[] | undefined,
+  ): Promise<{
+    tempKeys: string[];
+    finalKeys: string[];
+  }>;
+
+  cleanupTempImages(tempKeys: string[]): Promise<void>;
+  cleanupFinalImages(finalKeys: string[]): Promise<void>;
+}
+
+export function createReportService(
+  repository: ReportRepository = reportRepository,
+  imageManager: ReportImageManager = reportImageService,
+  transactionRunner: TransactionRunner = runTransaction,
+) {
   return {
     async createReport(params: {
       reporterId: string;
@@ -165,18 +191,32 @@ export function createReportService(repository: ReportRepository = reportReposit
         throw new AppError("REPORT_ALREADY_EXISTS");
       }
 
+      const promoted = await imageManager.promoteUploadedImages(reporterId, input.imageKeys);
+
       try {
-        const created = await repository.createReport({
-          targetType: input.targetType,
-          targetId: normalizedTargetId,
-          reporterId,
-          reason: input.reason,
-          detail,
-          status: "PENDING",
-        });
+        const created = await transactionRunner((tx) =>
+          repository.createReport(
+            {
+              targetType: input.targetType,
+              targetId: normalizedTargetId,
+              reporterId,
+              reason: input.reason,
+              detail,
+              status: "PENDING",
+              ...(promoted.finalKeys.length > 0 && {
+                imageKeys: promoted.finalKeys,
+              }),
+            },
+            tx,
+          ),
+        );
+
+        await imageManager.cleanupTempImages(promoted.tempKeys);
 
         return toReportItem(created);
       } catch (error) {
+        await imageManager.cleanupFinalImages(promoted.finalKeys);
+
         if (isReportUniqueConstraintError(error)) {
           throw new AppError("REPORT_ALREADY_EXISTS");
         }

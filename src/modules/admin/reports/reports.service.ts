@@ -1,10 +1,12 @@
-import { ReportTargetType } from "@prisma/client";
+import { NotificationType, ReportStatus, ReportTargetType } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
 import { runTransaction, type DbClient } from "../../../utils/transaction";
+import { notificationService } from "../../notification/notification.service";
 
 import {
+  mapAdminReportDetail,
   mapAdminReportListItem,
   mapGiveawayReportTarget,
   mapMoverReportTarget,
@@ -18,6 +20,7 @@ import {
 } from "./reports.policy";
 import {
   reportsRepository,
+  type AdminReportDetailRow,
   type AdminReportListFilters,
   type AdminReportRow,
   type GiveawayReportTarget,
@@ -26,6 +29,10 @@ import {
   type ReviewReportTarget,
 } from "./reports.repository";
 import type { AdminReportTarget, HandleReportBody, ListAdminReportsQuery } from "./reports.type";
+import type {
+  CreateNotificationInput,
+  NotificationItem,
+} from "../../notification/notification.type";
 
 type FindReportsParams = {
   skip: number;
@@ -49,6 +56,9 @@ type CreateActivityLogInput = {
 };
 
 type ActivityLogResult = Awaited<ReturnType<typeof reportsRepository.createActivityLog>>;
+type NotificationDbClient = Parameters<typeof notificationService.createNotification>[1];
+
+const REPORT_RESULT_NOTIFICATION_EXPIRES_IN_DAYS = 30;
 
 export interface ReportsRepository {
   findReportsWithCount(
@@ -59,9 +69,12 @@ export interface ReportsRepository {
     totalCount: number;
   }>;
 
-  findReportById(reportId: number, db?: DbClient): Promise<AdminReportRow | null>;
+  findReportById(reportId: number, db?: DbClient): Promise<AdminReportDetailRow | null>;
 
-  updateReportIfPending(params: UpdateReportParams, db?: DbClient): Promise<AdminReportRow | null>;
+  updateReportIfPending(
+    params: UpdateReportParams,
+    db?: DbClient,
+  ): Promise<AdminReportDetailRow | null>;
 
   findReviewTargetById(reviewId: number, db?: DbClient): Promise<ReviewReportTarget>;
 
@@ -78,6 +91,14 @@ export interface ReportsRepository {
 }
 
 type TransactionRunner = <T>(callback: (tx: DbClient) => Promise<T>) => Promise<T>;
+
+interface ReportsNotificationService {
+  createNotification(
+    input: CreateNotificationInput,
+    db?: NotificationDbClient,
+  ): Promise<NotificationItem>;
+  sendNotification(userId: string, notification: NotificationItem): void;
+}
 
 function buildListFilters(query: ListAdminReportsQuery): AdminReportListFilters {
   const filters: AdminReportListFilters = {};
@@ -104,7 +125,42 @@ function buildListFilters(query: ListAdminReportsQuery): AdminReportListFilters 
 export function createReportsService(
   repository: ReportsRepository = reportsRepository,
   transactionRunner: TransactionRunner = runTransaction,
+  notifications: ReportsNotificationService = notificationService,
 ) {
+  function resolveNotificationExpiresAt(handledAt: Date): Date {
+    return new Date(
+      handledAt.getTime() + REPORT_RESULT_NOTIFICATION_EXPIRES_IN_DAYS * 24 * 60 * 60 * 1000,
+    );
+  }
+
+  function buildReportResultNotificationInput(params: {
+    reporterId: string;
+    reportId: number;
+    status: typeof ReportStatus.RESOLVED | typeof ReportStatus.REJECTED;
+    handledAt: Date;
+  }): CreateNotificationInput {
+    const base = {
+      userId: params.reporterId,
+      type: NotificationType.REPORT_RESULT,
+      sourceId: `report:${String(params.reportId)}`,
+      expiresAt: resolveNotificationExpiresAt(params.handledAt),
+    } satisfies Pick<CreateNotificationInput, "userId" | "type" | "sourceId" | "expiresAt">;
+
+    if (params.status === ReportStatus.RESOLVED) {
+      return {
+        ...base,
+        title: "신고 처리가 완료되었어요",
+        content: "신고하신 내용에 대한 조치가 완료되었습니다.",
+      };
+    }
+
+    return {
+      ...base,
+      title: "신고 검토가 완료되었어요",
+      content: "신고하신 내용을 검토한 결과 별도 조치 없이 종료되었습니다.",
+    };
+  }
+
   async function getReportTarget(
     targetType: ReportTargetType,
     targetId: string,
@@ -188,16 +244,13 @@ export function createReportsService(
 
       const target = await getReportTarget(report.targetType, report.targetId);
 
-      return {
-        ...mapAdminReportListItem(report),
-        target,
-      };
+      return mapAdminReportDetail(report, target);
     },
 
     async handleReport(params: { adminId: string; reportId: number; input: HandleReportBody }) {
       const { adminId, reportId, input } = params;
 
-      return transactionRunner(async (tx) => {
+      const result = await transactionRunner(async (tx) => {
         const report = await repository.findReportById(reportId, tx);
 
         if (!report) {
@@ -208,12 +261,14 @@ export function createReportsService(
 
         assertReportPending(report.status);
 
+        const handledAt = new Date();
+
         const updated = await repository.updateReportIfPending(
           {
             reportId,
             status: input.status,
             handledBy: adminId,
-            handledAt: new Date(),
+            handledAt,
             handlerNote: input.handlerNote,
           },
           tx,
@@ -234,8 +289,26 @@ export function createReportsService(
           tx,
         );
 
-        return mapAdminReportListItem(updated);
+        const notification = await notifications.createNotification(
+          buildReportResultNotificationInput({
+            reporterId: report.reporterId,
+            reportId,
+            status: input.status,
+            handledAt,
+          }),
+          tx,
+        );
+
+        return {
+          report: mapAdminReportListItem(updated),
+          reporterId: report.reporterId,
+          notification,
+        };
       });
+
+      notifications.sendNotification(result.reporterId, result.notification);
+
+      return result.report;
     },
   };
 }

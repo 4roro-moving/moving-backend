@@ -91,6 +91,14 @@ const userRoleSchema = z.enum([UserRole.CUSTOMER, UserRole.MOVER], {
   error: "회원 역할은 CUSTOMER 또는 MOVER여야 합니다.",
 });
 
+/*
+ * 로그인 페이지와 회원가입 페이지의 OAuth 요청을 구분한다.
+ * login: 기존 회원만 로그인 / signup: 없으면 신규 생성
+ */
+const oauthIntentSchema = z.enum(["login", "signup"], {
+  error: "OAuth intent는 login 또는 signup이어야 합니다.",
+});
+
 export const signUpSchema = z.strictObject({
   email: emailSchema,
   password: passwordSchema,
@@ -118,6 +126,7 @@ export const googleOAuthSchema = z.strictObject({
   code: authorizationCodeSchema,
   role: userRoleSchema,
   agreements: termsAgreementsSchema.optional(),
+  intent: oauthIntentSchema,
 });
 
 /**
@@ -133,6 +142,7 @@ export const kakaoOAuthSchema = z.strictObject({
   code: authorizationCodeSchema,
   role: userRoleSchema,
   agreements: termsAgreementsSchema.optional(),
+  intent: oauthIntentSchema,
 });
 
 /**
@@ -149,6 +159,7 @@ export const naverOAuthSchema = z.strictObject({
   state: stateSchema,
   role: userRoleSchema,
   agreements: termsAgreementsSchema.optional(),
+  intent: oauthIntentSchema,
 });
 
 export const authValidator = {
@@ -161,6 +172,7 @@ export const authValidator = {
 
 export type SignUpInput = z.infer<typeof signUpSchema>;
 export type LoginInput = z.infer<typeof loginSchema>;
+export type OAuthIntent = z.infer<typeof oauthIntentSchema>;
 export type GoogleOAuthInput = z.infer<typeof googleOAuthSchema>;
 export type KakaoOAuthInput = z.infer<typeof kakaoOAuthSchema>;
 export type NaverOAuthInput = z.infer<typeof naverOAuthSchema>;

@@ -142,6 +142,7 @@ enum NotificationType {
   ESTIMATE_REQUEST_CANCELED_BY_ACCOUNT_SUSPENSION // (기사) 고객 계정이 정지되어 견적 요청 취소됨
   ESTIMATE_CANCELED_BY_ACCOUNT_SUSPENSION // (고객) 기사 계정이 정지되어 견적 취소됨
   ESTIMATE_CANCELED_BY_ADMIN // (고객/기사) 관리자가 확정 견적을 취소함
+  REPORT_RESULT // 신고 처리 결과 안내
 }
 
 /// 채팅 메시지 유형
@@ -1600,6 +1601,8 @@ model Report {
   reporter User  @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
   /// 처리 관리자 관계. 관리자 계정 삭제 시 이 필드만 null 로(SetNull).
   handler  User? @relation("ReportHandler", fields: [handledBy], references: [id], onDelete: SetNull)
+  /// 신고에 첨부된 증빙 이미지들.
+  images   ReportImage[]
 
   /// 생성 시각.
   createdAt DateTime @default(now()) @map("created_at")
@@ -1615,6 +1618,29 @@ model Report {
   /// 신고자 기준 조회 최적화.
   @@index([reporterId])
   @@map("reports")
+}
+
+/// 신고 첨부 이미지
+///
+/// 신고 생성 시 업로드된 증빙 이미지의 S3 key를 저장합니다.
+/// URL은 응답 시점에 CloudFront 경로로 변환합니다.
+model ReportImage {
+  /// PK.
+  id       Int    @id @default(autoincrement())
+  /// 소속 신고.
+  reportId Int    @map("report_id")
+  /// S3 객체 key.
+  imageKey String @map("image_key")
+
+  /// 소속 신고 관계. 신고 삭제 시 함께 삭제(Cascade).
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  /// 생성 시각.
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// 신고별 이미지 조회 최적화.
+  @@index([reportId])
+  @@map("report_images")
 }
 
 /// 회원 정지 / 해제 이력
