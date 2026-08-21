@@ -44,8 +44,46 @@ const estimateHistorySelect = {
   id: true,
   moveType: true,
   status: true,
+  isActive: true,
   moveDate: true,
+  expiresAt: true,
+  expiredAt: true,
+  canceledAt: true,
+  completedAt: true,
+  confirmedEstimateId: true,
   createdAt: true,
+  // 취소된 요청은 처리 주체 역할을 조회해 고객 직접 취소와 관리자 조치를 구분합니다.
+  histories: {
+    where: { type: "CANCELED" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: 1,
+    select: {
+      changedByUser: {
+        select: { role: true },
+      },
+    },
+  },
+  // 목록 화면에는 개별 견적을 노출하지 않고, 상태별 건수만 조합합니다.
+  estimates: {
+    select: { status: true },
+  },
+  // 확정/완료 거래에서만 존재하는 대표 견적입니다.
+  confirmedEstimate: {
+    select: {
+      id: true,
+      moverId: true,
+      price: true,
+      confirmedAt: true,
+      mover: {
+        select: {
+          name: true,
+          moverProfile: {
+            select: { nickname: true },
+          },
+        },
+      },
+    },
+  },
 } satisfies Prisma.EstimateRequestSelect;
 
 const reviewHistorySelect = {

@@ -10,7 +10,14 @@ const suspensionHistorySelect = {
   id: true,
   action: true,
   reason: true,
+  internalNote: true,
   createdAt: true,
+  admin: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
 } satisfies Prisma.UserSuspensionSelect;
 
 export const memberRepository = {

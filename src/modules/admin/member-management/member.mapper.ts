@@ -62,12 +62,16 @@ export function toMemberSuspensionHistoryItem(item: {
   id: number;
   action: MemberSuspensionHistoryItem["action"];
   reason: string;
+  internalNote: string | null;
   createdAt: Date;
+  admin: MemberSuspensionHistoryItem["admin"];
 }): MemberSuspensionHistoryItem {
   return {
     id: item.id,
     action: item.action,
     reason: item.reason,
+    internalNote: item.internalNote,
     createdAt: item.createdAt,
+    admin: item.admin,
   };
 }
