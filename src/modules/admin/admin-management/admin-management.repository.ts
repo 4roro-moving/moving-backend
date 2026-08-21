@@ -314,32 +314,37 @@ export const adminManagementRepository = {
   },
 
   /**
-   * 관리자의 활성 상태를 변경합니다.
+   * 관리자의 활성 상태를 조건부로 변경합니다.
    *
-   * 정지/해제 상태의 기준은 User.isActive입니다.
+   * Service에서 조회한 현재 상태와 DB의 실제 상태가 동일할 때만
+   * 변경하도록 하여 동일 상태 변경 요청의 동시 처리를 방지합니다.
+   *
+   * deletedAt = null 조건을 함께 확인하여
+   * 비활성화된 관리자 계정이 다시 변경되지 않도록 합니다.
+   *
+   * count가 0이면 다른 요청에 의해 이미 상태가 변경되었거나
+   * 비활성화된 상태임을 의미합니다.
    */
-  updateAdminActiveStatus(id: string, isActive: boolean, db: DbClient = prisma) {
-    return db.user.update({
+  updateAdminActiveStatus(
+    id: string,
+    currentIsActive: boolean,
+    nextIsActive: boolean,
+    db: DbClient = prisma,
+  ) {
+    return db.user.updateMany({
       where: {
         id,
+        isActive: currentIsActive,
+        deletedAt: null,
       },
       data: {
-        isActive,
-      },
-      select: {
-        id: true,
-        isActive: true,
-        adminProfile: {
-          select: {
-            adminRole: true,
-          },
-        },
+        isActive: nextIsActive,
       },
     });
   },
 
   /**
-   * 일반 ADMIN 계정을 비활성화합니다.
+   * 일반 ADMIN 계정을 조건부로 비활성화합니다.
    *
    * 비활성화는 일시적인 정지와 구분합니다.
    *
@@ -347,25 +352,24 @@ export const adminManagementRepository = {
    * - deletedAt = 비활성화 시각
    *
    * 실제 User 데이터를 삭제하지 않는 Soft Delete 방식입니다.
+   *
+   * Service에서 조회한 isActive 상태와
+   * DB의 현재 isActive 상태가 동일하고,
+   * deletedAt이 null인 경우에만 변경합니다.
+   *
+   * 따라서 동일 관리자에 대한 중복 비활성화 요청이나
+   * 정지/해제와 비활성화가 동시에 처리되는 상황을 방지합니다.
    */
-  deactivateAdmin(id: string, deletedAt: Date, db: DbClient = prisma) {
-    return db.user.update({
+  deactivateAdmin(id: string, currentIsActive: boolean, deletedAt: Date, db: DbClient = prisma) {
+    return db.user.updateMany({
       where: {
         id,
+        isActive: currentIsActive,
+        deletedAt: null,
       },
       data: {
         isActive: false,
         deletedAt,
-      },
-      select: {
-        id: true,
-        isActive: true,
-        deletedAt: true,
-        adminProfile: {
-          select: {
-            adminRole: true,
-          },
-        },
       },
     });
   },

@@ -263,7 +263,11 @@ export const adminManagementService = {
       const shouldBeActive = input.action === SuspensionAction.RELEASE;
 
       /**
-       * 현재 상태와 동일한 상태 변경 요청은 중복 처리하지 않습니다.
+       * 명확한 중복 요청에 대해서는
+       * DB 변경 전에 빠르게 Conflict를 반환합니다.
+       *
+       * 이 검사는 사용자 친화적인 응답을 위한 사전 검사이며,
+       * 동시 요청에 대한 최종 방어는 Repository의 조건부 UPDATE가 담당합니다.
        */
       if (admin.isActive === shouldBeActive) {
         throw new AppError("CONFLICT", {
@@ -274,15 +278,31 @@ export const adminManagementService = {
       }
 
       /**
-       * 관리자 계정의 실제 활성 상태를 변경합니다.
+       * 조회 당시 상태가 실제 DB에서도 그대로 유지되고 있을 때만
+       * 활성 상태를 변경합니다.
        *
-       * 현재 정지 여부의 기준은 User.isActive입니다.
+       * 동일 관리자에 대한 SUSPEND/RELEASE 요청이 동시에 들어와도
+       * 조건을 먼저 충족한 한 요청만 상태 변경에 성공합니다.
        */
-      const updatedAdmin = await adminManagementRepository.updateAdminActiveStatus(
+      const { count } = await adminManagementRepository.updateAdminActiveStatus(
         targetAdminId,
+        admin.isActive,
         shouldBeActive,
         tx,
       );
+
+      /**
+       * count가 0이면 조회 이후 다른 요청에서 상태가 변경됐거나
+       * 관리자 계정이 비활성화된 상태입니다.
+       *
+       * 이 경우 아래 UserSuspension / ActivityLog 생성까지 진행하지 않고
+       * 트랜잭션을 중단합니다.
+       */
+      if (count === 0) {
+        throw new AppError("CONFLICT", {
+          message: "관리자 계정 상태가 이미 변경되었습니다. 다시 시도해주세요.",
+        });
+      }
 
       /**
        * 누가 어떤 관리자를 어떤 사유로 정지/해제했는지
@@ -328,8 +348,8 @@ export const adminManagementService = {
       }
 
       return {
-        id: updatedAdmin.id,
-        isActive: updatedAdmin.isActive,
+        id: admin.id,
+        isActive: shouldBeActive,
         adminRole: admin.adminProfile.adminRole,
       };
     });
@@ -384,6 +404,9 @@ export const adminManagementService = {
 
       /**
        * 이미 비활성화된 계정은 중복 처리하지 않습니다.
+       *
+       * 사용자 친화적인 응답을 위한 사전 검사이며,
+       * 동시 요청 최종 방어는 Repository의 조건부 UPDATE가 담당합니다.
        */
       if (admin.deletedAt !== null) {
         throw new AppError("CONFLICT", {
@@ -394,17 +417,30 @@ export const adminManagementService = {
       const deletedAt = new Date();
 
       /**
-       * 일반 ADMIN을 Soft Delete 방식으로 비활성화합니다.
+       * 일반 ADMIN을 Soft Delete 방식으로 조건부 비활성화합니다.
+       *
+       * 조회 당시 isActive 상태와 DB의 현재 상태가 동일하고
+       * deletedAt이 null일 때만 변경됩니다.
        *
        * 정지된 ADMIN(isActive=false, deletedAt=null)도
-       * 비활성화할 수 있으며 최종 상태는
-       * isActive=false + deletedAt!=null이 됩니다.
+       * 정상적으로 비활성화할 수 있습니다.
        */
-      const deactivatedAdmin = await adminManagementRepository.deactivateAdmin(
+      const { count } = await adminManagementRepository.deactivateAdmin(
         targetAdminId,
+        admin.isActive,
         deletedAt,
         tx,
       );
+
+      /**
+       * 조회 이후 다른 요청이 먼저 정지/해제 또는 비활성화를 수행했다면
+       * stale 상태를 기준으로 후속 로그 및 세션 폐기 작업을 수행하지 않습니다.
+       */
+      if (count === 0) {
+        throw new AppError("CONFLICT", {
+          message: "관리자 계정 상태가 이미 변경되었습니다. 다시 시도해주세요.",
+        });
+      }
 
       /**
        * 비활성화는 정지/해제 이력이 아니므로
@@ -430,21 +466,11 @@ export const adminManagementService = {
         tx,
       );
 
-      /**
-       * Repository에서 deletedAt을 직접 설정했으므로
-       * 정상적인 경우 반드시 Date가 존재합니다.
-       */
-      if (!deactivatedAdmin.deletedAt) {
-        throw new AppError("INTERNAL_SERVER_ERROR", {
-          message: "관리자 계정 비활성화 상태를 확인할 수 없습니다.",
-        });
-      }
-
       return {
-        id: deactivatedAdmin.id,
+        id: admin.id,
         adminRole: admin.adminProfile.adminRole,
-        isActive: deactivatedAdmin.isActive,
-        deletedAt: deactivatedAdmin.deletedAt,
+        isActive: false,
+        deletedAt,
       };
     });
   },

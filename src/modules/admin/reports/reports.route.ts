@@ -6,7 +6,7 @@ import { requireActiveAdmin } from "../../../middlewares/admin";
 
 import { authorizeAdmin } from "../../../middlewares/admin-auth";
 
-import { authenticate, authorize } from "../../../middlewares/auth";
+import { authenticate } from "../../../middlewares/auth";
 import { validate } from "../../../middlewares/validate";
 import { asyncHandler } from "../../../utils/async-handler.util";
 
@@ -25,7 +25,6 @@ const adminReportRouter = Router();
 
 adminReportRouter.use(
   authenticate,
-  authorize("ADMIN"),
   requireActiveAdmin,
   authorizeAdmin(ADMIN_PERMISSIONS.REPORT_MANAGE),
 );

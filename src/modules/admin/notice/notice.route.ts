@@ -6,7 +6,7 @@ import { requireActiveAdmin } from "../../../middlewares/admin";
 import { authorizeAdmin } from "../../../middlewares/admin-auth";
 
 import { asyncHandler } from "../../../utils/async-handler.util";
-import { authenticate, authorize } from "../../../middlewares/auth";
+import { authenticate } from "../../../middlewares/auth";
 import { validate } from "../../../middlewares/validate";
 import { noticeController } from "./notice.controller";
 import {
@@ -19,12 +19,7 @@ import {
 const noticeRouter = Router();
 
 // 공지 관리는 관리자만 접근할 수 있습니다.
-noticeRouter.use(
-  authenticate,
-  authorize("ADMIN"),
-  requireActiveAdmin,
-  authorizeAdmin(ADMIN_PERMISSIONS.NOTICE_MANAGE),
-);
+noticeRouter.use(authenticate, requireActiveAdmin, authorizeAdmin(ADMIN_PERMISSIONS.NOTICE_MANAGE));
 
 noticeRouter
   .route("/")

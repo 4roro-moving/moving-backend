@@ -1,7 +1,6 @@
 import type { RequestHandler } from "express";
 
 import { AppError } from "../lib/app-error";
-import { prisma } from "../lib/prisma";
 import type { AdminPermission } from "../lib/auth/admin-permissions";
 import { hasAdminPermission } from "../lib/auth/has-admin-permission";
 
@@ -20,14 +19,7 @@ export function authorizeAdmin(permission: AdminPermission): RequestHandler {
         });
       }
 
-      const adminProfile = await prisma.adminProfile.findUnique({
-        where: {
-          userId: req.user.id,
-        },
-        select: {
-          adminRole: true,
-        },
-      });
+      const adminProfile = req.adminProfile;
 
       if (!adminProfile) {
         throw new AppError("FORBIDDEN", {

@@ -59,7 +59,6 @@ const adminInquiryRouter = Router();
 
 adminInquiryRouter.use(
   authenticate,
-  authorize("ADMIN"),
   requireActiveAdmin,
   authorizeAdmin(ADMIN_PERMISSIONS.INQUIRY_MANAGE),
 );

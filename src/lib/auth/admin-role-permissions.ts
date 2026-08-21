@@ -2,6 +2,15 @@ import type { AdminRole } from "@prisma/client";
 
 import { ADMIN_PERMISSIONS, type AdminPermission } from "./admin-permissions";
 
+/**
+ * 관리자 역할별 권한 정책
+ *
+ * SUPER_ADMIN은 일반 ADMIN 계정 관리만 담당하고,
+ * 실제 서비스 운영 권한은 일반 ADMIN에게만 부여합니다.
+ *
+ * 관리자 계정 관리와 서비스 운영의 책임을 분리하여
+ * SUPER_ADMIN에게 불필요하게 운영 권한이 집중되지 않도록 구성했습니다.
+ */
 export const ADMIN_ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermission[]> = {
   SUPER_ADMIN: [
     ADMIN_PERMISSIONS.ADMIN_VIEW,

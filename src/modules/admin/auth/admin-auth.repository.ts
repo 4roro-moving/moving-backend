@@ -44,6 +44,11 @@ const findByIdForSession = async (id: string, db: DbClient = prisma) => {
       isActive: true,
       deletedAt: true,
       createdAt: true,
+      adminProfile: {
+        select: {
+          adminRole: true,
+        },
+      },
     },
   });
 };
