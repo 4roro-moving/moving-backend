@@ -8,6 +8,7 @@ import {
 } from "@prisma/client";
 
 import { prisma } from "../../../lib/prisma";
+
 import type { DbClient } from "../../../utils/transaction";
 
 type CreateAdminUserData = {
@@ -28,6 +29,13 @@ type CreateAdminStatusActivityLogData = {
   actorId: string;
   targetId: string;
   memo: string;
+};
+
+type FindAdminsWithCountParams = {
+  skip: number;
+  take: number;
+  keyword?: string;
+  status?: "ACTIVE" | "SUSPENDED";
 };
 
 export const adminManagementRepository = {
@@ -102,6 +110,95 @@ export const adminManagementRepository = {
         adminRole: true,
       },
     });
+  },
+
+  /**
+   * 일반 ADMIN 목록과 전체 개수를 조회합니다.
+   *
+   * - User.role = ADMIN인 계정만 조회합니다.
+   * - AdminProfile.adminRole = ADMIN 조건을 통해
+   *   SUPER_ADMIN은 관리 대상 목록에서 제외합니다.
+   * - keyword가 있으면 이름 또는 이메일을 부분 일치 검색합니다.
+   * - status는 User.isActive 기준으로 필터링합니다.
+   * - 최신 생성된 관리자부터 조회합니다.
+   */
+  async findAdminsWithCount(
+    { skip, take, keyword, status }: FindAdminsWithCountParams,
+    db: DbClient = prisma,
+  ) {
+    const where = {
+      role: UserRole.ADMIN,
+      deletedAt: null,
+
+      adminProfile: {
+        is: {
+          adminRole: AdminRole.ADMIN,
+        },
+      },
+
+      ...(keyword
+        ? {
+            OR: [
+              {
+                name: {
+                  contains: keyword,
+                  mode: "insensitive" as const,
+                },
+              },
+              {
+                email: {
+                  contains: keyword,
+                  mode: "insensitive" as const,
+                },
+              },
+            ],
+          }
+        : {}),
+
+      ...(status
+        ? {
+            isActive: status === "ACTIVE",
+          }
+        : {}),
+    };
+
+    const [admins, totalCount] = await Promise.all([
+      db.user.findMany({
+        where,
+        skip,
+        take,
+        orderBy: [
+          {
+            createdAt: "desc",
+          },
+          {
+            id: "asc",
+          },
+        ],
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          phone: true,
+          isActive: true,
+          createdAt: true,
+          adminProfile: {
+            select: {
+              adminRole: true,
+            },
+          },
+        },
+      }),
+
+      db.user.count({
+        where,
+      }),
+    ]);
+
+    return {
+      admins,
+      totalCount,
+    };
   },
 
   /**

@@ -7,6 +7,7 @@ import {
 
 import { AppError } from "../../../lib/app-error";
 
+import { buildPagination } from "../../../utils/pagination.util";
 import { hashPassword } from "../../../utils/password";
 import { isUniqueConstraintError } from "../../../utils/prisma-error";
 import { runTransaction } from "../../../utils/transaction";
@@ -16,13 +17,59 @@ import { authRepository } from "../../auth/auth.repository";
 import { adminManagementRepository } from "./admin-management.repository";
 
 import type {
+  AdminListItem,
   CreateAdminBody,
   CreateAdminResponse,
+  ListAdminQuery,
   UpdateAdminStatusBody,
   UpdateAdminStatusResponse,
 } from "./admin-management.type";
 
 export const adminManagementService = {
+  /**
+   * SUPER_ADMIN이 관리할 일반 ADMIN 목록을 조회합니다.
+   *
+   * SUPER_ADMIN은 목록에서 제외하고,
+   * 이름/이메일 검색과 활성 상태 필터를 지원합니다.
+   */
+  async getAdminList(query: ListAdminQuery) {
+    const { page, limit, keyword, status } = query;
+
+    const { admins, totalCount } = await adminManagementRepository.findAdminsWithCount({
+      skip: (page - 1) * limit,
+      take: limit,
+      ...(keyword !== undefined ? { keyword } : {}),
+      ...(status !== undefined ? { status } : {}),
+    });
+
+    const items: AdminListItem[] = admins.map((admin) => {
+      /**
+       * Repository에서 AdminRole.ADMIN인 관리자만 조회하므로
+       * 정상적인 데이터라면 AdminProfile은 반드시 존재합니다.
+       */
+      if (!admin.adminProfile) {
+        throw new AppError("INTERNAL_SERVER_ERROR", {
+          message: "관리자 권한 정보를 확인할 수 없습니다.",
+        });
+      }
+
+      return {
+        id: admin.id,
+        email: admin.email,
+        name: admin.name,
+        phone: admin.phone,
+        adminRole: admin.adminProfile.adminRole,
+        isActive: admin.isActive,
+        createdAt: admin.createdAt,
+      };
+    });
+
+    return {
+      items,
+      pagination: buildPagination(totalCount, page, limit),
+    };
+  },
+
   /**
    * SUPER_ADMIN이 일반 ADMIN 계정을 생성합니다.
    *

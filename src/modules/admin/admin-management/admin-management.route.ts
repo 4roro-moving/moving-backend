@@ -19,6 +19,7 @@ import { adminManagementController } from "./admin-management.controller";
 import {
   adminIdParamSchema,
   createAdminBodySchema,
+  listAdminQuerySchema,
   updateAdminStatusBodySchema,
 } from "./admin-management.validator";
 
@@ -28,6 +29,11 @@ adminManagementRouter.use(authenticate, authorize(UserRole.ADMIN), requireActive
 
 adminManagementRouter
   .route("/")
+  .get(
+    authorizeAdmin(ADMIN_PERMISSIONS.ADMIN_VIEW),
+    validate({ query: listAdminQuerySchema }),
+    asyncHandler(adminManagementController.getAdminList),
+  )
   .post(
     authorizeAdmin(ADMIN_PERMISSIONS.ADMIN_CREATE),
     validate({ body: createAdminBodySchema }),

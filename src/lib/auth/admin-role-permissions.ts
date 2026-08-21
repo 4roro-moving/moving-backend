@@ -4,6 +4,7 @@ import { ADMIN_PERMISSIONS, type AdminPermission } from "./admin-permissions";
 
 export const ADMIN_ROLE_PERMISSIONS: Record<AdminRole, readonly AdminPermission[]> = {
   SUPER_ADMIN: [
+    ADMIN_PERMISSIONS.ADMIN_VIEW,
     ADMIN_PERMISSIONS.ADMIN_CREATE,
     ADMIN_PERMISSIONS.ADMIN_STATUS_MANAGE,
     ADMIN_PERMISSIONS.ADMIN_DEACTIVATE,

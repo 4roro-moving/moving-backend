@@ -20,6 +20,28 @@ registerRouterDocs(adminManagementRouter, {
     422: "입력값이 올바르지 않습니다.",
   },
   endpoints: {
+    "GET /": {
+      summary: "일반 관리자 목록 조회",
+      description: [
+        "SUPER_ADMIN이 관리 대상인 일반 ADMIN 목록을 조회합니다.",
+        "",
+        "- SUPER_ADMIN만 호출할 수 있습니다.",
+        "- `AdminRole.ADMIN`인 일반 관리자만 조회합니다.",
+        "- SUPER_ADMIN 계정은 목록에서 제외됩니다.",
+        "- `keyword`: 관리자 이름 또는 이메일 부분 일치 검색입니다.",
+        "- `status`: `ACTIVE` 또는 `SUSPENDED` 상태로 필터링합니다.",
+        "- 상태는 User.isActive 값을 기준으로 판단합니다.",
+        "- `page`: 페이지 번호이며 기본값은 1입니다.",
+        "- `limit`: 페이지당 조회 개수이며 기본값은 20, 최대 100입니다.",
+        "- 정렬은 관리자 생성일(createdAt) 최신순입니다.",
+      ].join("\n"),
+      responses: {
+        200: "관리자 목록 조회 성공",
+        403: "SUPER_ADMIN 권한이 없습니다.",
+        422: "조회 조건이 올바르지 않습니다.",
+      },
+    },
+
     "POST /": {
       summary: "일반 관리자 계정 생성",
       description: [

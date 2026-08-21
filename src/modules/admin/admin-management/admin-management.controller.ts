@@ -6,9 +6,25 @@ import { sendResponse } from "../../../utils/response.util";
 
 import { adminManagementService } from "./admin-management.service";
 
-import type { AdminIdParam, CreateAdminBody, UpdateAdminStatusBody } from "./admin-management.type";
+import type {
+  AdminIdParam,
+  CreateAdminBody,
+  ListAdminQuery,
+  UpdateAdminStatusBody,
+} from "./admin-management.type";
 
 export const adminManagementController = {
+  // GET /api/admin/admins
+  getAdminList: async (_req: Request, res: Response) => {
+    const query = res.locals.query as ListAdminQuery;
+
+    const result = await adminManagementService.getAdminList(query);
+
+    return sendResponse(res, 200, result.items, {
+      pagination: result.pagination,
+    });
+  },
+
   // POST /api/admin/admins
   createAdmin: async (req: Request, res: Response) => {
     const input = req.body as CreateAdminBody;
