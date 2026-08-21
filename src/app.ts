@@ -43,6 +43,7 @@ import { adminInquiryRouter, inquiryRouter } from "./modules/inquiry/inquiry.rou
 import { adminAuthRouter } from "./modules/admin/auth/admin-auth.route";
 import { adminTermsRouter, publicTermsRouter } from "./modules/terms/terms.route";
 import { adminReportRouter } from "./modules/admin/reports/reports.route";
+import adminManagementRouter from "./modules/admin/admin-management/admin-management.route";
 
 // Swagger UI로 전환할 때 사용
 // import type { RequestHandler } from "express";
@@ -192,6 +193,7 @@ app.use("/api/residence-reviews", publicResidenceReviewRouter);
  * 관리자 API
  */
 app.use("/api/admin/auth", adminAuthRouter);
+app.use("/api/admin/admins", adminManagementRouter);
 app.use("/api/admin/notices", noticeRouter);
 app.use("/api/admin/reviews", adminReviewRouter);
 app.use("/api/admin/residence-reviews", adminResidenceReviewRouter);

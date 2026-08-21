@@ -1,11 +1,12 @@
 import { UserRole } from "@prisma/client";
+
 import { z } from "zod";
 
 import { termsAgreementsSchema } from "../terms/terms.validator";
 
 const BCRYPT_PASSWORD_MAX_BYTES = 72;
 
-const emailSchema = z
+export const emailSchema = z
   .string({
     error: "이메일을 입력해주세요.",
   })
@@ -21,7 +22,7 @@ const emailSchema = z
   })
   .transform((email) => email.toLowerCase());
 
-const passwordSchema = z
+export const passwordSchema = z
   .string({
     error: "비밀번호를 입력해주세요.",
   })
@@ -46,7 +47,7 @@ const loginPasswordSchema = z
     error: "비밀번호는 UTF-8 기준 72바이트 이하여야 합니다.",
   });
 
-const nameSchema = z
+export const nameSchema = z
   .string({
     error: "이름을 입력해주세요.",
   })
@@ -58,7 +59,7 @@ const nameSchema = z
     error: "이름은 50자 이하여야 합니다.",
   });
 
-const phoneSchema = z
+export const phoneSchema = z
   .string({
     error: "휴대전화 번호를 입력해주세요.",
   })
@@ -112,7 +113,7 @@ export const loginSchema = z.strictObject({
   role: userRoleSchema,
 });
 
-/*
+/**
  * Google OAuth Authorization Code 로그인 요청
  *
  * role은 신규 OAuth 회원 생성 시에만 사용한다.
@@ -128,7 +129,7 @@ export const googleOAuthSchema = z.strictObject({
   intent: oauthIntentSchema,
 });
 
-/*
+/**
  * Kakao OAuth Authorization Code 로그인 요청
  *
  * role은 신규 OAuth 회원 생성 시에만 사용한다.
@@ -144,7 +145,7 @@ export const kakaoOAuthSchema = z.strictObject({
   intent: oauthIntentSchema,
 });
 
-/*
+/**
  * Naver OAuth Authorization Code 로그인 요청
  *
  * 네이버는 Authorization Code와 함께
