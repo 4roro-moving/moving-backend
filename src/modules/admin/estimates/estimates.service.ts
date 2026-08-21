@@ -87,35 +87,36 @@ async function createCancellationSideEffects({
     content: "관리자 확인으로 확정된 견적 거래가 취소되었습니다.",
   }));
 
-  const [, , , , createdNotifications] = await Promise.all([
-    adminEstimatesRepository.cancelPendingRevisions(estimate.id, tx),
-    adminEstimatesRepository.createRequestCancellationHistory(
-      {
-        estimateRequestId: estimate.estimateRequestId,
-        changedBy: adminId,
-        type: "CANCELED",
-        previousData: {
-          status: estimate.estimateRequest.status,
-          isActive: estimate.estimateRequest.isActive,
-          confirmedEstimateId: estimate.estimateRequest.confirmedEstimateId,
-        },
-        changedData: {
-          status: "CANCELED",
-          isActive: false,
-          canceledAt: canceledAt.toISOString(),
-          cancelReason: "ADMIN_MANUAL_CANCELLATION",
-        },
+  await adminEstimatesRepository.cancelPendingRevisions(estimate.id, tx);
+  await adminEstimatesRepository.createRequestCancellationHistory(
+    {
+      estimateRequestId: estimate.estimateRequestId,
+      changedBy: adminId,
+      type: "CANCELED",
+      previousData: {
+        status: estimate.estimateRequest.status,
+        isActive: estimate.estimateRequest.isActive,
+        confirmedEstimateId: estimate.estimateRequest.confirmedEstimateId,
       },
-      tx,
-    ),
-    adminEstimatesRepository.createSystemMessages(systemMessages, tx),
-    adminEstimatesRepository.updateChatRoomsLastMessageAt(chatRoomIds, canceledAt, tx),
-    adminEstimatesRepository.createNotifications(notifications, tx),
-    adminEstimatesRepository.createActivityLog(
-      { adminId, estimateId: estimate.id, memo: buildCancellationActivityMemo(input) },
-      tx,
-    ),
-  ]);
+      changedData: {
+        status: "CANCELED",
+        isActive: false,
+        canceledAt: canceledAt.toISOString(),
+        cancelReason: "ADMIN_MANUAL_CANCELLATION",
+      },
+    },
+    tx,
+  );
+  await adminEstimatesRepository.createSystemMessages(systemMessages, tx);
+  await adminEstimatesRepository.updateChatRoomsLastMessageAt(chatRoomIds, canceledAt, tx);
+  const createdNotifications = await adminEstimatesRepository.createNotifications(
+    notifications,
+    tx,
+  );
+  await adminEstimatesRepository.createActivityLog(
+    { adminId, estimateId: estimate.id, memo: buildCancellationActivityMemo(input) },
+    tx,
+  );
 
   return createdNotifications;
 }
