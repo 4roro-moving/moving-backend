@@ -4,11 +4,12 @@ import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
 import {
   ACTIVE_GIVEAWAY_REQUEST_STATUSES,
+  GIVEAWAY_LIST_SORT,
   GIVEAWAY_REQUEST_STATUS,
   GIVEAWAY_STATUS,
   GIVEAWAY_VISIBILITY,
 } from "./giveaway.type";
-import type { GiveawayRequestStatusValue } from "./giveaway.type";
+import type { GiveawayListSortValue, GiveawayRequestStatusValue } from "./giveaway.type";
 
 const authorSelect = {
   id: true,
@@ -135,13 +136,23 @@ type ListGiveawayParams = {
   skip: number;
   take: number;
   where: Prisma.GiveawayWhereInput;
+  orderBy: Prisma.GiveawayOrderByWithRelationInput[];
 };
 
 type ListRequestParams = {
   skip: number;
   take: number;
   where: Prisma.GiveawayRequestWhereInput;
+  orderBy: Prisma.GiveawayRequestOrderByWithRelationInput[];
 };
+
+function toCreatedAtOrderBy(sort: GiveawayListSortValue) {
+  if (sort === GIVEAWAY_LIST_SORT.OLDEST) {
+    return [{ createdAt: "asc" as const }, { id: "asc" as const }];
+  }
+
+  return [{ createdAt: "desc" as const }, { id: "desc" as const }];
+}
 
 type CreateGiveawayData = {
   authorId: string;
@@ -180,14 +191,14 @@ function findRegionById(regionId: number, db: DbClient = prisma) {
 }
 
 async function findGiveawaysWithCount(
-  { skip, take, where }: ListGiveawayParams,
+  { skip, take, where, orderBy }: ListGiveawayParams,
   db: DbClient = prisma,
 ) {
   const [giveaways, totalCount] = await Promise.all([
     db.giveaway.findMany({
       where,
       select: giveawayListSelect,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy,
       skip,
       take,
     }),
@@ -357,14 +368,14 @@ async function findRequestByGiveawayAndRequester(
 }
 
 async function findRequestsWithCount(
-  { skip, take, where }: ListRequestParams,
+  { skip, take, where, orderBy }: ListRequestParams,
   db: DbClient = prisma,
 ) {
   const [requests, totalCount] = await Promise.all([
     db.giveawayRequest.findMany({
       where,
       select: requestSelect,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy,
       skip,
       take,
     }),
@@ -375,14 +386,14 @@ async function findRequestsWithCount(
 }
 
 async function findMyRequestsWithCount(
-  { skip, take, where }: ListRequestParams,
+  { skip, take, where, orderBy }: ListRequestParams,
   db: DbClient = prisma,
 ) {
   const [requests, totalCount] = await Promise.all([
     db.giveawayRequest.findMany({
       where,
       select: myRequestSelect,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      orderBy,
       skip,
       take,
     }),
@@ -472,6 +483,7 @@ export const giveawayRepository = {
   findGiveawayOwnership,
   findRegionById,
   findGiveawaysWithCount,
+  toCreatedAtOrderBy,
   createGiveaway,
   updateGiveaway,
   deleteGiveaway,

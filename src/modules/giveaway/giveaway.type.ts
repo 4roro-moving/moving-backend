@@ -10,6 +10,7 @@ import type {
   listGiveawayQuerySchema,
   listGiveawayRequestQuerySchema,
   listMyGiveawayQuerySchema,
+  listMyGiveawayRequestQuerySchema,
   rejectGiveawayRequestParamSchema,
   selectGiveawayRequestParamSchema,
   updateGiveawayRequestSchema,
@@ -39,12 +40,18 @@ export const GIVEAWAY_VISIBILITY = {
   VISIBLE: false,
 } as const;
 
+export const GIVEAWAY_LIST_SORT = {
+  LATEST: "LATEST",
+  OLDEST: "OLDEST",
+} as const;
+
 export const GIVEAWAY_TEXT_LENGTH = {
   TITLE_MIN: 1,
   TITLE_MAX: 100,
   DESCRIPTION_MIN: 1,
   DESCRIPTION_MAX: 2000,
   MESSAGE_MAX: 1000,
+  KEYWORD_MAX: 100,
 } as const;
 
 export const GIVEAWAY_PAGINATION = {
@@ -61,6 +68,7 @@ export const GIVEAWAY_USER_ROLE = {
 export type GiveawayStatusValue = (typeof GIVEAWAY_STATUS)[keyof typeof GIVEAWAY_STATUS];
 export type GiveawayRequestStatusValue =
   (typeof GIVEAWAY_REQUEST_STATUS)[keyof typeof GIVEAWAY_REQUEST_STATUS];
+export type GiveawayListSortValue = (typeof GIVEAWAY_LIST_SORT)[keyof typeof GIVEAWAY_LIST_SORT];
 
 export type CreateGiveawayInput = z.infer<typeof createGiveawaySchema>;
 export type UpdateGiveawayInput = z.infer<typeof updateGiveawaySchema>;
@@ -72,6 +80,7 @@ export type CompleteGiveawayParam = z.infer<typeof completeGiveawayParamSchema>;
 export type CreateGiveawayRequestInput = z.infer<typeof createGiveawayRequestSchema>;
 export type UpdateGiveawayRequestInput = z.infer<typeof updateGiveawayRequestSchema>;
 export type ListGiveawayRequestQuery = z.infer<typeof listGiveawayRequestQuerySchema>;
+export type ListMyGiveawayRequestQuery = z.infer<typeof listMyGiveawayRequestQuerySchema>;
 export type GiveawayRequestIdParam = z.infer<typeof giveawayRequestIdParamSchema>;
 export type SelectGiveawayRequestParam = z.infer<typeof selectGiveawayRequestParamSchema>;
 export type RejectGiveawayRequestParam = z.infer<typeof rejectGiveawayRequestParamSchema>;

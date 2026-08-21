@@ -13,6 +13,7 @@ import type {
   ListGiveawayQuery,
   ListGiveawayRequestQuery,
   ListMyGiveawayQuery,
+  ListMyGiveawayRequestQuery,
   RejectGiveawayRequestParam,
   SelectGiveawayRequestParam,
   UpdateGiveawayInput,
@@ -182,7 +183,7 @@ export const giveawayController = {
   },
 
   getMyGiveawayRequestList: async (req: Request, res: Response) => {
-    const query = res.locals.query as ListGiveawayRequestQuery;
+    const query = res.locals.query as ListMyGiveawayRequestQuery;
     const result = await giveawayService.listMyGiveawayRequests(getUserId(req), query);
 
     res.status(200).json({

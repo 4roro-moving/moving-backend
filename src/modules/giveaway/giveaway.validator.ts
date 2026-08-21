@@ -5,6 +5,7 @@ import {
   giveawayUpdateImageKeysSchema,
 } from "./giveaway-image.validator";
 import {
+  GIVEAWAY_LIST_SORT,
   GIVEAWAY_PAGINATION,
   GIVEAWAY_REQUEST_STATUS,
   GIVEAWAY_STATUS,
@@ -62,6 +63,22 @@ const limitSchema = z.coerce
   )
   .default(GIVEAWAY_PAGINATION.DEFAULT_LIMIT);
 
+const keywordSchema = z
+  .string({ error: "검색어는 문자열이어야 합니다." })
+  .trim()
+  .min(1, "검색어를 입력해 주세요.")
+  .max(
+    GIVEAWAY_TEXT_LENGTH.KEYWORD_MAX,
+    `검색어는 ${String(GIVEAWAY_TEXT_LENGTH.KEYWORD_MAX)}자 이하여야 합니다.`,
+  )
+  .optional();
+
+const sortSchema = z
+  .enum([GIVEAWAY_LIST_SORT.LATEST, GIVEAWAY_LIST_SORT.OLDEST], {
+    error: "올바른 정렬 기준이 아닙니다.",
+  })
+  .default(GIVEAWAY_LIST_SORT.LATEST);
+
 export const giveawayIdParamSchema = z.object({
   giveawayId: z.coerce
     .number({ error: "올바른 나눔 ID가 아닙니다." })
@@ -117,6 +134,8 @@ export const listGiveawayQuerySchema = z.object({
     .int("지역 ID는 정수여야 합니다.")
     .positive("올바른 지역 ID가 아닙니다.")
     .optional(),
+  keyword: keywordSchema,
+  sort: sortSchema,
 });
 
 export const listMyGiveawayQuerySchema = listGiveawayQuerySchema;
@@ -143,4 +162,9 @@ export const listGiveawayRequestQuerySchema = z.object({
       { error: "올바른 신청 상태가 아닙니다." },
     )
     .optional(),
+  sort: sortSchema,
+});
+
+export const listMyGiveawayRequestQuerySchema = listGiveawayRequestQuerySchema.extend({
+  keyword: keywordSchema,
 });

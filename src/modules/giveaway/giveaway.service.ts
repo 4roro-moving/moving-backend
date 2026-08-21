@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
+import { escapeLikePattern } from "../../utils/search.util";
 import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
 import { cleanupGiveawayImagesSafely } from "./giveaway-image.cleanup";
@@ -34,6 +35,7 @@ import type {
   ListGiveawayQuery,
   ListGiveawayRequestQuery,
   ListMyGiveawayQuery,
+  ListMyGiveawayRequestQuery,
   UpdateGiveawayInput,
   UpdateGiveawayRequestInput,
 } from "./giveaway.type";
@@ -43,6 +45,17 @@ function toImageRecords(imageKeys: string[]) {
     imageKey,
     sortOrder: index,
   }));
+}
+
+function toTitleContainsFilter(keyword: string | undefined): Prisma.StringFilter | undefined {
+  if (keyword === undefined) {
+    return undefined;
+  }
+
+  return {
+    contains: escapeLikePattern(keyword),
+    mode: "insensitive",
+  };
 }
 
 function toGiveawayUpdateData(
@@ -191,10 +204,17 @@ async function listVisibleGiveaways(
     where.regionId = query.regionId;
   }
 
+  const title = toTitleContainsFilter(query.keyword);
+
+  if (title !== undefined) {
+    where.title = title;
+  }
+
   const { giveaways, totalCount } = await giveawayRepository.findGiveawaysWithCount({
     skip: (query.page - 1) * query.limit,
     take: query.limit,
     where,
+    orderBy: giveawayRepository.toCreatedAtOrderBy(query.sort),
   });
 
   return {
@@ -385,6 +405,7 @@ async function listGiveawayRequests(
     skip: (query.page - 1) * query.limit,
     take: query.limit,
     where,
+    orderBy: giveawayRepository.toCreatedAtOrderBy(query.sort),
   });
 
   return {
@@ -650,12 +671,19 @@ async function rejectGiveawayRequest(giveawayId: number, requestId: number, auth
   });
 }
 
-async function listMyGiveawayRequests(requesterId: string, query: ListGiveawayRequestQuery) {
+async function listMyGiveawayRequests(requesterId: string, query: ListMyGiveawayRequestQuery) {
+  const giveawayWhere: Prisma.GiveawayWhereInput = {
+    isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
+  };
+  const title = toTitleContainsFilter(query.keyword);
+
+  if (title !== undefined) {
+    giveawayWhere.title = title;
+  }
+
   const where: Prisma.GiveawayRequestWhereInput = {
     requesterId,
-    giveaway: {
-      isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
-    },
+    giveaway: giveawayWhere,
   };
 
   if (query.status !== undefined) {
@@ -666,6 +694,7 @@ async function listMyGiveawayRequests(requesterId: string, query: ListGiveawayRe
     skip: (query.page - 1) * query.limit,
     take: query.limit,
     where,
+    orderBy: giveawayRepository.toCreatedAtOrderBy(query.sort),
   });
 
   return {
