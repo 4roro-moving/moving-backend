@@ -19,6 +19,7 @@ import { authRepository } from "./auth.repository";
 import { authService } from "./auth.service";
 import type { OAuthProfile } from "./auth.type";
 import { googleOAuth } from "./oauth/google.oauth";
+import { termsRepository } from "../terms/terms.repository";
 
 const REAL_PASSWORD_HASH = "$2b$10$real-user-password-hash-for-token-family-test";
 const CORRECT_PASSWORD = "correct-password";
@@ -229,6 +230,7 @@ describe("authService refresh token family on login", () => {
   const originalCompare = bcrypt.compare;
   const originalGetGoogleOAuthProfile = googleOAuth.getGoogleOAuthProfile;
   const originalTransaction = prisma.$transaction;
+  const originalFindRequiredPublished = termsRepository.findRequiredPublished;
 
   afterEach(() => {
     authRepository.findByEmail = originalFindByEmail;
@@ -238,6 +240,7 @@ describe("authService refresh token family on login", () => {
     bcrypt.compare = originalCompare;
     googleOAuth.getGoogleOAuthProfile = originalGetGoogleOAuthProfile;
     prisma.$transaction = originalTransaction;
+    termsRepository.findRequiredPublished = originalFindRequiredPublished;
   });
 
   function installSuccessfulLocalLogin(role: UserRole) {
@@ -311,6 +314,8 @@ describe("authService refresh token family on login", () => {
       deletedAt: null,
     });
     authRepository.saveRefreshToken = recorder.saveRefreshToken;
+    termsRepository.findRequiredPublished =
+      (async () => []) as typeof termsRepository.findRequiredPublished;
     prisma.$transaction = (async (callback: (tx: never) => Promise<unknown>) =>
       callback({} as never)) as unknown as typeof prisma.$transaction;
 

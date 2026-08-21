@@ -13,8 +13,8 @@ import { authRepository } from "./auth.repository";
 import { authService } from "./auth.service";
 import type { OAuthProfile } from "./auth.type";
 import { googleOAuth } from "./oauth/google.oauth";
+import { termsRepository } from "../terms/terms.repository";
 
-const DUMMY_PASSWORD_HASH = "$2b$10$CxtIUUg2JDRWy.TYdu0y0e9bahGlNcJg2F78GaW9lRboxNL/OZpE6";
 const REAL_PASSWORD_HASH = "$2b$10$real-user-password-hash-for-login-role-test";
 const CORRECT_PASSWORD = "correct-password";
 const WRONG_PASSWORD = "wrong-password";
@@ -294,6 +294,7 @@ describe("authService OAuth login role validation", () => {
   const originalCreate = authRepository.create;
   const originalSaveRefreshToken = authRepository.saveRefreshToken;
   const originalTransaction = prisma.$transaction;
+  const originalFindRequiredPublished = termsRepository.findRequiredPublished;
 
   afterEach(() => {
     googleOAuth.getGoogleOAuthProfile = originalGetGoogleOAuthProfile;
@@ -302,6 +303,7 @@ describe("authService OAuth login role validation", () => {
     authRepository.create = originalCreate;
     authRepository.saveRefreshToken = originalSaveRefreshToken;
     prisma.$transaction = originalTransaction;
+    termsRepository.findRequiredPublished = originalFindRequiredPublished;
   });
 
   function stubGoogleProfile(): void {
@@ -401,6 +403,8 @@ describe("authService OAuth login role validation", () => {
       };
     };
     authRepository.saveRefreshToken = refreshTokenStub.saveRefreshToken;
+    termsRepository.findRequiredPublished =
+      (async () => []) as typeof termsRepository.findRequiredPublished;
     prisma.$transaction = (async (callback: (tx: never) => Promise<unknown>) =>
       callback({} as never)) as unknown as typeof prisma.$transaction;
 
