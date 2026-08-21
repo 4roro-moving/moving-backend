@@ -19,7 +19,10 @@ registerRouterDocs(giveawayRouter, {
   endpoints: {
     "POST /image/upload-url": {
       summary: "나눔 이미지 업로드 URL 발급",
-      description: "S3 직접 업로드용 Presigned URL과 imageKey를 발급합니다.",
+      description: [
+        "S3 직접 업로드용 Presigned URL과 임시 imageKey를 발급합니다.",
+        "업로드 경로는 `temp/giveaways/{userId}/{uuid}.{ext}`이며, 글 저장 성공 시 `giveaways/{userId}/...`로 이동합니다.",
+      ].join("\n"),
       responses: { 201: "발급 성공" },
     },
     "GET /me": {
@@ -42,7 +45,10 @@ registerRouterDocs(giveawayRouter, {
     },
     "POST /": {
       summary: "나눔 글 작성",
-      description: "imageKeys의 배열 순서가 sortOrder가 되며, 0번이 대표 이미지입니다.",
+      description: [
+        "imageKeys의 배열 순서가 sortOrder가 되며, 0번이 대표 이미지입니다.",
+        "imageKeys에는 Presigned URL 발급으로 받은 `temp/giveaways/{userId}/...` Key만 넣을 수 있습니다.",
+      ].join("\n"),
       responses: { 201: "생성 성공", 400: "지역 또는 이미지가 올바르지 않습니다." },
     },
     "GET /:giveawayId": {
@@ -56,8 +62,12 @@ registerRouterDocs(giveawayRouter, {
     },
     "PATCH /:giveawayId": {
       summary: "나눔 글 수정",
-      description:
-        "작성자만, AVAILABLE 상태에서만 가능합니다. 숨김 글은 404입니다. imageKeys를 보내면 이미지를 교체합니다.",
+      description: [
+        "작성자만, AVAILABLE 상태에서만 가능합니다. 숨김 글은 404입니다.",
+        "imageKeys를 보내면 이미지를 교체합니다. 배열이 최종 목록이며 순서가 sortOrder입니다.",
+        "유지할 이미지는 기존 `giveaways/{userId}/...` Key를, 신규 이미지는 temp Key를 넣습니다.",
+        "요청에 없는 기존 이미지는 DB와 S3에서 삭제합니다.",
+      ].join("\n"),
       responses: {
         200: "수정 성공",
         403: "작성자가 아닙니다.",
@@ -68,7 +78,7 @@ registerRouterDocs(giveawayRouter, {
     "DELETE /:giveawayId": {
       summary: "나눔 글 삭제",
       description:
-        "작성자만, AVAILABLE 상태에서만 가능합니다. 숨김 글은 404입니다. 이미지와 신청은 Cascade로 함께 삭제됩니다.",
+        "작성자만, AVAILABLE 상태에서만 가능합니다. 숨김 글은 404입니다. 이미지와 신청은 Cascade로 함께 삭제되며, 연결된 S3 이미지도 정리합니다.",
       responses: {
         200: "삭제 성공",
         403: "작성자가 아닙니다.",

@@ -6,7 +6,8 @@ export const GIVEAWAY_IMAGE = {
   MAX_COUNT: 5,
   MAX_SIZE: 5 * 1024 * 1024,
   UPLOAD_URL_EXPIRES_IN: 180,
-  KEY_PREFIX: "giveaways",
+  TEMP_PREFIX: "temp/giveaways",
+  FINAL_PREFIX: "giveaways",
 } as const;
 
 export interface CreateGiveawayImageUploadUrlInput {

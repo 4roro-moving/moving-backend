@@ -1,10 +1,18 @@
 import { randomUUID } from "node:crypto";
 
-import { HeadObjectCommand, PutObjectCommand, S3ServiceException } from "@aws-sdk/client-s3";
+import {
+  CopyObjectCommand,
+  DeleteObjectCommand,
+  HeadObjectCommand,
+  PutObjectCommand,
+  S3ServiceException,
+} from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { s3Client } from "../../lib/s3";
+import { cleanupGiveawayImagesSafely } from "./giveaway-image.cleanup";
 import {
   GIVEAWAY_IMAGE,
   GIVEAWAY_IMAGE_CONTENT_TYPES,
@@ -14,6 +22,12 @@ import {
 } from "./giveaway-image.type";
 
 const ALLOWED_CONTENT_TYPES = new Set<string>(GIVEAWAY_IMAGE_CONTENT_TYPES);
+
+export type PreparedGiveawayImages = {
+  nextKeys: string[];
+  tempKeys: string[];
+  finalizedKeys: string[];
+};
 
 function getBucketName(): string {
   const bucketName = process.env.AWS_S3_BUCKET;
@@ -37,12 +51,30 @@ function getExtension(contentType: GiveawayImageContentType) {
   return extensionMap[contentType];
 }
 
-function validateImageKeyOwnership(userId: string, key: string): void {
-  const expectedPrefix = `${GIVEAWAY_IMAGE.KEY_PREFIX}/${userId}/`;
+function isTemporaryImageKey(key: string): boolean {
+  return key.startsWith(`${GIVEAWAY_IMAGE.TEMP_PREFIX}/`);
+}
+
+function isAbsoluteUrl(value: string): boolean {
+  return value.startsWith("http://") || value.startsWith("https://");
+}
+
+function validateTemporaryImageKeyOwnership(userId: string, key: string): void {
+  const expectedPrefix = `${GIVEAWAY_IMAGE.TEMP_PREFIX}/${userId}/`;
 
   if (!key.startsWith(expectedPrefix)) {
     throw new AppError("FORBIDDEN", {
       message: "본인의 나눔 이미지만 등록할 수 있습니다.",
+    });
+  }
+}
+
+function validateFinalImageKeyOwnership(userId: string, key: string): void {
+  const expectedPrefix = `${GIVEAWAY_IMAGE.FINAL_PREFIX}/${userId}/`;
+
+  if (!key.startsWith(expectedPrefix)) {
+    throw new AppError("FORBIDDEN", {
+      message: "본인의 나눔 이미지만 삭제할 수 있습니다.",
     });
   }
 }
@@ -59,8 +91,29 @@ function isS3ObjectNotFoundError(error: unknown): boolean {
   );
 }
 
+function createCopySource(key: string): string {
+  const encodedKey = key
+    .split("/")
+    .map((segment) => encodeURIComponent(segment))
+    .join("/");
+
+  return `${getBucketName()}/${encodedKey}`;
+}
+
+function getFinalImageKey(tempKey: string): string {
+  const tempPrefix = "temp/";
+
+  if (!tempKey.startsWith(tempPrefix)) {
+    throw new AppError("BAD_REQUEST", {
+      message: "올바른 임시 나눔 이미지 Key가 아닙니다.",
+    });
+  }
+
+  return tempKey.slice(tempPrefix.length);
+}
+
 async function validateUploadedImage(userId: string, key: string): Promise<void> {
-  validateImageKeyOwnership(userId, key);
+  validateTemporaryImageKeyOwnership(userId, key);
 
   try {
     const metadata = await s3Client.send(
@@ -102,8 +155,109 @@ async function validateUploadedImage(userId: string, key: string): Promise<void>
   }
 }
 
-async function validateUploadedImages(userId: string, imageKeys: string[]): Promise<void> {
-  await Promise.all(imageKeys.map((imageKey) => validateUploadedImage(userId, imageKey)));
+async function finalizeUploadedImage(userId: string, tempKey: string): Promise<string> {
+  await validateUploadedImage(userId, tempKey);
+
+  const finalKey = getFinalImageKey(tempKey);
+
+  try {
+    await s3Client.send(
+      new CopyObjectCommand({
+        Bucket: getBucketName(),
+        CopySource: createCopySource(tempKey),
+        Key: finalKey,
+      }),
+    );
+  } catch (error) {
+    logger.error("나눔 이미지를 최종 저장 위치로 복사하지 못했습니다.", {
+      error,
+      userId,
+      tempKey,
+      finalKey,
+    });
+
+    throw new AppError("INTERNAL_SERVER_ERROR", {
+      message: "나눔 이미지를 최종 저장 위치로 이동하지 못했습니다.",
+    });
+  }
+
+  return finalKey;
+}
+
+async function rollbackFinalizedImages(userId: string, finalKeys: string[]): Promise<void> {
+  await cleanupGiveawayImagesSafely(finalKeys, (key) => deleteFinalImage(userId, key), {
+    userId,
+    action: "ROLLBACK_FINALIZED_IMAGE",
+  });
+}
+
+async function finalizeUploadedImages(userId: string, tempKeys: string[]): Promise<string[]> {
+  const finalizedKeys: string[] = [];
+
+  try {
+    for (const tempKey of tempKeys) {
+      finalizedKeys.push(await finalizeUploadedImage(userId, tempKey));
+    }
+
+    return finalizedKeys;
+  } catch (error) {
+    await rollbackFinalizedImages(userId, finalizedKeys);
+    throw error;
+  }
+}
+
+async function deleteTemporaryImage(userId: string, tempKey: string): Promise<void> {
+  validateTemporaryImageKeyOwnership(userId, tempKey);
+
+  await s3Client.send(
+    new DeleteObjectCommand({
+      Bucket: getBucketName(),
+      Key: tempKey,
+    }),
+  );
+}
+
+async function deleteFinalImage(userId: string, key: string): Promise<void> {
+  if (!key || isAbsoluteUrl(key)) {
+    return;
+  }
+
+  validateFinalImageKeyOwnership(userId, key);
+
+  await s3Client.send(
+    new DeleteObjectCommand({
+      Bucket: getBucketName(),
+      Key: key,
+    }),
+  );
+}
+
+async function prepareUpdatedImages(
+  userId: string,
+  imageKeys: string[],
+  currentKeys: string[],
+): Promise<PreparedGiveawayImages> {
+  const currentKeySet = new Set(currentKeys);
+
+  for (const key of imageKeys) {
+    if (!isTemporaryImageKey(key) && !currentKeySet.has(key)) {
+      throw new AppError("BAD_REQUEST", {
+        message: "다른 나눔 글의 이미지는 재사용할 수 없습니다.",
+      });
+    }
+  }
+
+  const tempKeys = imageKeys.filter((key) => isTemporaryImageKey(key));
+  const finalizedKeys = await finalizeUploadedImages(userId, tempKeys);
+  const tempToFinal = new Map(
+    tempKeys.map((tempKey, index) => [tempKey, finalizedKeys[index] ?? tempKey]),
+  );
+
+  return {
+    nextKeys: imageKeys.map((key) => tempToFinal.get(key) ?? key),
+    tempKeys,
+    finalizedKeys,
+  };
 }
 
 async function createUploadUrl(
@@ -111,7 +265,7 @@ async function createUploadUrl(
   input: CreateGiveawayImageUploadUrlInput,
 ): Promise<GiveawayImageUploadUrlResponse> {
   const extension = getExtension(input.contentType);
-  const key = `${GIVEAWAY_IMAGE.KEY_PREFIX}/${userId}/${randomUUID()}.${extension}`;
+  const key = `${GIVEAWAY_IMAGE.TEMP_PREFIX}/${userId}/${randomUUID()}.${extension}`;
 
   const command = new PutObjectCommand({
     Bucket: getBucketName(),
@@ -132,5 +286,9 @@ async function createUploadUrl(
 
 export const giveawayImageService = {
   createUploadUrl,
-  validateUploadedImages,
+  finalizeUploadedImages,
+  prepareUpdatedImages,
+  deleteTemporaryImage,
+  deleteFinalImage,
+  rollbackFinalizedImages,
 };

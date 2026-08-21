@@ -4,6 +4,7 @@ import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
+import { cleanupGiveawayImagesSafely } from "./giveaway-image.cleanup";
 import { giveawayImageService } from "./giveaway-image.service";
 import {
   toGiveawayDetail,
@@ -42,6 +43,53 @@ function toImageRecords(imageKeys: string[]) {
     imageKey,
     sortOrder: index,
   }));
+}
+
+function toGiveawayUpdateData(
+  input: UpdateGiveawayInput,
+  images?: Array<{ imageKey: string; sortOrder: number }>,
+) {
+  const updateData: Parameters<typeof giveawayRepository.updateGiveaway>[1] = {};
+
+  if (input.title !== undefined) {
+    updateData.title = input.title;
+  }
+
+  if (input.description !== undefined) {
+    updateData.description = input.description;
+  }
+
+  if (input.regionId !== undefined) {
+    updateData.regionId = input.regionId;
+  }
+
+  if (images !== undefined) {
+    updateData.images = images;
+  }
+
+  return updateData;
+}
+
+async function cleanupTemporaryImages(userId: string, keys: string[]) {
+  await cleanupGiveawayImagesSafely(
+    keys,
+    (key) => giveawayImageService.deleteTemporaryImage(userId, key),
+    {
+      userId,
+      action: "DELETE_TEMP_IMAGE",
+    },
+  );
+}
+
+async function cleanupPreviousImages(userId: string, keys: string[]) {
+  await cleanupGiveawayImagesSafely(
+    keys,
+    (key) => giveawayImageService.deleteFinalImage(userId, key),
+    {
+      userId,
+      action: "DELETE_PREVIOUS_IMAGE",
+    },
+  );
 }
 
 function isUniqueConstraintError(error: unknown, fields: string[]): boolean {
@@ -168,73 +216,131 @@ async function listReceivedGiveaways(receiverId: string, query: ListMyGiveawayQu
 }
 
 async function createGiveaway(authorId: string, input: CreateGiveawayInput) {
-  await giveawayImageService.validateUploadedImages(authorId, input.imageKeys);
+  await assertRegionExists(input.regionId);
 
-  return runTransaction(async (tx) => {
-    await assertRegionExists(input.regionId, tx);
+  const tempKeys = input.imageKeys;
+  let finalizedKeys: string[] = [];
 
-    const createData: Parameters<typeof giveawayRepository.createGiveaway>[0] = {
-      authorId,
-      title: input.title,
-      description: input.description,
-      images: toImageRecords(input.imageKeys),
-    };
+  try {
+    finalizedKeys = await giveawayImageService.finalizeUploadedImages(authorId, tempKeys);
 
-    if (input.regionId !== undefined) {
-      createData.regionId = input.regionId;
-    }
+    const giveaway = await runTransaction(async (tx) => {
+      await assertRegionExists(input.regionId, tx);
 
-    const giveaway = await giveawayRepository.createGiveaway(createData, tx);
+      const createData: Parameters<typeof giveawayRepository.createGiveaway>[0] = {
+        authorId,
+        title: input.title,
+        description: input.description,
+        images: toImageRecords(finalizedKeys),
+      };
+
+      if (input.regionId !== undefined) {
+        createData.regionId = input.regionId;
+      }
+
+      return giveawayRepository.createGiveaway(createData, tx);
+    });
+
+    await cleanupTemporaryImages(authorId, tempKeys);
 
     return toGiveawayDetail(giveaway, { id: authorId }, null);
-  });
+  } catch (error) {
+    await giveawayImageService.rollbackFinalizedImages(authorId, finalizedKeys);
+    throw error;
+  }
 }
 
 async function updateGiveaway(giveawayId: number, authorId: string, input: UpdateGiveawayInput) {
-  if (input.imageKeys !== undefined) {
-    await giveawayImageService.validateUploadedImages(authorId, input.imageKeys);
+  if (input.imageKeys === undefined) {
+    return runTransaction(async (tx) => {
+      const owned = await findGiveawayOwnershipOrThrow(giveawayId, tx);
+
+      assertGiveawayAuthor(owned, authorId);
+      assertGiveawayEditable(owned);
+      await assertRegionExists(input.regionId, tx);
+
+      const giveaway = await giveawayRepository.updateGiveaway(
+        giveawayId,
+        toGiveawayUpdateData(input),
+        tx,
+      );
+
+      return toGiveawayDetail(giveaway, { id: authorId }, null);
+    });
   }
 
-  return runTransaction(async (tx) => {
-    const owned = await findGiveawayOwnershipOrThrow(giveawayId, tx);
+  let finalizedKeys: string[] = [];
 
-    assertGiveawayAuthor(owned, authorId);
-    assertGiveawayEditable(owned);
-    await assertRegionExists(input.regionId, tx);
+  try {
+    const current = await findVisibleGiveawayOrThrow(giveawayId);
 
-    const updateData: Parameters<typeof giveawayRepository.updateGiveaway>[1] = {};
+    assertGiveawayAuthor(current, authorId);
+    assertGiveawayEditable(current);
+    await assertRegionExists(input.regionId);
 
-    if (input.title !== undefined) {
-      updateData.title = input.title;
-    }
+    const currentKeys = current.images.map((image) => image.imageKey);
+    const prepared = await giveawayImageService.prepareUpdatedImages(
+      authorId,
+      input.imageKeys,
+      currentKeys,
+    );
 
-    if (input.description !== undefined) {
-      updateData.description = input.description;
-    }
+    finalizedKeys = prepared.finalizedKeys;
+    const newlyCopied = new Set(prepared.finalizedKeys);
 
-    if (input.regionId !== undefined) {
-      updateData.regionId = input.regionId;
-    }
+    const giveaway = await runTransaction(async (tx) => {
+      const locked = await findGiveawayOwnershipOrThrow(giveawayId, tx);
 
-    if (input.imageKeys !== undefined) {
-      updateData.images = toImageRecords(input.imageKeys);
-    }
+      assertGiveawayAuthor(locked, authorId);
+      assertGiveawayEditable(locked);
+      await assertRegionExists(input.regionId, tx);
 
-    const giveaway = await giveawayRepository.updateGiveaway(giveawayId, updateData, tx);
+      const latest = await giveawayRepository.findGiveawayById(giveawayId, tx);
+      const latestKeys = new Set(latest?.images.map((image) => image.imageKey) ?? []);
+
+      for (const key of prepared.nextKeys) {
+        if (!newlyCopied.has(key) && !latestKeys.has(key)) {
+          throw new AppError("BAD_REQUEST", {
+            message: "다른 나눔 글의 이미지는 재사용할 수 없습니다.",
+          });
+        }
+      }
+
+      return giveawayRepository.updateGiveaway(
+        giveawayId,
+        toGiveawayUpdateData(input, toImageRecords(prepared.nextKeys)),
+        tx,
+      );
+    });
+
+    const removedKeys = currentKeys.filter((key) => !prepared.nextKeys.includes(key));
+
+    await cleanupTemporaryImages(authorId, prepared.tempKeys);
+    await cleanupPreviousImages(authorId, removedKeys);
 
     return toGiveawayDetail(giveaway, { id: authorId }, null);
-  });
+  } catch (error) {
+    await giveawayImageService.rollbackFinalizedImages(authorId, finalizedKeys);
+    throw error;
+  }
 }
 
 async function deleteGiveaway(giveawayId: number, authorId: string) {
-  await runTransaction(async (tx) => {
+  const imageKeys = await runTransaction(async (tx) => {
     const owned = await findGiveawayOwnershipOrThrow(giveawayId, tx);
 
     assertGiveawayAuthor(owned, authorId);
     assertGiveawayDeletable(owned);
 
+    const giveaway = await giveawayRepository.findGiveawayById(giveawayId, tx);
+    const keys = giveaway?.images.map((image) => image.imageKey) ?? [];
+
     await giveawayRepository.deleteGiveaway(giveawayId, tx);
+
+    return keys;
   });
+
+  await cleanupPreviousImages(authorId, imageKeys);
 }
 
 async function completeGiveaway(giveawayId: number, authorId: string) {

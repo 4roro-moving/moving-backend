@@ -1,6 +1,9 @@
 import { z } from "zod";
 
-import { giveawayImageKeysSchema } from "./giveaway-image.validator";
+import {
+  giveawayCreateImageKeysSchema,
+  giveawayUpdateImageKeysSchema,
+} from "./giveaway-image.validator";
 import {
   GIVEAWAY_PAGINATION,
   GIVEAWAY_REQUEST_STATUS,
@@ -87,7 +90,7 @@ export const createGiveawaySchema = z.object({
   title: titleSchema,
   description: descriptionSchema,
   regionId: regionIdSchema.optional(),
-  imageKeys: giveawayImageKeysSchema.default([]),
+  imageKeys: giveawayCreateImageKeysSchema.default([]),
 });
 
 export const updateGiveawaySchema = z
@@ -95,7 +98,7 @@ export const updateGiveawaySchema = z
     title: titleSchema.optional(),
     description: descriptionSchema.optional(),
     regionId: regionIdSchema.nullable().optional(),
-    imageKeys: giveawayImageKeysSchema.optional(),
+    imageKeys: giveawayUpdateImageKeysSchema.optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "수정할 내용을 입력해 주세요.",
