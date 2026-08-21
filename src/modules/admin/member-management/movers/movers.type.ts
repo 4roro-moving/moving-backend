@@ -4,6 +4,7 @@ import type {
   MoveType,
   ReportReason,
   ReportStatus,
+  ReportTargetType,
   SuspensionAction,
 } from "@prisma/client";
 import type { z } from "zod";
@@ -109,6 +110,15 @@ export type MoverReceivedReportHistoryItem = {
   createdAt: Date;
 };
 
+export type MoverFiledReportHistoryItem = {
+  id: number;
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: ReportReason;
+  status: ReportStatus;
+  createdAt: Date;
+};
+
 export type MoverDetail = {
   account: MemberDetailAccount;
   profile: MoverDetailProfile;
@@ -118,6 +128,7 @@ export type MoverDetail = {
   };
   reviewHistory: HistorySummary<MoverReviewHistoryItem>;
   reportHistory: {
+    filed: HistorySummary<MoverFiledReportHistoryItem>;
     received: HistorySummary<MoverReceivedReportHistoryItem>;
   };
   suspensionHistory: HistorySummary<MemberSuspensionHistoryItem>;
