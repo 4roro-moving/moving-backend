@@ -1,9 +1,10 @@
-import { LogAction, type NotificationType } from "@prisma/client";
+import { LogAction, Prisma, type NotificationType } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
 import { buildPagination } from "../../../utils/pagination.util";
 import { runTransaction } from "../../../utils/transaction";
 import { notificationService } from "../../notification/notification.service";
+import { residenceReviewService } from "../../residence-review/residence-review.service";
 
 import {
   residenceReviewsRepository,
@@ -151,50 +152,58 @@ async function toggleResidenceReviewVisibility(params: {
   const { adminId, residenceReviewId, action, reason } = params;
   const config = VISIBILITY_TOGGLE_CONFIG[action];
 
-  const result = await runTransaction(async (tx) => {
-    const review = await residenceReviewsRepository.findResidenceReviewById(residenceReviewId, tx);
+  const result = await runTransaction(
+    async (tx) => {
+      const review = await residenceReviewsRepository.findResidenceReviewById(
+        residenceReviewId,
+        tx,
+      );
 
-    if (!review) {
-      throw new AppError("CONTENT_NOT_FOUND");
-    }
+      if (!review) {
+        throw new AppError("CONTENT_NOT_FOUND");
+      }
 
-    const updated = await residenceReviewsRepository.updateResidenceReviewHiddenIf(
-      residenceReviewId,
-      config.expectedHidden,
-      config.nextHidden,
-      tx,
-    );
+      const updated = await residenceReviewsRepository.updateResidenceReviewHiddenIf(
+        residenceReviewId,
+        config.expectedHidden,
+        config.nextHidden,
+        tx,
+      );
 
-    if (!updated) {
-      throw new AppError(config.conflictError);
-    }
+      if (!updated) {
+        throw new AppError(config.conflictError);
+      }
 
-    await residenceReviewsRepository.createActivityLog(
-      {
-        actorId: adminId,
-        action: config.logAction,
-        targetId: String(residenceReviewId),
-        memo: reason,
-      },
-      tx,
-    );
+      await residenceReviewsRepository.createActivityLog(
+        {
+          actorId: adminId,
+          action: config.logAction,
+          targetId: String(residenceReviewId),
+          memo: reason,
+        },
+        tx,
+      );
 
-    await residenceReviewsRepository.syncRegionReviewStatistic(updated.regionId, tx);
+      await residenceReviewService.refreshRegionReviewStatistic(updated.regionId, tx);
 
-    const notification = await notificationService.createNotification(
-      {
-        userId: review.authorId,
-        type: config.notificationType,
-        title: config.notificationTitle,
-        content: getResidenceReviewNotificationContent(review),
-        linkUrl: null,
-        expiresAt: null,
-      },
-      tx,
-    );
+      const notification = await notificationService.createNotification(
+        {
+          userId: review.authorId,
+          type: config.notificationType,
+          title: config.notificationTitle,
+          content: getResidenceReviewNotificationContent(review),
+          linkUrl: null,
+          expiresAt: null,
+        },
+        tx,
+      );
 
-    return { updated, notification, authorId: review.authorId };
-  });
+      return { updated, notification, authorId: review.authorId };
+    },
+    {
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    },
+  );
 
   notificationService.sendNotification(result.authorId, result.notification);
 

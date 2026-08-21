@@ -274,43 +274,6 @@ export const residenceReviewsRepository = {
     });
   },
 
-  /**
-   * 노출 중(isHidden=false) 후기만 집계해 지역 통계를 맞춥니다.
-   * 숨김/복구 후 같은 트랜잭션에서 호출합니다.
-   */
-  async syncRegionReviewStatistic(regionId: number, db: DbClient = prisma) {
-    const aggregate = await db.residenceReview.aggregate({
-      where: {
-        regionId,
-        isHidden: false,
-      },
-      _sum: { rating: true },
-      _count: { _all: true },
-    });
-
-    const reviewCount = aggregate._count._all;
-    const ratingSum = aggregate._sum.rating ?? 0;
-    const averageRating =
-      reviewCount === 0
-        ? new Prisma.Decimal(0)
-        : new Prisma.Decimal((ratingSum / reviewCount).toFixed(2));
-
-    await db.regionReviewStatistic.upsert({
-      where: { regionId },
-      create: {
-        regionId,
-        ratingSum,
-        reviewCount,
-        averageRating,
-      },
-      update: {
-        ratingSum,
-        reviewCount,
-        averageRating,
-      },
-    });
-  },
-
   countReportsByTargetIds(targetIds: string[], db: DbClient = prisma) {
     if (targetIds.length === 0) {
       return Promise.resolve([] as Array<{ targetId: string; _count: { _all: number } }>);
