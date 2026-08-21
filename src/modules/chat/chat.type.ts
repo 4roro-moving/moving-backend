@@ -34,6 +34,10 @@ export type ChatRoomSummary = {
   estimateRequestId: number;
   customer: ChatParticipant;
   mover: ChatParticipant;
+  /** 현재 채팅방에서 텍스트·이미지 메시지를 전송할 수 있는지 여부입니다. */
+  canSendMessage: boolean;
+  /** 메시지 전송이 불가능한 경우 프론트에 표시할 안내 문구입니다. */
+  messageDisabledReason: string | null;
   lastMessageAt: Date | null;
   createdAt: Date;
   updatedAt: Date;
