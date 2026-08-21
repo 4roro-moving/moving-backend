@@ -19,6 +19,7 @@ import { adminManagementController } from "./admin-management.controller";
 import {
   adminIdParamSchema,
   createAdminBodySchema,
+  deactivateAdminBodySchema,
   listAdminQuerySchema,
   updateAdminStatusBodySchema,
 } from "./admin-management.validator";
@@ -103,6 +104,7 @@ adminManagementRouter
  * - SUSPEND / RELEASE 요청을 처리합니다.
  * - 대상 관리자 ID와 요청 Body를 모두 검증합니다.
  * - SUPER_ADMIN 계정 자체는 Service에서 상태 변경을 차단합니다.
+ * - 비활성화된 관리자는 정지/해제할 수 없습니다.
  */
 adminManagementRouter.route("/:id/status").patch(
   authorizeAdmin(ADMIN_PERMISSIONS.ADMIN_STATUS_MANAGE),
@@ -111,6 +113,30 @@ adminManagementRouter.route("/:id/status").patch(
     body: updateAdminStatusBodySchema,
   }),
   asyncHandler(adminManagementController.updateAdminStatus),
+);
+
+/**
+ * PATCH /api/admin/admins/:id/deactivate
+ *
+ * 일반 ADMIN 계정 비활성화
+ *
+ * - SUPER_ADMIN만 수행할 수 있습니다.
+ * - 대상 관리자 ID와 비활성화 사유를 검증합니다.
+ * - 일반 ADMIN(AdminRole.ADMIN)만 비활성화할 수 있습니다.
+ * - SUPER_ADMIN 계정 자체는 비활성화할 수 없습니다.
+ * - 비활성화 시 User.isActive를 false로 변경합니다.
+ * - deletedAt을 기록하여 일반적인 정지 상태와 구분합니다.
+ * - 기존 ADMIN Refresh Token 세션을 모두 강제 폐기합니다.
+ * - 비활성화 행위와 사유는 ActivityLog에 기록합니다.
+ * - 이미 비활성화된 계정의 중복 요청은 Service에서 차단합니다.
+ */
+adminManagementRouter.route("/:id/deactivate").patch(
+  authorizeAdmin(ADMIN_PERMISSIONS.ADMIN_DEACTIVATE),
+  validate({
+    params: adminIdParamSchema,
+    body: deactivateAdminBodySchema,
+  }),
+  asyncHandler(adminManagementController.deactivateAdmin),
 );
 
 export default adminManagementRouter;

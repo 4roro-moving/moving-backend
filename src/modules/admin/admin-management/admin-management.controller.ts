@@ -9,6 +9,7 @@ import { adminManagementService } from "./admin-management.service";
 import type {
   AdminIdParam,
   CreateAdminBody,
+  DeactivateAdminBody,
   ListAdminQuery,
   UpdateAdminStatusBody,
 } from "./admin-management.type";
@@ -60,6 +61,31 @@ export const adminManagementController = {
     }
 
     const result = await adminManagementService.updateAdminStatus({
+      targetAdminId: id,
+      actorAdminId: req.admin.id,
+      input,
+    });
+
+    return sendResponse(res, 200, result);
+  },
+
+  // PATCH /api/admin/admins/:id/deactivate
+  deactivateAdmin: async (req: Request, res: Response) => {
+    const { id } = res.locals.params as AdminIdParam;
+    const input = req.body as DeactivateAdminBody;
+
+    /**
+     * 런타임에서는 requireActiveAdmin이 req.admin을 보장하지만,
+     * TypeScript는 Express 미들웨어 실행 순서를 추론하지 못하므로
+     * Controller에서도 안전하게 확인합니다.
+     */
+    if (!req.admin) {
+      throw new AppError("UNAUTHORIZED", {
+        message: "인증이 필요합니다.",
+      });
+    }
+
+    const result = await adminManagementService.deactivateAdmin({
       targetAdminId: id,
       actorAdminId: req.admin.id,
       input,

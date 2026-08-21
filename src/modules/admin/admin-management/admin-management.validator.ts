@@ -2,9 +2,6 @@ import { z } from "zod";
 
 import { emailSchema, nameSchema, passwordSchema, phoneSchema } from "../../auth/auth.validator";
 
-/**
- * SUPER_ADMIN의 일반 ADMIN 생성 요청입니다.
- */
 export const createAdminBodySchema = z.strictObject({
   email: emailSchema,
   password: passwordSchema,
@@ -12,16 +9,10 @@ export const createAdminBodySchema = z.strictObject({
   phone: phoneSchema,
 });
 
-/**
- * 관리자 ID Path Parameter입니다.
- */
 export const adminIdParamSchema = z.strictObject({
   id: z.uuid("올바른 관리자 ID가 아닙니다."),
 });
 
-/**
- * 관리자 정지/해제 요청입니다.
- */
 export const updateAdminStatusBodySchema = z.strictObject({
   action: z.enum(["SUSPEND", "RELEASE"], {
     error: "관리자 상태 변경 action은 SUSPEND 또는 RELEASE여야 합니다.",
@@ -40,14 +31,6 @@ export const updateAdminStatusBodySchema = z.strictObject({
     }),
 });
 
-/**
- * 관리자 목록 조회 Query Parameter입니다.
- *
- * - page: 페이지 번호
- * - limit: 페이지당 조회 개수
- * - keyword: 이름 또는 이메일 검색
- * - status: 활성/정지 상태
- */
 export const listAdminQuerySchema = z.strictObject({
   page: z.coerce
     .number()
@@ -69,4 +52,24 @@ export const listAdminQuerySchema = z.strictObject({
       error: "관리자 상태는 ACTIVE 또는 SUSPENDED여야 합니다.",
     })
     .optional(),
+});
+
+/**
+ * 일반 ADMIN 계정 비활성화 요청
+ *
+ * 비활성화는 정지와 달리 계정 사용을 종료하는 조치이므로
+ * 해제 기능을 제공하지 않고 처리 사유를 필수로 기록합니다.
+ */
+export const deactivateAdminBodySchema = z.strictObject({
+  reason: z
+    .string({
+      error: "비활성화 사유를 입력해주세요.",
+    })
+    .trim()
+    .min(1, {
+      error: "비활성화 사유를 입력해주세요.",
+    })
+    .max(500, {
+      error: "비활성화 사유는 500자 이하여야 합니다.",
+    }),
 });

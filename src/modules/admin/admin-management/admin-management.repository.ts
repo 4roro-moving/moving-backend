@@ -31,6 +31,12 @@ type CreateAdminStatusActivityLogData = {
   memo: string;
 };
 
+type CreateAdminDeactivateActivityLogData = {
+  actorId: string;
+  targetId: string;
+  memo: string;
+};
+
 type FindAdminsWithCountParams = {
   skip: number;
   take: number;
@@ -118,6 +124,7 @@ export const adminManagementRepository = {
    * - User.role = ADMIN인 계정만 조회합니다.
    * - AdminProfile.adminRole = ADMIN 조건을 통해
    *   SUPER_ADMIN은 관리 대상 목록에서 제외합니다.
+   * - deletedAt이 null인 관리자만 조회합니다.
    * - keyword가 있으면 이름 또는 이메일을 부분 일치 검색합니다.
    * - status는 User.isActive 기준으로 필터링합니다.
    * - 최신 생성된 관리자부터 조회합니다.
@@ -129,13 +136,11 @@ export const adminManagementRepository = {
     const where = {
       role: UserRole.ADMIN,
       deletedAt: null,
-
       adminProfile: {
         is: {
           adminRole: AdminRole.ADMIN,
         },
       },
-
       ...(keyword
         ? {
             OR: [
@@ -154,7 +159,6 @@ export const adminManagementRepository = {
             ],
           }
         : {}),
-
       ...(status
         ? {
             isActive: status === "ACTIVE",
@@ -205,7 +209,7 @@ export const adminManagementRepository = {
    * 일반 ADMIN 상세 정보를 조회합니다.
    *
    * 관리자 계정 관리 대상인 AdminRole.ADMIN만 조회하며,
-   * SUPER_ADMIN은 상세 조회 대상에서 제외합니다.
+   * SUPER_ADMIN과 비활성화된 관리자는 상세 조회 대상에서 제외합니다.
    */
   findAdminDetailById(id: string, db: DbClient = prisma) {
     return db.user.findFirst({
@@ -279,20 +283,48 @@ export const adminManagementRepository = {
   },
 
   /**
-   * 관리자 상태 변경에 필요한 대상 관리자 정보를 조회합니다.
+   * 관리자 상태 변경 또는 비활성화에 필요한 대상 관리자 정보를 조회합니다.
    *
    * User.role = ADMIN인 계정만 조회하며,
    * AdminProfile을 함께 조회해 SUPER_ADMIN 여부를 확인할 수 있도록 합니다.
    *
-   * 상태 변경에서는 SUPER_ADMIN 여부를 Service에서 명시적으로 판단해야 하므로
+   * SUPER_ADMIN 여부는 Service에서 명시적으로 판단해야 하므로
    * 여기서는 AdminRole.ADMIN으로 제한하지 않습니다.
+   *
+   * 이미 비활성화된 관리자도 Service에서 중복 비활성화를 판단할 수 있도록
+   * deletedAt 조건을 두지 않습니다.
    */
   findAdminById(id: string, db: DbClient = prisma) {
     return db.user.findFirst({
       where: {
         id,
         role: UserRole.ADMIN,
-        deletedAt: null,
+      },
+      select: {
+        id: true,
+        isActive: true,
+        deletedAt: true,
+        adminProfile: {
+          select: {
+            adminRole: true,
+          },
+        },
+      },
+    });
+  },
+
+  /**
+   * 관리자의 활성 상태를 변경합니다.
+   *
+   * 정지/해제 상태의 기준은 User.isActive입니다.
+   */
+  updateAdminActiveStatus(id: string, isActive: boolean, db: DbClient = prisma) {
+    return db.user.update({
+      where: {
+        id,
+      },
+      data: {
+        isActive,
       },
       select: {
         id: true,
@@ -307,21 +339,28 @@ export const adminManagementRepository = {
   },
 
   /**
-   * 관리자의 활성 상태를 변경합니다.
+   * 일반 ADMIN 계정을 비활성화합니다.
    *
-   * 현재 관리자 정지 상태의 기준은 User.isActive입니다.
+   * 비활성화는 일시적인 정지와 구분합니다.
+   *
+   * - isActive = false
+   * - deletedAt = 비활성화 시각
+   *
+   * 실제 User 데이터를 삭제하지 않는 Soft Delete 방식입니다.
    */
-  updateAdminActiveStatus(id: string, isActive: boolean, db: DbClient = prisma) {
+  deactivateAdmin(id: string, deletedAt: Date, db: DbClient = prisma) {
     return db.user.update({
       where: {
         id,
       },
       data: {
-        isActive,
+        isActive: false,
+        deletedAt,
       },
       select: {
         id: true,
         isActive: true,
+        deletedAt: true,
         adminProfile: {
           select: {
             adminRole: true,
@@ -358,6 +397,31 @@ export const adminManagementRepository = {
    * 관리자 역시 User이므로 targetType은 USER를 사용합니다.
    */
   createAdminStatusActivityLog(data: CreateAdminStatusActivityLogData, db: DbClient = prisma) {
+    return db.activityLog.create({
+      data: {
+        actorId: data.actorId,
+        actorRole: UserRole.ADMIN,
+        action: LogAction.UPDATE,
+        targetType: LogTargetType.USER,
+        targetId: data.targetId,
+        memo: data.memo,
+      },
+    });
+  },
+
+  /**
+   * 일반 ADMIN 비활성화 행위를 ActivityLog에 기록합니다.
+   *
+   * actorId에는 비활성화를 수행한 SUPER_ADMIN,
+   * targetId에는 비활성화된 ADMIN의 User ID를 기록합니다.
+   *
+   * User 자체는 Soft Delete되지만 실제 데이터는 남아 있으므로
+   * 운영상 누가 어떤 사유로 계정을 비활성화했는지 추적할 수 있습니다.
+   */
+  createAdminDeactivateActivityLog(
+    data: CreateAdminDeactivateActivityLogData,
+    db: DbClient = prisma,
+  ) {
     return db.activityLog.create({
       data: {
         actorId: data.actorId,

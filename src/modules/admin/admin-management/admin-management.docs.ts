@@ -12,7 +12,6 @@ registerRouterDocs(adminManagementRouter, {
   basePath: "/api/admin/admins",
   tag: "Admin Management",
   headers: authHeaderSchema,
-
   commonResponses: {
     401: "인증이 필요합니다.",
     403: "해당 요청을 수행할 관리자 권한이 없습니다.",
@@ -20,7 +19,6 @@ registerRouterDocs(adminManagementRouter, {
     409: "이미 요청한 상태로 처리된 관리자 계정입니다.",
     422: "입력값이 올바르지 않습니다.",
   },
-
   endpoints: {
     /**
      * 일반 관리자 목록 조회
@@ -108,6 +106,7 @@ registerRouterDocs(adminManagementRouter, {
         "- SUPER_ADMIN만 호출할 수 있습니다.",
         "- 대상은 `AdminRole.ADMIN`인 일반 관리자만 가능합니다.",
         "- SUPER_ADMIN 계정은 상태 변경 대상이 될 수 없습니다.",
+        "- 비활성화된 관리자 계정은 정지하거나 정지 해제할 수 없습니다.",
         "- `SUSPEND`: User.isActive를 false로 변경하고 기존 ADMIN Refresh Token 세션을 강제 폐기합니다.",
         "- 기존 Access Token도 이후 요청에서 requireActiveAdmin을 통해 차단됩니다.",
         "- `RELEASE`: User.isActive를 true로 변경합니다.",
@@ -119,8 +118,39 @@ registerRouterDocs(adminManagementRouter, {
         200: "관리자 상태 변경 성공",
         403: "SUPER_ADMIN 권한이 없거나 SUPER_ADMIN 계정을 변경하려는 요청입니다.",
         404: "해당 관리자 계정을 찾을 수 없습니다.",
-        409: "이미 요청한 상태로 처리된 관리자 계정입니다.",
+        409: "이미 요청한 상태이거나 비활성화된 관리자 계정입니다.",
         422: "입력값이 올바르지 않습니다.",
+      },
+    },
+
+    /**
+     * 일반 관리자 계정 비활성화
+     */
+    "PATCH /:id/deactivate": {
+      summary: "일반 관리자 계정 비활성화",
+      description: [
+        "SUPER_ADMIN이 일반 ADMIN 계정의 사용을 종료합니다.",
+        "",
+        "- SUPER_ADMIN만 호출할 수 있습니다.",
+        "- 대상은 `AdminRole.ADMIN`인 일반 관리자만 가능합니다.",
+        "- SUPER_ADMIN 계정 자체는 비활성화할 수 없습니다.",
+        "- 비활성화는 일시적인 정지와 구분되는 Soft Delete 조치입니다.",
+        "- User.isActive를 false로 변경합니다.",
+        "- User.deletedAt에 비활성화 시각을 기록합니다.",
+        "- 정지된 관리자도 비활성화할 수 있습니다.",
+        "- 비활성화된 계정은 정지 해제를 통해 다시 활성화할 수 없습니다.",
+        "- 기존 ADMIN Refresh Token 세션을 모두 강제로 폐기합니다.",
+        "- 기존 Access Token도 이후 관리자 API 요청에서 차단됩니다.",
+        "- 비활성화 사유와 처리 행위는 ActivityLog에 기록합니다.",
+        "- 비활성화는 UserSuspension의 정지/해제 이력에는 기록하지 않습니다.",
+        "- 이미 비활성화된 관리자에 대한 중복 요청은 거부됩니다.",
+      ].join("\n"),
+      responses: {
+        200: "관리자 계정 비활성화 성공",
+        403: "SUPER_ADMIN 권한이 없거나 SUPER_ADMIN 계정을 비활성화하려는 요청입니다.",
+        404: "해당 관리자 계정을 찾을 수 없습니다.",
+        409: "이미 비활성화된 관리자 계정입니다.",
+        422: "관리자 ID 또는 비활성화 사유가 올바르지 않습니다.",
       },
     },
   },

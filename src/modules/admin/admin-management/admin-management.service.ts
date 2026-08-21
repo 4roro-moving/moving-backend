@@ -24,6 +24,8 @@ import type {
   AdminListItem,
   CreateAdminBody,
   CreateAdminResponse,
+  DeactivateAdminBody,
+  DeactivateAdminResponse,
   ListAdminQuery,
   UpdateAdminStatusBody,
   UpdateAdminStatusResponse,
@@ -212,6 +214,7 @@ export const adminManagementService = {
    * SUPER_ADMIN이 일반 ADMIN 계정을 정지하거나 해제합니다.
    *
    * SUPER_ADMIN 계정 자체는 상태 변경 대상이 될 수 없습니다.
+   * 이미 비활성화된 관리자 계정은 정지/해제할 수 없습니다.
    * 정지 시 기존 ADMIN Refresh Token 세션을 모두 강제 폐기합니다.
    * 정지 해제 시 기존 세션은 복구하지 않으며 다시 로그인해야 합니다.
    */
@@ -244,6 +247,16 @@ export const adminManagementService = {
       if (admin.adminProfile.adminRole !== AdminRole.ADMIN) {
         throw new AppError("FORBIDDEN", {
           message: "SUPER_ADMIN 계정의 상태는 변경할 수 없습니다.",
+        });
+      }
+
+      /**
+       * 비활성화된 관리자 계정은 사용 종료된 계정이므로
+       * 정지/해제를 통해 다시 활성화할 수 없습니다.
+       */
+      if (admin.deletedAt !== null) {
+        throw new AppError("CONFLICT", {
+          message: "비활성화된 관리자 계정은 정지 또는 정지 해제할 수 없습니다.",
         });
       }
 
@@ -318,6 +331,120 @@ export const adminManagementService = {
         id: updatedAdmin.id,
         isActive: updatedAdmin.isActive,
         adminRole: admin.adminProfile.adminRole,
+      };
+    });
+  },
+
+  /**
+   * SUPER_ADMIN이 일반 ADMIN 계정을 비활성화합니다.
+   *
+   * 비활성화는 일시적인 정지와 달리
+   * 관리자 계정 사용을 종료하는 Soft Delete 조치입니다.
+   *
+   * - User.isActive = false
+   * - User.deletedAt = 비활성화 시각
+   * - 기존 ADMIN Refresh Token 전부 강제 폐기
+   * - ActivityLog에 비활성화 사유 기록
+   *
+   * 비활성화된 계정은 다시 활성화하지 않습니다.
+   */
+  async deactivateAdmin({
+    targetAdminId,
+    actorAdminId,
+    input,
+  }: {
+    targetAdminId: string;
+    actorAdminId: string;
+    input: DeactivateAdminBody;
+  }): Promise<DeactivateAdminResponse> {
+    return runTransaction(async (tx) => {
+      /**
+       * 대상이 실제 ADMIN 계정인지 확인합니다.
+       *
+       * 이미 비활성화된 계정도 조회할 수 있어야
+       * 중복 비활성화를 409로 구분할 수 있습니다.
+       */
+      const admin = await adminManagementRepository.findAdminById(targetAdminId, tx);
+
+      if (!admin || !admin.adminProfile) {
+        throw new AppError("USER_NOT_FOUND", {
+          message: "해당 관리자 계정을 찾을 수 없습니다.",
+        });
+      }
+
+      /**
+       * SUPER_ADMIN은 일반 관리자 계정 관리 API의
+       * 비활성화 대상이 될 수 없습니다.
+       */
+      if (admin.adminProfile.adminRole !== AdminRole.ADMIN) {
+        throw new AppError("FORBIDDEN", {
+          message: "SUPER_ADMIN 계정은 비활성화할 수 없습니다.",
+        });
+      }
+
+      /**
+       * 이미 비활성화된 계정은 중복 처리하지 않습니다.
+       */
+      if (admin.deletedAt !== null) {
+        throw new AppError("CONFLICT", {
+          message: "이미 비활성화된 관리자 계정입니다.",
+        });
+      }
+
+      const deletedAt = new Date();
+
+      /**
+       * 일반 ADMIN을 Soft Delete 방식으로 비활성화합니다.
+       *
+       * 정지된 ADMIN(isActive=false, deletedAt=null)도
+       * 비활성화할 수 있으며 최종 상태는
+       * isActive=false + deletedAt!=null이 됩니다.
+       */
+      const deactivatedAdmin = await adminManagementRepository.deactivateAdmin(
+        targetAdminId,
+        deletedAt,
+        tx,
+      );
+
+      /**
+       * 비활성화는 정지/해제 이력이 아니므로
+       * UserSuspension에는 기록하지 않고
+       * ActivityLog에 처리 사유를 기록합니다.
+       */
+      await adminManagementRepository.createAdminDeactivateActivityLog(
+        {
+          actorId: actorAdminId,
+          targetId: targetAdminId,
+          memo: input.reason,
+        },
+        tx,
+      );
+
+      /**
+       * 비활성화 즉시 기존 관리자 세션을 모두 종료합니다.
+       */
+      await authRepository.revokeAllRefreshTokensByUserId(
+        targetAdminId,
+        RefreshTokenSessionType.ADMIN,
+        RefreshTokenRevokedReason.FORCED,
+        tx,
+      );
+
+      /**
+       * Repository에서 deletedAt을 직접 설정했으므로
+       * 정상적인 경우 반드시 Date가 존재합니다.
+       */
+      if (!deactivatedAdmin.deletedAt) {
+        throw new AppError("INTERNAL_SERVER_ERROR", {
+          message: "관리자 계정 비활성화 상태를 확인할 수 없습니다.",
+        });
+      }
+
+      return {
+        id: deactivatedAdmin.id,
+        adminRole: admin.adminProfile.adminRole,
+        isActive: deactivatedAdmin.isActive,
+        deletedAt: deactivatedAdmin.deletedAt,
       };
     });
   },
