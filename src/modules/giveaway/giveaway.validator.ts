@@ -121,24 +121,27 @@ export const updateGiveawaySchema = z
     message: "수정할 내용을 입력해 주세요.",
   });
 
-export const listGiveawayQuerySchema = z.object({
+const giveawayStatusQuerySchema = z
+  .enum([GIVEAWAY_STATUS.AVAILABLE, GIVEAWAY_STATUS.IN_PROGRESS, GIVEAWAY_STATUS.COMPLETED], {
+    error: "올바른 나눔 상태가 아닙니다.",
+  })
+  .optional();
+
+export const listMyGiveawayQuerySchema = z.object({
   page: pageSchema,
   limit: limitSchema,
-  status: z
-    .enum([GIVEAWAY_STATUS.AVAILABLE, GIVEAWAY_STATUS.IN_PROGRESS, GIVEAWAY_STATUS.COMPLETED], {
-      error: "올바른 나눔 상태가 아닙니다.",
-    })
-    .optional(),
+  status: giveawayStatusQuerySchema,
+  sort: sortSchema,
+});
+
+export const listGiveawayQuerySchema = listMyGiveawayQuerySchema.extend({
   regionId: z.coerce
     .number({ error: "지역 ID는 숫자여야 합니다." })
     .int("지역 ID는 정수여야 합니다.")
     .positive("올바른 지역 ID가 아닙니다.")
     .optional(),
   keyword: keywordSchema,
-  sort: sortSchema,
 });
-
-export const listMyGiveawayQuerySchema = listGiveawayQuerySchema;
 
 export const createGiveawayRequestSchema = z.object({
   message: messageSchema.optional(),

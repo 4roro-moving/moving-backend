@@ -186,7 +186,7 @@ async function getGiveawayDetail(giveawayId: number, viewerId: string) {
 }
 
 async function listVisibleGiveaways(
-  query: ListGiveawayQuery,
+  query: ListMyGiveawayQuery & Pick<ListGiveawayQuery, "keyword" | "regionId">,
   extraWhere: Prisma.GiveawayWhereInput = {},
 ) {
   await assertRegionExists(query.regionId);

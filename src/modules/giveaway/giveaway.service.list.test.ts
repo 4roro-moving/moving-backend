@@ -5,6 +5,7 @@ import { giveawayRepository } from "./giveaway.repository";
 import { giveawayService } from "./giveaway.service";
 import { GIVEAWAY_LIST_SORT, GIVEAWAY_REQUEST_STATUS, GIVEAWAY_STATUS } from "./giveaway.type";
 
+const AUTHOR_ID = "22222222-2222-4222-8222-222222222222";
 const REQUESTER_ID = "11111111-1111-4111-8111-111111111111";
 
 describe("giveawayService.listGiveaways", () => {
@@ -43,6 +44,44 @@ describe("giveawayService.listGiveaways", () => {
           contains: "100\\%\\_test",
           mode: "insensitive",
         },
+      },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+    });
+  });
+});
+
+describe("giveawayService.listMyGiveaways", () => {
+  it("작성자 글 목록에 처리 상태와 오래된 순을 적용한다", async () => {
+    const originalFindGiveawaysWithCount = giveawayRepository.findGiveawaysWithCount;
+    let receivedParams: Parameters<typeof giveawayRepository.findGiveawaysWithCount>[0] | undefined;
+
+    giveawayRepository.findGiveawaysWithCount = async (params) => {
+      receivedParams = params;
+
+      return {
+        giveaways: [],
+        totalCount: 0,
+      };
+    };
+
+    try {
+      await giveawayService.listMyGiveaways(AUTHOR_ID, {
+        page: 1,
+        limit: 10,
+        status: GIVEAWAY_STATUS.IN_PROGRESS,
+        sort: GIVEAWAY_LIST_SORT.OLDEST,
+      });
+    } finally {
+      giveawayRepository.findGiveawaysWithCount = originalFindGiveawaysWithCount;
+    }
+
+    assert.deepEqual(receivedParams, {
+      skip: 0,
+      take: 10,
+      where: {
+        authorId: AUTHOR_ID,
+        isHidden: false,
+        status: GIVEAWAY_STATUS.IN_PROGRESS,
       },
       orderBy: [{ createdAt: "asc" }, { id: "asc" }],
     });

@@ -5,6 +5,7 @@ import { GIVEAWAY_LIST_SORT, GIVEAWAY_REQUEST_STATUS } from "./giveaway.type";
 import {
   listGiveawayQuerySchema,
   listGiveawayRequestQuerySchema,
+  listMyGiveawayQuerySchema,
   listMyGiveawayRequestQuerySchema,
 } from "./giveaway.validator";
 
@@ -74,6 +75,37 @@ describe("listMyGiveawayRequestQuerySchema", () => {
       status: GIVEAWAY_REQUEST_STATUS.PENDING,
       sort: GIVEAWAY_LIST_SORT.OLDEST,
     });
+  });
+});
+
+describe("listMyGiveawayQuerySchema", () => {
+  it("처리 상태와 오래된 순을 받는다", () => {
+    const result = listMyGiveawayQuerySchema.parse({
+      status: "IN_PROGRESS",
+      sort: GIVEAWAY_LIST_SORT.OLDEST,
+    });
+
+    assert.deepEqual(result, {
+      page: 1,
+      limit: 10,
+      status: "IN_PROGRESS",
+      sort: GIVEAWAY_LIST_SORT.OLDEST,
+    });
+    assert.equal("keyword" in result, false);
+  });
+
+  it("올바르지 않은 처리 상태는 한국어 검증 메시지를 반환한다", () => {
+    const result = listMyGiveawayQuerySchema.safeParse({
+      status: "PENDING",
+    });
+
+    assert.equal(result.success, false);
+
+    if (result.success) {
+      assert.fail("올바르지 않은 처리 상태는 실패해야 합니다.");
+    }
+
+    assert.equal(result.error.issues[0]?.message, "올바른 나눔 상태가 아닙니다.");
   });
 });
 
