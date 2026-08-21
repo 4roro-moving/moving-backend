@@ -43,16 +43,6 @@ const messageSchema = z
     `신청 메시지는 ${String(GIVEAWAY_TEXT_LENGTH.MESSAGE_MAX)}자 이하여야 합니다.`,
   );
 
-const pageSchema = z.coerce
-  .number({ error: "페이지 번호는 숫자여야 합니다." })
-  .int("페이지 번호는 정수여야 합니다.")
-  .positive("페이지 번호는 1 이상이어야 합니다.")
-  .max(
-    GIVEAWAY_PAGINATION.MAX_PAGE,
-    `페이지 번호는 ${String(GIVEAWAY_PAGINATION.MAX_PAGE)} 이하여야 합니다.`,
-  )
-  .default(GIVEAWAY_PAGINATION.DEFAULT_PAGE);
-
 const limitSchema = z.coerce
   .number({ error: "조회 개수는 숫자여야 합니다." })
   .int("조회 개수는 정수여야 합니다.")
@@ -62,6 +52,15 @@ const limitSchema = z.coerce
     `조회 개수는 ${String(GIVEAWAY_PAGINATION.MAX_LIMIT)} 이하여야 합니다.`,
   )
   .default(GIVEAWAY_PAGINATION.DEFAULT_LIMIT);
+
+const cursorSchema = z
+  .string({ error: "커서는 문자열이어야 합니다." })
+  .min(1, "커서는 비어 있을 수 없습니다.")
+  .max(
+    GIVEAWAY_PAGINATION.MAX_CURSOR_LENGTH,
+    `커서는 최대 ${String(GIVEAWAY_PAGINATION.MAX_CURSOR_LENGTH)}자까지 입력할 수 있습니다.`,
+  )
+  .optional();
 
 const keywordSchema = z
   .string({ error: "검색어는 문자열이어야 합니다." })
@@ -128,8 +127,8 @@ const giveawayStatusQuerySchema = z
   .optional();
 
 export const listMyGiveawayQuerySchema = z.object({
-  page: pageSchema,
   limit: limitSchema,
+  cursor: cursorSchema,
   status: giveawayStatusQuerySchema,
   sort: sortSchema,
 });
@@ -152,8 +151,8 @@ export const updateGiveawayRequestSchema = z.object({
 });
 
 export const listGiveawayRequestQuerySchema = z.object({
-  page: pageSchema,
   limit: limitSchema,
+  cursor: cursorSchema,
   status: z
     .enum(
       [

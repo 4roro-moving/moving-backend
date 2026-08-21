@@ -7,6 +7,15 @@ const authHeaderSchema = z.object({
   authorization: z.string().meta({ example: "Bearer <access-token>" }),
 });
 
+const GIVEAWAY_CURSOR_LIST_NOTES = [
+  "- `sort`와 필터가 바뀌면 `cursor` 없이 처음부터 조회해야 합니다.",
+  "- 조건이 다른 `cursor`를 보내면 유효하지 않은 커서로 응답합니다.",
+  "- `cursor`가 없으면 해당 조건의 첫 페이지부터 조회합니다.",
+  "- `cursor`가 있으면 해당 위치 다음 항목을 조회합니다.",
+  "- `pagination.totalCount`는 첫 페이지(`cursor` 없음)에서만 전체 건수입니다. `cursor`가 있으면 `null`이며, 전체 건수는 첫 페이지 응답을 사용하면 됩니다.",
+  "- 다음 페이지는 응답의 `pagination.nextCursor`로 요청합니다.",
+].join("\n");
+
 registerRouterDocs(giveawayRouter, {
   basePath: "/api/giveaways",
   tag: "Giveaway",
@@ -27,20 +36,29 @@ registerRouterDocs(giveawayRouter, {
     },
     "GET /me": {
       summary: "내가 작성한 나눔 목록",
-      description:
+      description: [
         "숨김 글은 제외합니다. status(AVAILABLE|IN_PROGRESS|COMPLETED)와 sort(LATEST|OLDEST)로 조회할 수 있습니다.",
+        "",
+        GIVEAWAY_CURSOR_LIST_NOTES,
+      ].join("\n"),
       responses: { 200: "조회 성공" },
     },
     "GET /me/received": {
       summary: "내가 수령한 나눔 목록",
-      description:
+      description: [
         "선정되어 receiverId가 본인인 나눔 글 목록입니다. 숨김 글은 제외합니다. status, sort(LATEST|OLDEST)로 조회할 수 있습니다.",
+        "",
+        GIVEAWAY_CURSOR_LIST_NOTES,
+      ].join("\n"),
       responses: { 200: "조회 성공" },
     },
     "GET /": {
       summary: "나눔 목록",
-      description:
+      description: [
         "숨김 글은 제외합니다. keyword(제목), status, regionId, sort(LATEST|OLDEST)로 조회할 수 있습니다. 없는 지역이면 400입니다.",
+        "",
+        GIVEAWAY_CURSOR_LIST_NOTES,
+      ].join("\n"),
       responses: { 200: "조회 성공", 400: "지원하지 않는 지역입니다." },
     },
     "POST /": {
@@ -98,8 +116,11 @@ registerRouterDocs(giveawayRouter, {
     },
     "GET /:giveawayId/requests": {
       summary: "나눔 신청 목록",
-      description:
+      description: [
         "작성자만 해당 글의 신청 목록을 조회합니다. 숨김 글은 404입니다. status, sort(LATEST|OLDEST)로 조회할 수 있습니다.",
+        "",
+        GIVEAWAY_CURSOR_LIST_NOTES,
+      ].join("\n"),
       responses: {
         200: "조회 성공",
         403: "작성자가 아닙니다.",
@@ -161,8 +182,11 @@ registerRouterDocs(giveawayRequestRouter, {
   endpoints: {
     "GET /me": {
       summary: "내 나눔 신청 목록",
-      description:
+      description: [
         "숨김 글의 신청은 제외합니다. keyword(나눔 글 제목), status, sort(LATEST|OLDEST)로 조회할 수 있습니다.",
+        "",
+        GIVEAWAY_CURSOR_LIST_NOTES,
+      ].join("\n"),
       responses: { 200: "조회 성공" },
     },
     "PATCH /:requestId": {

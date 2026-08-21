@@ -69,7 +69,6 @@ describe("listMyGiveawayRequestQuerySchema", () => {
     });
 
     assert.deepEqual(result, {
-      page: 1,
       limit: 10,
       keyword: "책상",
       status: GIVEAWAY_REQUEST_STATUS.PENDING,
@@ -86,7 +85,6 @@ describe("listMyGiveawayQuerySchema", () => {
     });
 
     assert.deepEqual(result, {
-      page: 1,
       limit: 10,
       status: "IN_PROGRESS",
       sort: GIVEAWAY_LIST_SORT.OLDEST,

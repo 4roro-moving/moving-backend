@@ -1,12 +1,21 @@
 import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
-import { buildPagination } from "../../utils/pagination.util";
+import type { CursorPagination } from "../../types/response.type";
 import { escapeLikePattern } from "../../utils/search.util";
 import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
 import { cleanupGiveawayImagesSafely } from "./giveaway-image.cleanup";
 import { giveawayImageService } from "./giveaway-image.service";
+import {
+  decodeGiveawayCursor,
+  decodeGiveawayRequestCursor,
+  encodeGiveawayNextCursor,
+  encodeGiveawayRequestNextCursor,
+  sliceGiveawayCursorPage,
+  toGiveawayCursorQuery,
+  toGiveawayRequestCursorQuery,
+} from "./giveaway.cursor";
 import {
   toGiveawayDetail,
   toGiveawayListItem,
@@ -210,16 +219,29 @@ async function listVisibleGiveaways(
     where.title = title;
   }
 
-  const { giveaways, totalCount } = await giveawayRepository.findGiveawaysWithCount({
-    skip: (query.page - 1) * query.limit,
-    take: query.limit,
+  const cursorQuery = toGiveawayCursorQuery({
+    sort: query.sort,
+    status: query.status,
+    regionId: query.regionId,
+    keyword: query.keyword,
+  });
+  const decodedCursor = decodeGiveawayCursor(query.cursor, cursorQuery);
+  const { giveaways, totalCount } = await giveawayRepository.findGiveawaysByCursorWithCount({
+    take: query.limit + 1,
     where,
     orderBy: giveawayRepository.toCreatedAtOrderBy(query.sort),
+    ...(decodedCursor ? { cursor: decodedCursor } : {}),
   });
+  const { pageItems, hasNext } = sliceGiveawayCursorPage(giveaways, query.limit);
 
   return {
-    giveaways: giveaways.map(toGiveawayListItem),
-    pagination: buildPagination(totalCount, query.page, query.limit),
+    giveaways: pageItems.map(toGiveawayListItem),
+    pagination: {
+      limit: query.limit,
+      totalCount,
+      hasNext,
+      nextCursor: encodeGiveawayNextCursor(pageItems.at(-1), hasNext, cursorQuery),
+    } satisfies CursorPagination,
   };
 }
 
@@ -401,16 +423,27 @@ async function listGiveawayRequests(
     where.status = query.status;
   }
 
-  const { requests, totalCount } = await giveawayRepository.findRequestsWithCount({
-    skip: (query.page - 1) * query.limit,
-    take: query.limit,
+  const cursorQuery = toGiveawayRequestCursorQuery({
+    sort: query.sort,
+    status: query.status,
+  });
+  const decodedCursor = decodeGiveawayRequestCursor(query.cursor, cursorQuery);
+  const { requests, totalCount } = await giveawayRepository.findRequestsByCursorWithCount({
+    take: query.limit + 1,
     where,
     orderBy: giveawayRepository.toCreatedAtOrderBy(query.sort),
+    ...(decodedCursor ? { cursor: decodedCursor } : {}),
   });
+  const { pageItems, hasNext } = sliceGiveawayCursorPage(requests, query.limit);
 
   return {
-    requests: requests.map(toGiveawayRequestItem),
-    pagination: buildPagination(totalCount, query.page, query.limit),
+    requests: pageItems.map(toGiveawayRequestItem),
+    pagination: {
+      limit: query.limit,
+      totalCount,
+      hasNext,
+      nextCursor: encodeGiveawayRequestNextCursor(pageItems.at(-1), hasNext, cursorQuery),
+    } satisfies CursorPagination,
   };
 }
 
@@ -690,16 +723,28 @@ async function listMyGiveawayRequests(requesterId: string, query: ListMyGiveaway
     where.status = query.status;
   }
 
-  const { requests, totalCount } = await giveawayRepository.findMyRequestsWithCount({
-    skip: (query.page - 1) * query.limit,
-    take: query.limit,
+  const cursorQuery = toGiveawayRequestCursorQuery({
+    sort: query.sort,
+    status: query.status,
+    keyword: query.keyword,
+  });
+  const decodedCursor = decodeGiveawayRequestCursor(query.cursor, cursorQuery);
+  const { requests, totalCount } = await giveawayRepository.findMyRequestsByCursorWithCount({
+    take: query.limit + 1,
     where,
     orderBy: giveawayRepository.toCreatedAtOrderBy(query.sort),
+    ...(decodedCursor ? { cursor: decodedCursor } : {}),
   });
+  const { pageItems, hasNext } = sliceGiveawayCursorPage(requests, query.limit);
 
   return {
-    requests: requests.map(toMyGiveawayRequestItem),
-    pagination: buildPagination(totalCount, query.page, query.limit),
+    requests: pageItems.map(toMyGiveawayRequestItem),
+    pagination: {
+      limit: query.limit,
+      totalCount,
+      hasNext,
+      nextCursor: encodeGiveawayRequestNextCursor(pageItems.at(-1), hasNext, cursorQuery),
+    } satisfies CursorPagination,
   };
 }
 

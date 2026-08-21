@@ -55,10 +55,9 @@ export const GIVEAWAY_TEXT_LENGTH = {
 } as const;
 
 export const GIVEAWAY_PAGINATION = {
-  MAX_PAGE: 10000,
-  DEFAULT_PAGE: 1,
   DEFAULT_LIMIT: 10,
   MAX_LIMIT: 50,
+  MAX_CURSOR_LENGTH: 500,
 } as const;
 
 export const GIVEAWAY_USER_ROLE = {
@@ -81,6 +80,30 @@ export type CreateGiveawayRequestInput = z.infer<typeof createGiveawayRequestSch
 export type UpdateGiveawayRequestInput = z.infer<typeof updateGiveawayRequestSchema>;
 export type ListGiveawayRequestQuery = z.infer<typeof listGiveawayRequestQuerySchema>;
 export type ListMyGiveawayRequestQuery = z.infer<typeof listMyGiveawayRequestQuerySchema>;
+
+export type GiveawayCursorQuery = {
+  sort: GiveawayListSortValue;
+  status?: GiveawayStatusValue;
+  regionId?: number;
+  keyword?: string;
+};
+
+export type GiveawayRequestCursorQuery = {
+  sort: GiveawayListSortValue;
+  status?: GiveawayRequestStatusValue;
+  keyword?: string;
+};
+
+export type GiveawayCursor = GiveawayCursorQuery & {
+  createdAt: Date;
+  id: number;
+};
+
+export type GiveawayRequestCursor = GiveawayRequestCursorQuery & {
+  createdAt: Date;
+  id: number;
+};
+
 export type GiveawayRequestIdParam = z.infer<typeof giveawayRequestIdParamSchema>;
 export type SelectGiveawayRequestParam = z.infer<typeof selectGiveawayRequestParamSchema>;
 export type RejectGiveawayRequestParam = z.infer<typeof rejectGiveawayRequestParamSchema>;
