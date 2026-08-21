@@ -14,6 +14,7 @@ import { authRepository } from "./auth.repository";
 import { authService } from "./auth.service";
 import type { OAuthProfile } from "./auth.type";
 import { googleOAuth } from "./oauth/google.oauth";
+import { termsRepository } from "../terms/terms.repository";
 
 const REAL_PASSWORD_HASH = "$2b$10$real-user-password-hash-for-login-role-test";
 const CORRECT_PASSWORD = "correct-password";
@@ -300,6 +301,7 @@ describe("authService OAuth login role validation", () => {
   const originalCreate = authRepository.create;
   const originalSaveRefreshToken = authRepository.saveRefreshToken;
   const originalTransaction = prisma.$transaction;
+  const originalFindRequiredPublished = termsRepository.findRequiredPublished;
   const originalSaveSignUpAgreements = termsService.saveSignUpAgreements;
 
   afterEach(() => {
@@ -309,6 +311,7 @@ describe("authService OAuth login role validation", () => {
     authRepository.create = originalCreate;
     authRepository.saveRefreshToken = originalSaveRefreshToken;
     prisma.$transaction = originalTransaction;
+    termsRepository.findRequiredPublished = originalFindRequiredPublished;
     termsService.saveSignUpAgreements = originalSaveSignUpAgreements;
   });
 
@@ -461,6 +464,8 @@ describe("authService OAuth login role validation", () => {
       };
     };
     authRepository.saveRefreshToken = refreshTokenStub.saveRefreshToken;
+    termsRepository.findRequiredPublished =
+      (async () => []) as typeof termsRepository.findRequiredPublished;
     // 26.08.20 김나연 - [수정] signup intent 경로에서 약관 저장 stub 처리
     termsService.saveSignUpAgreements = async () => undefined;
     prisma.$transaction = (async (callback: (tx: never) => Promise<unknown>) =>

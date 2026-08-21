@@ -20,6 +20,7 @@ import { authRepository } from "./auth.repository";
 import { authService } from "./auth.service";
 import type { OAuthProfile } from "./auth.type";
 import { googleOAuth } from "./oauth/google.oauth";
+import { termsRepository } from "../terms/terms.repository";
 
 const REAL_PASSWORD_HASH = "$2b$10$real-user-password-hash-for-token-family-test";
 const CORRECT_PASSWORD = "correct-password";
@@ -230,6 +231,7 @@ describe("authService refresh token family on login", () => {
   const originalCompare = bcrypt.compare;
   const originalGetGoogleOAuthProfile = googleOAuth.getGoogleOAuthProfile;
   const originalTransaction = prisma.$transaction;
+  const originalFindRequiredPublished = termsRepository.findRequiredPublished;
   const originalSaveSignUpAgreements = termsService.saveSignUpAgreements;
 
   afterEach(() => {
@@ -240,6 +242,7 @@ describe("authService refresh token family on login", () => {
     bcrypt.compare = originalCompare;
     googleOAuth.getGoogleOAuthProfile = originalGetGoogleOAuthProfile;
     prisma.$transaction = originalTransaction;
+    termsRepository.findRequiredPublished = originalFindRequiredPublished;
     termsService.saveSignUpAgreements = originalSaveSignUpAgreements;
   });
 
@@ -317,6 +320,8 @@ describe("authService refresh token family on login", () => {
       deletedAt: null,
     });
     authRepository.saveRefreshToken = recorder.saveRefreshToken;
+    termsRepository.findRequiredPublished =
+      (async () => []) as typeof termsRepository.findRequiredPublished;
     // 26.08.20 김나연 - [수정] signup intent 경로에서 약관 저장 stub 처리
     termsService.saveSignUpAgreements = async () => undefined;
     prisma.$transaction = (async (callback: (tx: never) => Promise<unknown>) =>
