@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
+import { escapeLikePattern } from "../../utils/search.util";
 import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
 
@@ -123,9 +124,18 @@ export const termsService = {
    * type/status 로 필터할 수 있고, 삭제된 약관은 제외합니다.
    */
   async getTermsList(query: ListTermsQuery) {
-    const { page, limit, type, status } = query;
+    const { page, limit, type, status, keyword } = query;
 
     const where: Prisma.TermsWhereInput = { deletedAt: null };
+
+    if (keyword !== undefined) {
+      const escapedKeyword = escapeLikePattern(keyword);
+      // 제목만으로는 type 필터와 정보가 겹치므로 본문까지 검색한다. (insensitive: 대소문자 구분 없이)
+      where.OR = [
+        { title: { contains: escapedKeyword, mode: "insensitive" } },
+        { content: { contains: escapedKeyword, mode: "insensitive" } },
+      ];
+    }
 
     if (type !== undefined) {
       where.type = type;
