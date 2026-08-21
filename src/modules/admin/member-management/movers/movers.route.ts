@@ -5,12 +5,11 @@ import { requireActiveAdmin } from "../../../../middlewares/admin";
 import { authenticate, authorize } from "../../../../middlewares/auth";
 import { validate } from "../../../../middlewares/validate";
 import { asyncHandler } from "../../../../utils/async-handler.util";
+
+import { listMoverQuerySchema, moverIdParamSchema } from "./movers.validator";
+
 import { moversController } from "./movers.controller";
-import {
-  listMoverQuerySchema,
-  moverIdParamSchema,
-  updateMoverStatusBodySchema,
-} from "./movers.validator";
+import { updateMemberStatusBodySchema } from "../member-status.validator";
 
 const adminMoverRouter = Router();
 
@@ -27,7 +26,7 @@ adminMoverRouter
 adminMoverRouter
   .route("/:id/status")
   .patch(
-    validate({ params: moverIdParamSchema, body: updateMoverStatusBodySchema }),
+    validate({ params: moverIdParamSchema, body: updateMemberStatusBodySchema }),
     asyncHandler(moversController.updateMoverStatus),
   );
 

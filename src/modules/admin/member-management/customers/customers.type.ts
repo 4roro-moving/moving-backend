@@ -16,15 +16,10 @@ import type {
   MemberListBase,
   MemberSuspensionHistoryItem,
 } from "../member.type";
-import type {
-  customerIdParamSchema,
-  listCustomerQuerySchema,
-  updateCustomerStatusBodySchema,
-} from "./customers.validator";
+import type { customerIdParamSchema, listCustomerQuerySchema } from "./customers.validator";
 
 export type ListCustomerQuery = z.infer<typeof listCustomerQuerySchema>;
 export type CustomerIdParam = z.infer<typeof customerIdParamSchema>;
-export type UpdateCustomerStatusBody = z.infer<typeof updateCustomerStatusBodySchema>;
 
 export type UpdateCustomerStatusResponse = {
   id: string;
