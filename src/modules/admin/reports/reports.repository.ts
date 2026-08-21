@@ -49,6 +49,23 @@ export type AdminReportRow = Prisma.ReportGetPayload<{
   select: typeof adminReportSelect;
 }>;
 
+const adminReportDetailSelect = {
+  ...adminReportSelect,
+  images: {
+    orderBy: {
+      id: "asc",
+    },
+    select: {
+      id: true,
+      imageKey: true,
+    },
+  },
+} satisfies Prisma.ReportSelect;
+
+export type AdminReportDetailRow = Prisma.ReportGetPayload<{
+  select: typeof adminReportDetailSelect;
+}>;
+
 export type AdminReportListFilters = {
   status?: ReportStatus;
   targetType?: ReportTargetType;
@@ -152,7 +169,7 @@ export const reportsRepository = {
       where: {
         id: reportId,
       },
-      select: adminReportSelect,
+      select: adminReportDetailSelect,
     });
   },
 
@@ -171,7 +188,7 @@ export const reportsRepository = {
       handlerNote: string;
     },
     db: DbClient = prisma,
-  ): Promise<AdminReportRow | null> {
+  ): Promise<AdminReportDetailRow | null> {
     const result = await db.report.updateMany({
       where: {
         id: params.reportId,
@@ -193,7 +210,7 @@ export const reportsRepository = {
       where: {
         id: params.reportId,
       },
-      select: adminReportSelect,
+      select: adminReportDetailSelect,
     });
   },
 

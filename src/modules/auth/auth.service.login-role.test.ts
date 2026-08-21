@@ -9,6 +9,7 @@ import "dotenv/config";
 import { AppError } from "../../lib/app-error";
 import { prisma } from "../../lib/prisma";
 import { verifyAccessToken } from "../../utils/jwt";
+import { termsService } from "../terms/terms.service";
 import { authRepository } from "./auth.repository";
 import { authService } from "./auth.service";
 import type { OAuthProfile } from "./auth.type";
@@ -66,6 +67,11 @@ function assertUnauthorized(error: unknown): boolean {
 
 function assertAuthRoleMismatch(error: unknown): boolean {
   return error instanceof AppError && error.code === "AUTH_ROLE_MISMATCH";
+}
+
+// 26.08.20 김나연 - [추가] 소셜 로그인으로 접근한 계정이 존재하지 않을 때 에러 테스트
+function assertOAuthAccountNotFound(error: unknown): boolean {
+  return error instanceof AppError && error.code === "OAUTH_ACCOUNT_NOT_FOUND";
 }
 
 function createLocalUser(overrides: Partial<AuthUser> = {}): AuthUser {
@@ -287,6 +293,7 @@ describe("authService.login role validation", () => {
   });
 });
 
+// 26.08.20 김나연 - [수정] OAuth 로그인 테스트에 intent 필드 반영
 describe("authService OAuth login role validation", () => {
   const originalGetGoogleOAuthProfile = googleOAuth.getGoogleOAuthProfile;
   const originalFindByProviderAndProviderId = authRepository.findByProviderAndProviderId;
@@ -295,6 +302,7 @@ describe("authService OAuth login role validation", () => {
   const originalSaveRefreshToken = authRepository.saveRefreshToken;
   const originalTransaction = prisma.$transaction;
   const originalFindRequiredPublished = termsRepository.findRequiredPublished;
+  const originalSaveSignUpAgreements = termsService.saveSignUpAgreements;
 
   afterEach(() => {
     googleOAuth.getGoogleOAuthProfile = originalGetGoogleOAuthProfile;
@@ -304,6 +312,7 @@ describe("authService OAuth login role validation", () => {
     authRepository.saveRefreshToken = originalSaveRefreshToken;
     prisma.$transaction = originalTransaction;
     termsRepository.findRequiredPublished = originalFindRequiredPublished;
+    termsService.saveSignUpAgreements = originalSaveSignUpAgreements;
   });
 
   function stubGoogleProfile(): void {
@@ -323,6 +332,7 @@ describe("authService OAuth login role validation", () => {
       const result = await authService.loginWithGoogle({
         code: "google-auth-code",
         role,
+        intent: "login",
       });
 
       assert.equal(result.user.role, role);
@@ -347,6 +357,7 @@ describe("authService OAuth login role validation", () => {
         authService.loginWithGoogle({
           code: "google-auth-code",
           role: UserRole.MOVER,
+          intent: "login",
         }),
       assertAuthRoleMismatch,
     );
@@ -368,10 +379,60 @@ describe("authService OAuth login role validation", () => {
         authService.loginWithGoogle({
           code: "google-auth-code",
           role: UserRole.CUSTOMER,
+          intent: "login",
         }),
       assertAuthRoleMismatch,
     );
 
+    assert.equal(refreshTokenStub.callCount, 0);
+  });
+
+  // 26.08.20 김나연 - [추가] 기존 OAuth 계정은 signup intent여도 로그인한다
+  it("logs in an existing OAuth account when intent is signup", async () => {
+    stubGoogleProfile();
+
+    const refreshTokenStub = createSaveRefreshTokenStub();
+
+    authRepository.findByProviderAndProviderId = async () =>
+      createOAuthUser({ role: UserRole.CUSTOMER });
+    authRepository.saveRefreshToken = refreshTokenStub.saveRefreshToken;
+
+    const result = await authService.loginWithGoogle({
+      code: "google-auth-code",
+      role: UserRole.CUSTOMER,
+      intent: "signup",
+    });
+
+    assert.equal(result.user.role, UserRole.CUSTOMER);
+    assert.equal(refreshTokenStub.callCount, 1);
+  });
+
+  // 26.08.20 김나연 - [추가] login intent인데 OAuth 계정이 없으면 에러를 반환한다
+  it("returns OAUTH_ACCOUNT_NOT_FOUND when intent is login and the OAuth account does not exist", async () => {
+    stubGoogleProfile();
+
+    let createCalled = false;
+    const refreshTokenStub = createSaveRefreshTokenStub();
+
+    authRepository.findByProviderAndProviderId = async () => null;
+    authRepository.create = async (data) => {
+      createCalled = true;
+
+      return createOAuthUser({ role: data.role as UserRole });
+    };
+    authRepository.saveRefreshToken = refreshTokenStub.saveRefreshToken;
+
+    await assert.rejects(
+      () =>
+        authService.loginWithGoogle({
+          code: "google-auth-code",
+          role: UserRole.CUSTOMER,
+          intent: "login",
+        }),
+      assertOAuthAccountNotFound,
+    );
+
+    assert.equal(createCalled, false);
     assert.equal(refreshTokenStub.callCount, 0);
   });
 
@@ -405,12 +466,15 @@ describe("authService OAuth login role validation", () => {
     authRepository.saveRefreshToken = refreshTokenStub.saveRefreshToken;
     termsRepository.findRequiredPublished =
       (async () => []) as typeof termsRepository.findRequiredPublished;
+    // 26.08.20 김나연 - [수정] signup intent 경로에서 약관 저장 stub 처리
+    termsService.saveSignUpAgreements = async () => undefined;
     prisma.$transaction = (async (callback: (tx: never) => Promise<unknown>) =>
       callback({} as never)) as unknown as typeof prisma.$transaction;
 
     const result = await authService.loginWithGoogle({
       code: "google-auth-code",
       role: UserRole.MOVER,
+      intent: "signup",
     });
 
     assert.equal(createdRole, UserRole.MOVER);
@@ -442,6 +506,7 @@ describe("authService OAuth login role validation", () => {
     const result = await authService.loginWithGoogle({
       code: "google-auth-code",
       role: UserRole.CUSTOMER,
+      intent: "signup",
     });
 
     assert.equal(findByProviderCallCount, 2);
@@ -475,6 +540,7 @@ describe("authService OAuth login role validation", () => {
         authService.loginWithGoogle({
           code: "google-auth-code",
           role: UserRole.MOVER,
+          intent: "signup",
         }),
       assertAuthRoleMismatch,
     );

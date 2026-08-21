@@ -100,7 +100,20 @@ export const moversStatusRepository = {
   },
 
   createSystemMessages(data: Prisma.ChatMessageCreateManyInput[], db: DbClient = prisma) {
-    return db.chatMessage.createMany({ data });
+    return db.chatMessage.createManyAndReturn({
+      data,
+      select: {
+        id: true,
+        roomId: true,
+        senderId: true,
+        type: true,
+        content: true,
+        imageUrl: true,
+        isRead: true,
+        readAt: true,
+        createdAt: true,
+      },
+    });
   },
 
   updateChatRoomsLastMessageAt(roomIds: number[], lastMessageAt: Date, db: DbClient = prisma) {

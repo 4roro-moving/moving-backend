@@ -16,3 +16,20 @@ export async function lockEstimateRequestForUpdate(
 
   return rows.length > 0;
 }
+
+/**
+ * 견적 상태 변경과 채팅 메시지 저장을 직렬화하기 위해 견적 행을 배타 잠금한다.
+ *
+ * 기사 정지 시 개별 Estimate의 상태를 CANCELED로 변경하므로,
+ * 견적 요청 잠금만으로는 종료된 견적 채팅방에 메시지가 저장되는 race condition을 막기 어려움
+ */
+export async function lockEstimateForUpdate(
+  db: Prisma.TransactionClient,
+  estimateId: number,
+): Promise<boolean> {
+  const rows = await db.$queryRaw<Array<{ id: number }>>(
+    Prisma.sql`SELECT id FROM estimates WHERE id = ${estimateId} FOR UPDATE`,
+  );
+
+  return rows.length > 0;
+}

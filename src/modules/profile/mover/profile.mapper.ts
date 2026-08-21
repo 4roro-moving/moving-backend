@@ -1,7 +1,7 @@
 import { getProfileImageUrl } from "../../../utils/image-url";
 
 import type { profileRepository } from "./profile.repository";
-import type { ProfileResponse } from "./profile.type";
+import type { MyProfileResponse, ProfileResponse } from "./profile.type";
 
 type MoverProfileWithRelations = NonNullable<
   Awaited<ReturnType<typeof profileRepository.findProfileByUserId>>
@@ -50,5 +50,16 @@ export const mapProfileResponse = (
     serviceTypes: profile.serviceTypes.map(({ moveType }) => moveType),
     createdAt: profile.createdAt,
     updatedAt: profile.updatedAt,
+  };
+};
+
+export const mapMyProfileResponse = (
+  profile: MoverProfileWithRelations,
+  hasPassword: boolean,
+  completedCount: number,
+): MyProfileResponse => {
+  return {
+    ...mapProfileResponse(profile, hasPassword),
+    completedCount,
   };
 };

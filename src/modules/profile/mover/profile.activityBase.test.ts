@@ -160,3 +160,30 @@ describe("mover activityBase persistence", () => {
     assert.deepEqual(receivedData, updateData);
   });
 });
+
+describe("mover completedCount query", () => {
+  it("counts only COMPLETED estimate requests linked to the mover's confirmed estimate", async () => {
+    let receivedWhere: unknown;
+
+    const db = {
+      estimateRequest: {
+        count: async ({ where }: { where: unknown }) => {
+          receivedWhere = where;
+          return 3;
+        },
+      },
+    } as unknown as DbClient;
+
+    const count = await profileRepository.countCompletedMovesByUserId("mover-user-id", db);
+
+    assert.equal(count, 3);
+    assert.deepEqual(receivedWhere, {
+      status: "COMPLETED",
+      confirmedEstimate: {
+        is: {
+          moverId: "mover-user-id",
+        },
+      },
+    });
+  });
+});

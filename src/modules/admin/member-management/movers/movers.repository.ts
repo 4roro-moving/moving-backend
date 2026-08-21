@@ -53,9 +53,17 @@ const inProgressEstimateSelect = {
   estimateRequestId: true,
   status: true,
   price: true,
+  confirmedAt: true,
   createdAt: true,
   estimateRequest: {
     select: {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      moveType: true,
       moveDate: true,
       status: true,
       isActive: true,
@@ -66,10 +74,26 @@ const inProgressEstimateSelect = {
 
 const recentEstimateSelect = {
   id: true,
+  estimateRequestId: true,
   status: true,
   price: true,
   confirmedAt: true,
-  estimateRequest: { select: { status: true } },
+  expiredAt: true,
+  canceledAt: true,
+  createdAt: true,
+  estimateRequest: {
+    select: {
+      customer: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      moveType: true,
+      moveDate: true,
+      status: true,
+    },
+  },
 } satisfies Prisma.EstimateSelect;
 
 const reviewHistorySelect = {
@@ -83,6 +107,15 @@ const reviewHistorySelect = {
 
 const reportHistorySelect = {
   id: true,
+  reason: true,
+  status: true,
+  createdAt: true,
+} satisfies Prisma.ReportSelect;
+
+const filedReportHistorySelect = {
+  id: true,
+  targetType: true,
+  targetId: true,
   reason: true,
   status: true,
   createdAt: true,
@@ -116,6 +149,9 @@ export type InProgressEstimateRow = Prisma.EstimateGetPayload<{
 export type RecentEstimateRow = Prisma.EstimateGetPayload<{ select: typeof recentEstimateSelect }>;
 export type MoverReviewHistoryRow = Prisma.ReviewGetPayload<{ select: typeof reviewHistorySelect }>;
 export type MoverReportHistoryRow = Prisma.ReportGetPayload<{ select: typeof reportHistorySelect }>;
+export type MoverFiledReportHistoryRow = Prisma.ReportGetPayload<{
+  select: typeof filedReportHistorySelect;
+}>;
 
 type ListParams = {
   skip: number;
@@ -430,6 +466,26 @@ export const moversRepository = {
       db.report.findMany({
         where,
         select: reportHistorySelect,
+        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+        take,
+      }),
+      db.report.count({ where }),
+    ]);
+
+    return { items, totalCount };
+  },
+
+  /** 기사가 신고자로 접수한 신고 이력의 최신 일부와 전체 건수를 조회합니다. */
+  async findFiledReportHistory(
+    { moverId, take = MOVER_HISTORY_LIMIT }: HistoryParams,
+    db: DbClient = prisma,
+  ) {
+    const where: Prisma.ReportWhereInput = { reporterId: moverId };
+
+    const [items, totalCount] = await Promise.all([
+      db.report.findMany({
+        where,
+        select: filedReportHistorySelect,
         orderBy: [{ createdAt: "desc" }, { id: "asc" }],
         take,
       }),
