@@ -235,7 +235,11 @@ export const moversService = {
     for (const { userId, ...notification } of createdNotifications) {
       notificationService.sendNotification(userId, notification);
     }
-    emitSystemChatMessages(createdSystemMessages);
+    emitSystemChatMessages(
+      createdSystemMessages
+        .filter((message) => message.type === ChatMessageType.SYSTEM)
+        .map((message) => ({ ...message, type: "SYSTEM" as const })),
+    );
 
     return result;
   },

@@ -25,8 +25,8 @@ export const disconnectUserSockets = (userId: string): void => {
 
 type StoredSystemChatMessage = Pick<
   ChatMessageResponse,
-  "id" | "roomId" | "type" | "content" | "imageUrl" | "isRead" | "readAt" | "createdAt"
->;
+  "id" | "roomId" | "content" | "imageUrl" | "isRead" | "readAt" | "createdAt"
+> & { type: "SYSTEM" };
 
 /** 트랜잭션 커밋 후 저장된 SYSTEM 메시지를 채팅방 참여자에게 실시간 전송합니다. */
 export const emitSystemChatMessages = (messages: StoredSystemChatMessage[]): void => {
