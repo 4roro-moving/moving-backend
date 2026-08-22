@@ -26,7 +26,6 @@ const adminReportSelect = {
   handlerNote: true,
   createdAt: true,
   updatedAt: true,
-
   reporter: {
     select: {
       id: true,
@@ -35,7 +34,6 @@ const adminReportSelect = {
       role: true,
     },
   },
-
   handler: {
     select: {
       id: true,
@@ -154,7 +152,6 @@ export const reportsRepository = {
         orderBy,
         select: adminReportSelect,
       }),
-
       db.report.count({
         where,
       }),
@@ -166,19 +163,11 @@ export const reportsRepository = {
 
   findReportById(reportId: number, db: DbClient = prisma) {
     return db.report.findUnique({
-      where: {
-        id: reportId,
-      },
+      where: { id: reportId },
       select: adminReportDetailSelect,
     });
   },
 
-  /**
-   * PENDING 상태인 신고만 처리합니다.
-   *
-   * 동시에 여러 관리자가 같은 신고를 처리하려는 경우
-   * 먼저 처리한 요청만 성공하도록 조건부 updateMany를 사용합니다.
-   */
   async updateReportIfPending(
     params: {
       reportId: number;
@@ -207,28 +196,20 @@ export const reportsRepository = {
     }
 
     return db.report.findUnique({
-      where: {
-        id: params.reportId,
-      },
+      where: { id: params.reportId },
       select: adminReportDetailSelect,
     });
   },
 
-  /**
-   * REVIEW 신고 대상 상세 조회
-   */
   findReviewTargetById(reviewId: number, db: DbClient = prisma) {
     return db.review.findUnique({
-      where: {
-        id: reviewId,
-      },
+      where: { id: reviewId },
       select: {
         id: true,
         rating: true,
         content: true,
         isHidden: true,
         createdAt: true,
-
         customer: {
           select: {
             id: true,
@@ -236,12 +217,10 @@ export const reportsRepository = {
             email: true,
           },
         },
-
         mover: {
           select: {
             id: true,
             name: true,
-
             moverProfile: {
               select: {
                 nickname: true,
@@ -253,11 +232,6 @@ export const reportsRepository = {
     });
   },
 
-  /**
-   * MOVER 신고 대상 상세 조회
-   *
-   * Report.targetId에는 기사 User.id(UUID)가 저장됩니다.
-   */
   findMoverTargetById(moverId: string, db: DbClient = prisma) {
     return db.user.findFirst({
       where: {
@@ -269,7 +243,6 @@ export const reportsRepository = {
         name: true,
         email: true,
         isActive: true,
-
         moverProfile: {
           select: {
             nickname: true,
@@ -279,14 +252,29 @@ export const reportsRepository = {
     });
   },
 
-  /**
-   * RESIDENCE_REVIEW 신고 대상 상세 조회
-   */
+  findCustomerTargetById(customerId: string, db: DbClient = prisma) {
+    return db.user.findFirst({
+      where: {
+        id: customerId,
+        role: UserRole.CUSTOMER,
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        isActive: true,
+        customerProfile: {
+          select: {
+            imageUrl: true,
+          },
+        },
+      },
+    });
+  },
+
   findResidenceReviewTargetById(residenceReviewId: number, db: DbClient = prisma) {
     return db.residenceReview.findUnique({
-      where: {
-        id: residenceReviewId,
-      },
+      where: { id: residenceReviewId },
       select: {
         id: true,
         title: true,
@@ -294,7 +282,6 @@ export const reportsRepository = {
         rating: true,
         isHidden: true,
         createdAt: true,
-
         author: {
           select: {
             id: true,
@@ -302,7 +289,6 @@ export const reportsRepository = {
             email: true,
           },
         },
-
         region: {
           select: {
             id: true,
@@ -313,14 +299,9 @@ export const reportsRepository = {
     });
   },
 
-  /**
-   * GIVEAWAY 신고 대상 상세 조회
-   */
   findGiveawayTargetById(giveawayId: number, db: DbClient = prisma) {
     return db.giveaway.findUnique({
-      where: {
-        id: giveawayId,
-      },
+      where: { id: giveawayId },
       select: {
         id: true,
         title: true,
@@ -328,7 +309,6 @@ export const reportsRepository = {
         status: true,
         isHidden: true,
         createdAt: true,
-
         author: {
           select: {
             id: true,
@@ -336,14 +316,12 @@ export const reportsRepository = {
             email: true,
           },
         },
-
         region: {
           select: {
             id: true,
             name: true,
           },
         },
-
         images: {
           orderBy: {
             sortOrder: "asc",
@@ -358,9 +336,6 @@ export const reportsRepository = {
     });
   },
 
-  /**
-   * 관리자 신고 처리 이력을 ActivityLog에 남깁니다.
-   */
   createActivityLog(
     input: {
       actorId: string;
@@ -385,7 +360,6 @@ export const reportsRepository = {
         targetId: true,
         memo: true,
         createdAt: true,
-
         actor: {
           select: {
             id: true,
@@ -398,13 +372,13 @@ export const reportsRepository = {
 };
 
 export type ReviewReportTarget = Awaited<ReturnType<typeof reportsRepository.findReviewTargetById>>;
-
 export type MoverReportTarget = Awaited<ReturnType<typeof reportsRepository.findMoverTargetById>>;
-
+export type CustomerReportTarget = Awaited<
+  ReturnType<typeof reportsRepository.findCustomerTargetById>
+>;
 export type ResidenceReviewReportTarget = Awaited<
   ReturnType<typeof reportsRepository.findResidenceReviewTargetById>
 >;
-
 export type GiveawayReportTarget = Awaited<
   ReturnType<typeof reportsRepository.findGiveawayTargetById>
 >;

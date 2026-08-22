@@ -2,19 +2,30 @@ import { Prisma, UserRole } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import { getImageUrl } from "../../utils/image-url";
+import { buildPagination } from "../../utils/pagination.util";
 import { runTransaction, type DbClient } from "../../utils/transaction";
 
-import { reportRepository, type ReportRecord, type ReportRepository } from "./report.repository";
+import {
+  reportRepository,
+  type MyReportRecord,
+  type ReportRecord,
+  type ReportRepository,
+} from "./report.repository";
 import { reportImageService } from "./report-image.service";
-import type { CreateReportInput, ReportItem } from "./report.type";
+import type {
+  CreateReportInput,
+  ListMyReportsQuery,
+  MyReportItem,
+  ReportItem,
+} from "./report.type";
 
-function toReviewTargetIdNumber(targetId: string): number {
+function toNumericTargetIdNumber(targetId: string): number {
   return Number(targetId);
 }
 
 function normalizeTargetId(targetType: CreateReportInput["targetType"], targetId: string): string {
-  if (targetType === "REVIEW") {
-    return String(toReviewTargetIdNumber(targetId));
+  if (targetType === "REVIEW" || targetType === "RESIDENCE_REVIEW" || targetType === "GIVEAWAY") {
+    return String(toNumericTargetIdNumber(targetId));
   }
 
   return targetId.toLowerCase();
@@ -32,6 +43,19 @@ function toReportItem(report: ReportRecord): ReportItem {
       id: image.id,
       imageUrl: getImageUrl(image.imageKey) ?? "",
     })),
+    createdAt: report.createdAt,
+  };
+}
+
+function toMyReportItem(report: MyReportRecord): MyReportItem {
+  return {
+    id: report.id,
+    targetType: report.targetType,
+    targetId: report.targetId,
+    reason: report.reason,
+    status: report.status,
+    description: report.detail ?? null,
+    handledAt: report.handledAt,
     createdAt: report.createdAt,
   };
 }
@@ -144,6 +168,22 @@ export function createReportService(
   transactionRunner: TransactionRunner = runTransaction,
 ) {
   return {
+    async getMyReports(params: { reporterId: string; query: ListMyReportsQuery }) {
+      const { reporterId, query } = params;
+      const { page, limit } = query;
+
+      const { reports, totalCount } = await repository.findMineWithCount({
+        reporterId,
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+
+      return {
+        reports: reports.map(toMyReportItem),
+        pagination: buildPagination(totalCount, page, limit),
+      };
+    },
+
     async createReport(params: {
       reporterId: string;
       input: CreateReportInput;
@@ -153,7 +193,7 @@ export function createReportService(
       const detail = input.description && input.description.length > 0 ? input.description : null;
 
       if (input.targetType === "REVIEW") {
-        const reviewId = toReviewTargetIdNumber(normalizedTargetId);
+        const reviewId = toNumericTargetIdNumber(normalizedTargetId);
         const review = await repository.findReviewTargetById(reviewId);
 
         if (!review) {
@@ -165,7 +205,7 @@ export function createReportService(
         }
       }
 
-      if (input.targetType === "MOVER") {
+      if (input.targetType === "MOVER" || input.targetType === "CUSTOMER") {
         if (reporterId.toLowerCase() === normalizedTargetId) {
           throw new AppError("REPORT_SELF_NOT_ALLOWED");
         }
@@ -176,8 +216,36 @@ export function createReportService(
           throw new AppError("REPORT_TARGET_NOT_FOUND");
         }
 
-        if (user.role !== UserRole.MOVER) {
+        const expectedRole = input.targetType === "MOVER" ? UserRole.MOVER : UserRole.CUSTOMER;
+
+        if (user.role !== expectedRole) {
           throw new AppError("REPORT_TARGET_NOT_REPORTABLE");
+        }
+      }
+
+      if (input.targetType === "RESIDENCE_REVIEW") {
+        const residenceReviewId = toNumericTargetIdNumber(normalizedTargetId);
+        const residenceReview = await repository.findResidenceReviewTargetById(residenceReviewId);
+
+        if (!residenceReview) {
+          throw new AppError("REPORT_TARGET_NOT_FOUND");
+        }
+
+        if (residenceReview.authorId === reporterId) {
+          throw new AppError("REPORT_SELF_NOT_ALLOWED");
+        }
+      }
+
+      if (input.targetType === "GIVEAWAY") {
+        const giveawayId = toNumericTargetIdNumber(normalizedTargetId);
+        const giveaway = await repository.findGiveawayTargetById(giveawayId);
+
+        if (!giveaway) {
+          throw new AppError("REPORT_TARGET_NOT_FOUND");
+        }
+
+        if (giveaway.authorId === reporterId) {
+          throw new AppError("REPORT_SELF_NOT_ALLOWED");
         }
       }
 

@@ -2,9 +2,10 @@ import type { ReportReason, ReportStatus, ReportTargetType } from "@prisma/clien
 import type { z } from "zod";
 
 import type { ReportImageItem } from "./report-image.type";
-import type { createReportSchema } from "./report.validator";
+import type { createReportSchema, listMyReportsQuerySchema } from "./report.validator";
 
 export type CreateReportInput = z.infer<typeof createReportSchema>;
+export type ListMyReportsQuery = z.infer<typeof listMyReportsQuerySchema>;
 
 export interface ReportItem {
   id: number;
@@ -14,5 +15,16 @@ export interface ReportItem {
   status: ReportStatus;
   description: string | null;
   images: ReportImageItem[];
+  createdAt: Date;
+}
+
+export interface MyReportItem {
+  id: number;
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: ReportReason;
+  status: ReportStatus;
+  description: string | null;
+  handledAt: Date | null;
   createdAt: Date;
 }

@@ -16,7 +16,10 @@ function createRepositoryStub(overrides: Partial<ReportRepository> = {}): Report
   return {
     findReviewTargetById: async () => null,
     findUserById: async () => null,
+    findResidenceReviewTargetById: async () => null,
+    findGiveawayTargetById: async () => null,
     findExistingReport: async () => null,
+    findMineWithCount: async () => ({ reports: [], totalCount: 0 }),
     createReport: async ({ targetType, targetId, reason, status, detail, imageKeys }) => ({
       id: 1,
       targetType,
@@ -595,5 +598,103 @@ describe("reportService.createReport", () => {
     );
 
     assert.deepEqual(cleanedFinalKeys, [finalKey]);
+  });
+});
+
+describe("reportService.getMyReports", () => {
+  it("queries only the current reporter and returns pagination", async () => {
+    const createdAt = new Date("2026-08-21T00:00:00.000Z");
+    const handledAt = new Date("2026-08-21T01:00:00.000Z");
+
+    let receivedParams:
+      | {
+          reporterId: string;
+          skip: number;
+          take: number;
+        }
+      | undefined;
+
+    const service = createService({
+      findMineWithCount: async (params) => {
+        receivedParams = params;
+
+        return {
+          reports: [
+            {
+              id: 7,
+              targetType: "MOVER",
+              targetId: VALID_MOVER_ID,
+              reason: "SPAM",
+              status: "RESOLVED",
+              detail: "광고성 응답을 반복합니다.",
+              handledAt,
+              createdAt,
+            },
+          ],
+          totalCount: 21,
+        };
+      },
+    });
+
+    const result = await service.getMyReports({
+      reporterId: "customer-1",
+      query: {
+        page: 2,
+        limit: 10,
+      },
+    });
+
+    assert.deepEqual(receivedParams, {
+      reporterId: "customer-1",
+      skip: 10,
+      take: 10,
+    });
+
+    assert.deepEqual(result.reports, [
+      {
+        id: 7,
+        targetType: "MOVER",
+        targetId: VALID_MOVER_ID,
+        reason: "SPAM",
+        status: "RESOLVED",
+        description: "광고성 응답을 반복합니다.",
+        handledAt,
+        createdAt,
+      },
+    ]);
+
+    assert.deepEqual(result.pagination, {
+      page: 2,
+      limit: 10,
+      totalCount: 21,
+      totalPages: 3,
+      hasNext: true,
+    });
+  });
+
+  it("returns an empty list with pagination when there are no reports", async () => {
+    const service = createService({
+      findMineWithCount: async () => ({
+        reports: [],
+        totalCount: 0,
+      }),
+    });
+
+    const result = await service.getMyReports({
+      reporterId: "customer-1",
+      query: {
+        page: 1,
+        limit: 10,
+      },
+    });
+
+    assert.deepEqual(result.reports, []);
+    assert.deepEqual(result.pagination, {
+      page: 1,
+      limit: 10,
+      totalCount: 0,
+      totalPages: 0,
+      hasNext: false,
+    });
   });
 });

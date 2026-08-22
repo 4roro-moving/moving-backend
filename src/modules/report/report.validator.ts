@@ -4,24 +4,33 @@ import { z } from "zod";
 import { reportImageKeysSchema } from "./report-image.validator";
 
 export const MAX_REPORT_DESCRIPTION_LENGTH = 1000;
-export const MAX_REVIEW_TARGET_ID = 2_147_483_647;
-const MAX_SAFE_REVIEW_TARGET_ID = BigInt(Number.MAX_SAFE_INTEGER);
-const MAX_PRISMA_INT_TARGET_ID = BigInt(MAX_REVIEW_TARGET_ID);
+export const MAX_REPORT_NUMERIC_TARGET_ID = 2_147_483_647;
+// 기존 테스트/참조 호환용 alias
+export const MAX_REVIEW_TARGET_ID = MAX_REPORT_NUMERIC_TARGET_ID;
 
-// 신고 대상은 Prisma enum 전체가 아니라 1차 지원 subset만 허용합니다.
-const SUPPORTED_REPORT_TARGET_TYPES = [ReportTargetType.REVIEW, ReportTargetType.MOVER] as const;
-const reviewTargetIdPattern = /^[1-9]\d*$/;
-const moverTargetIdPattern =
+const MAX_SAFE_REPORT_NUMERIC_TARGET_ID = BigInt(Number.MAX_SAFE_INTEGER);
+const MAX_PRISMA_INT_TARGET_ID = BigInt(MAX_REPORT_NUMERIC_TARGET_ID);
+
+const SUPPORTED_REPORT_TARGET_TYPES = [
+  ReportTargetType.CUSTOMER,
+  ReportTargetType.MOVER,
+  ReportTargetType.REVIEW,
+  ReportTargetType.RESIDENCE_REVIEW,
+  ReportTargetType.GIVEAWAY,
+] as const;
+
+const numericTargetIdPattern = /^[1-9]\d*$/;
+const userTargetIdPattern =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-function isValidReviewTargetId(value: string): boolean {
-  if (!reviewTargetIdPattern.test(value)) {
+function isValidNumericTargetId(value: string): boolean {
+  if (!numericTargetIdPattern.test(value)) {
     return false;
   }
 
   const asBigInt = BigInt(value);
 
-  if (asBigInt > MAX_SAFE_REVIEW_TARGET_ID) {
+  if (asBigInt > MAX_SAFE_REPORT_NUMERIC_TARGET_ID) {
     return false;
   }
 
@@ -31,11 +40,13 @@ function isValidReviewTargetId(value: string): boolean {
 
   const asNumber = Number(asBigInt);
 
-  return Number.isSafeInteger(asNumber) && asNumber >= 1 && asNumber <= MAX_REVIEW_TARGET_ID;
+  return (
+    Number.isSafeInteger(asNumber) && asNumber >= 1 && asNumber <= MAX_REPORT_NUMERIC_TARGET_ID
+  );
 }
 
-function isValidMoverTargetId(value: string): boolean {
-  return moverTargetIdPattern.test(value);
+function isValidUserTargetId(value: string): boolean {
+  return userTargetIdPattern.test(value);
 }
 
 export const createReportSchema = z
@@ -57,20 +68,29 @@ export const createReportSchema = z
     imageKeys: reportImageKeysSchema.optional(),
   })
   .superRefine((value, ctx) => {
-    // REVIEW는 서비스에서 안전하게 number로 변환할 수 있도록 DB Int 범위로 제한합니다.
-    if (value.targetType === "REVIEW" && !isValidReviewTargetId(value.targetId)) {
+    if (
+      (value.targetType === "REVIEW" ||
+        value.targetType === "RESIDENCE_REVIEW" ||
+        value.targetType === "GIVEAWAY") &&
+      !isValidNumericTargetId(value.targetId)
+    ) {
       ctx.addIssue({
         code: "custom",
         path: ["targetId"],
-        message: `REVIEW 대상 ID는 1 이상 ${String(MAX_REVIEW_TARGET_ID)} 이하의 정수 문자열이어야 합니다.`,
+        message: `${value.targetType} 대상 ID는 1 이상 ${String(
+          MAX_REPORT_NUMERIC_TARGET_ID,
+        )} 이하의 정수 문자열이어야 합니다.`,
       });
     }
 
-    if (value.targetType === "MOVER" && !isValidMoverTargetId(value.targetId)) {
+    if (
+      (value.targetType === "MOVER" || value.targetType === "CUSTOMER") &&
+      !isValidUserTargetId(value.targetId)
+    ) {
       ctx.addIssue({
         code: "custom",
         path: ["targetId"],
-        message: "MOVER 대상 ID는 UUID 형식이어야 합니다.",
+        message: `${value.targetType} 대상 ID는 UUID 형식이어야 합니다.`,
       });
     }
 
@@ -82,3 +102,20 @@ export const createReportSchema = z
       });
     }
   });
+
+const MAX_REPORT_LIST_PAGE = 10000;
+
+export const listMyReportsQuerySchema = z.object({
+  page: z.coerce
+    .number()
+    .int("페이지 번호는 정수여야 합니다.")
+    .positive("페이지 번호는 1 이상이어야 합니다.")
+    .max(MAX_REPORT_LIST_PAGE, `페이지 번호는 ${String(MAX_REPORT_LIST_PAGE)} 이하여야 합니다.`)
+    .default(1),
+  limit: z.coerce
+    .number()
+    .int("조회 개수는 정수여야 합니다.")
+    .positive("조회 개수는 1 이상이어야 합니다.")
+    .max(50, "조회 개수는 50 이하여야 합니다.")
+    .default(10),
+});
