@@ -44,6 +44,7 @@ import { adminInquiryRouter, inquiryRouter } from "./modules/inquiry/inquiry.rou
 import { adminAuthRouter } from "./modules/admin/auth/admin-auth.route";
 import { adminTermsRouter, publicTermsRouter } from "./modules/terms/terms.route";
 import { adminReportRouter } from "./modules/admin/reports/reports.route";
+import { adminDashboardRouter } from "./modules/admin/dashboard/dashboard.route";
 import adminManagementRouter from "./modules/admin/admin-management/admin-management.route";
 
 // Swagger UI로 전환할 때 사용
@@ -209,7 +210,7 @@ app.use("/api/inquiries", inquiryRouter); // 사용자 1:1 문의 라우터
 app.use("/api/admin/inquiries", adminInquiryRouter); // 관리자 1:1 문의 라우터
 app.use("/api/admin/terms", adminTermsRouter); // 관리자 약관 라우터
 app.use("/api/admin/reports", adminReportRouter); // 관리자 신고 라우터
-
+app.use("/api/admin/dashboard", adminDashboardRouter); // 관리자 대시보드 라우터
 /*
  * 존재하지 않는 경로 처리
  */
