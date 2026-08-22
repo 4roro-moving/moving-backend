@@ -18,7 +18,6 @@ const suspensionHistorySelect = {
   createdAt: true,
   admin: {
     select: {
-      id: true,
       name: true,
     },
   },

@@ -77,7 +77,6 @@ export type MemberSuspensionHistoryItem = {
   internalNote: string | null;
   createdAt: Date;
   admin: {
-    id: string;
     name: string;
   };
 };
