@@ -182,7 +182,7 @@ async function toggleGiveawayVisibility(params: {
         type: config.notificationType,
         title: config.notificationTitle,
         content: getGiveawayNotificationContent(giveaway),
-        linkUrl: null,
+        linkUrl: `/my-contents/giveaway/${String(giveawayId)}`,
         expiresAt: null,
       },
       tx,

@@ -199,8 +199,7 @@ async function toggleReviewVisibility(params: {
         type: config.notificationType,
         title: config.notificationTitle,
         content: getMoverNotificationSubject(review),
-        //내가 작성한 리뷰 페이지로 연결
-        linkUrl: `/reviews/me`,
+        linkUrl: `/my-contents/review/${String(reviewId)}`,
         expiresAt: null,
       },
       tx,

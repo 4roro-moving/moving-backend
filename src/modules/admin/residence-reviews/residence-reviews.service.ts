@@ -192,7 +192,7 @@ async function toggleResidenceReviewVisibility(params: {
           type: config.notificationType,
           title: config.notificationTitle,
           content: getResidenceReviewNotificationContent(review),
-          linkUrl: null,
+          linkUrl: `/my-contents/residence-review/${String(residenceReviewId)}`,
           expiresAt: null,
         },
         tx,
