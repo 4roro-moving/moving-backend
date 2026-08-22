@@ -4,11 +4,17 @@ import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
 import {
   ACTIVE_GIVEAWAY_REQUEST_STATUSES,
+  GIVEAWAY_LIST_SORT,
   GIVEAWAY_REQUEST_STATUS,
   GIVEAWAY_STATUS,
   GIVEAWAY_VISIBILITY,
 } from "./giveaway.type";
-import type { GiveawayRequestStatusValue } from "./giveaway.type";
+import type {
+  GiveawayCursor,
+  GiveawayListSortValue,
+  GiveawayRequestCursor,
+  GiveawayRequestStatusValue,
+} from "./giveaway.type";
 
 const authorSelect = {
   id: true,
@@ -131,17 +137,82 @@ export type MyGiveawayRequestRow = Prisma.GiveawayRequestGetPayload<{
   select: typeof myRequestSelect;
 }>;
 
-type ListGiveawayParams = {
-  skip: number;
+type ListGiveawayByCursorParams = {
   take: number;
   where: Prisma.GiveawayWhereInput;
+  orderBy: Prisma.GiveawayOrderByWithRelationInput[];
+  cursor?: Pick<GiveawayCursor, "sort" | "createdAt" | "id">;
 };
 
-type ListRequestParams = {
-  skip: number;
+type ListRequestByCursorParams = {
   take: number;
   where: Prisma.GiveawayRequestWhereInput;
+  orderBy: Prisma.GiveawayRequestOrderByWithRelationInput[];
+  cursor?: Pick<GiveawayRequestCursor, "sort" | "createdAt" | "id">;
 };
+
+function toCreatedAtOrderBy(sort: GiveawayListSortValue) {
+  if (sort === GIVEAWAY_LIST_SORT.OLDEST) {
+    return [{ createdAt: "asc" as const }, { id: "asc" as const }];
+  }
+
+  return [{ createdAt: "desc" as const }, { id: "desc" as const }];
+}
+
+export function buildCursorCondition(cursor: Pick<GiveawayCursor, "sort" | "createdAt" | "id">): {
+  OR: Array<
+    | { createdAt: { lt: Date } | { gt: Date } }
+    | { createdAt: Date; id: { lt: number } | { gt: number } }
+  >;
+} {
+  if (cursor.sort === GIVEAWAY_LIST_SORT.OLDEST) {
+    return {
+      OR: [
+        { createdAt: { gt: cursor.createdAt } },
+        {
+          createdAt: cursor.createdAt,
+          id: { gt: cursor.id },
+        },
+      ],
+    };
+  }
+
+  return {
+    OR: [
+      { createdAt: { lt: cursor.createdAt } },
+      {
+        createdAt: cursor.createdAt,
+        id: { lt: cursor.id },
+      },
+    ],
+  };
+}
+
+function applyGiveawayCursor(
+  where: Prisma.GiveawayWhereInput,
+  cursor?: Pick<GiveawayCursor, "sort" | "createdAt" | "id">,
+): Prisma.GiveawayWhereInput {
+  if (!cursor) {
+    return where;
+  }
+
+  return {
+    AND: [where, buildCursorCondition(cursor)],
+  };
+}
+
+function applyRequestCursor(
+  where: Prisma.GiveawayRequestWhereInput,
+  cursor?: Pick<GiveawayRequestCursor, "sort" | "createdAt" | "id">,
+): Prisma.GiveawayRequestWhereInput {
+  if (!cursor) {
+    return where;
+  }
+
+  return {
+    AND: [where, buildCursorCondition(cursor)],
+  };
+}
 
 type CreateGiveawayData = {
   authorId: string;
@@ -179,19 +250,19 @@ function findRegionById(regionId: number, db: DbClient = prisma) {
   });
 }
 
-async function findGiveawaysWithCount(
-  { skip, take, where }: ListGiveawayParams,
+async function findGiveawaysByCursorWithCount(
+  { take, where, orderBy, cursor }: ListGiveawayByCursorParams,
   db: DbClient = prisma,
 ) {
   const [giveaways, totalCount] = await Promise.all([
     db.giveaway.findMany({
-      where,
+      where: applyGiveawayCursor(where, cursor),
       select: giveawayListSelect,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      skip,
+      orderBy,
       take,
     }),
-    db.giveaway.count({ where }),
+    // 무한 스크롤 다음 페이지에서는 같은 필터의 전체 건수를 다시 세지 않습니다.
+    cursor == null ? db.giveaway.count({ where }) : Promise.resolve(null),
   ]);
 
   return { giveaways, totalCount };
@@ -356,37 +427,35 @@ async function findRequestByGiveawayAndRequester(
   });
 }
 
-async function findRequestsWithCount(
-  { skip, take, where }: ListRequestParams,
+async function findRequestsByCursorWithCount(
+  { take, where, orderBy, cursor }: ListRequestByCursorParams,
   db: DbClient = prisma,
 ) {
   const [requests, totalCount] = await Promise.all([
     db.giveawayRequest.findMany({
-      where,
+      where: applyRequestCursor(where, cursor),
       select: requestSelect,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      skip,
+      orderBy,
       take,
     }),
-    db.giveawayRequest.count({ where }),
+    cursor == null ? db.giveawayRequest.count({ where }) : Promise.resolve(null),
   ]);
 
   return { requests, totalCount };
 }
 
-async function findMyRequestsWithCount(
-  { skip, take, where }: ListRequestParams,
+async function findMyRequestsByCursorWithCount(
+  { take, where, orderBy, cursor }: ListRequestByCursorParams,
   db: DbClient = prisma,
 ) {
   const [requests, totalCount] = await Promise.all([
     db.giveawayRequest.findMany({
-      where,
+      where: applyRequestCursor(where, cursor),
       select: myRequestSelect,
-      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-      skip,
+      orderBy,
       take,
     }),
-    db.giveawayRequest.count({ where }),
+    cursor == null ? db.giveawayRequest.count({ where }) : Promise.resolve(null),
   ]);
 
   return { requests, totalCount };
@@ -471,7 +540,9 @@ export const giveawayRepository = {
   findGiveawayById,
   findGiveawayOwnership,
   findRegionById,
-  findGiveawaysWithCount,
+  findGiveawaysByCursorWithCount,
+  toCreatedAtOrderBy,
+  buildCursorCondition,
   createGiveaway,
   updateGiveaway,
   deleteGiveaway,
@@ -481,8 +552,8 @@ export const giveawayRepository = {
   findRequestById,
   findActiveRequestByGiveawayAndRequester,
   findRequestByGiveawayAndRequester,
-  findRequestsWithCount,
-  findMyRequestsWithCount,
+  findRequestsByCursorWithCount,
+  findMyRequestsByCursorWithCount,
   createRequest,
   updateRequestMessage,
   updateRequestStatus,

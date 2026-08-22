@@ -7,6 +7,15 @@ const authHeaderSchema = z.object({
   authorization: z.string().meta({ example: "Bearer <access-token>" }),
 });
 
+const GIVEAWAY_CURSOR_LIST_NOTES = [
+  "- `sort`와 필터가 바뀌면 `cursor` 없이 처음부터 조회해야 합니다.",
+  "- 조건이 다른 `cursor`를 보내면 유효하지 않은 커서로 응답합니다.",
+  "- `cursor`가 없으면 해당 조건의 첫 페이지부터 조회합니다.",
+  "- `cursor`가 있으면 해당 위치 다음 항목을 조회합니다.",
+  "- `pagination.totalCount`는 첫 페이지(`cursor` 없음)에서만 전체 건수입니다. `cursor`가 있으면 `null`이며, 전체 건수는 첫 페이지 응답을 사용하면 됩니다.",
+  "- 다음 페이지는 응답의 `pagination.nextCursor`로 요청합니다.",
+].join("\n");
+
 registerRouterDocs(giveawayRouter, {
   basePath: "/api/giveaways",
   tag: "Giveaway",
@@ -19,30 +28,45 @@ registerRouterDocs(giveawayRouter, {
   endpoints: {
     "POST /image/upload-url": {
       summary: "나눔 이미지 업로드 URL 발급",
-      description: "S3 직접 업로드용 Presigned URL과 imageKey를 발급합니다.",
+      description: [
+        "S3 직접 업로드용 Presigned URL과 임시 imageKey를 발급합니다.",
+        "업로드 경로는 `temp/giveaways/{userId}/{uuid}.{ext}`이며, 글 저장 시 새로운 `giveaways/{userId}/{uuid}.{ext}`로 복사합니다.",
+      ].join("\n"),
       responses: { 201: "발급 성공" },
     },
     "GET /me": {
       summary: "내가 작성한 나눔 목록",
-      description:
-        "숨김 글은 제외합니다. status, regionId 로 필터할 수 있습니다. 없는 지역이면 400입니다.",
-      responses: { 200: "조회 성공", 400: "지원하지 않는 지역입니다." },
+      description: [
+        "숨김 글은 제외합니다. status(AVAILABLE|IN_PROGRESS|COMPLETED)와 sort(LATEST|OLDEST)로 조회할 수 있습니다.",
+        "",
+        GIVEAWAY_CURSOR_LIST_NOTES,
+      ].join("\n"),
+      responses: { 200: "조회 성공" },
     },
     "GET /me/received": {
       summary: "내가 수령한 나눔 목록",
-      description:
-        "선정되어 receiverId가 본인인 나눔 글 목록입니다. 숨김 글은 제외합니다. 없는 지역이면 400입니다.",
-      responses: { 200: "조회 성공", 400: "지원하지 않는 지역입니다." },
+      description: [
+        "선정되어 receiverId가 본인인 나눔 글 목록입니다. 숨김 글은 제외합니다. status, sort(LATEST|OLDEST)로 조회할 수 있습니다.",
+        "",
+        GIVEAWAY_CURSOR_LIST_NOTES,
+      ].join("\n"),
+      responses: { 200: "조회 성공" },
     },
     "GET /": {
       summary: "나눔 목록",
-      description:
-        "숨김 글은 제외합니다. status, regionId 로 필터할 수 있습니다. 없는 지역이면 400입니다.",
+      description: [
+        "숨김 글은 제외합니다. keyword(제목), status, regionId, sort(LATEST|OLDEST)로 조회할 수 있습니다. 없는 지역이면 400입니다.",
+        "",
+        GIVEAWAY_CURSOR_LIST_NOTES,
+      ].join("\n"),
       responses: { 200: "조회 성공", 400: "지원하지 않는 지역입니다." },
     },
     "POST /": {
       summary: "나눔 글 작성",
-      description: "imageKeys의 배열 순서가 sortOrder가 되며, 0번이 대표 이미지입니다.",
+      description: [
+        "imageKeys의 배열 순서가 sortOrder가 되며, 0번이 대표 이미지입니다.",
+        "imageKeys에는 Presigned URL 발급으로 받은 `temp/giveaways/{userId}/...` Key만 넣을 수 있습니다.",
+      ].join("\n"),
       responses: { 201: "생성 성공", 400: "지역 또는 이미지가 올바르지 않습니다." },
     },
     "GET /:giveawayId": {
@@ -56,19 +80,23 @@ registerRouterDocs(giveawayRouter, {
     },
     "PATCH /:giveawayId": {
       summary: "나눔 글 수정",
-      description:
-        "작성자만, AVAILABLE 상태에서만 가능합니다. 숨김 글은 404입니다. imageKeys를 보내면 이미지를 교체합니다.",
+      description: [
+        "작성자만, AVAILABLE 상태에서만 가능합니다. 숨김 글은 404입니다.",
+        "imageKeys를 보내면 이미지를 교체합니다. 배열이 최종 목록이며 순서가 sortOrder입니다.",
+        "유지할 이미지는 기존 `giveaways/{userId}/...` Key를, 신규 이미지는 temp Key를 넣습니다.",
+        "요청에 없는 기존 이미지는 DB와 S3에서 삭제합니다.",
+      ].join("\n"),
       responses: {
         200: "수정 성공",
         403: "작성자가 아닙니다.",
         404: "나눔 글을 찾을 수 없습니다.",
-        409: "신청 가능 상태가 아닙니다.",
+        409: "신청 가능 상태가 아니거나, 다른 요청이 먼저 이미지를 수정했습니다.",
       },
     },
     "DELETE /:giveawayId": {
       summary: "나눔 글 삭제",
       description:
-        "작성자만, AVAILABLE 상태에서만 가능합니다. 숨김 글은 404입니다. 이미지와 신청은 Cascade로 함께 삭제됩니다.",
+        "작성자만, AVAILABLE 상태에서만 가능합니다. 숨김 글은 404입니다. 이미지와 신청은 Cascade로 함께 삭제되며, 연결된 S3 이미지도 정리합니다.",
       responses: {
         200: "삭제 성공",
         403: "작성자가 아닙니다.",
@@ -88,7 +116,11 @@ registerRouterDocs(giveawayRouter, {
     },
     "GET /:giveawayId/requests": {
       summary: "나눔 신청 목록",
-      description: "작성자만 해당 글의 신청 목록을 조회합니다. 숨김 글은 404입니다.",
+      description: [
+        "작성자만 해당 글의 신청 목록을 조회합니다. 숨김 글은 404입니다. status, sort(LATEST|OLDEST)로 조회할 수 있습니다.",
+        "",
+        GIVEAWAY_CURSOR_LIST_NOTES,
+      ].join("\n"),
       responses: {
         200: "조회 성공",
         403: "작성자가 아닙니다.",
@@ -150,7 +182,11 @@ registerRouterDocs(giveawayRequestRouter, {
   endpoints: {
     "GET /me": {
       summary: "내 나눔 신청 목록",
-      description: "숨김 글의 신청은 제외합니다. status로 필터할 수 있습니다.",
+      description: [
+        "숨김 글의 신청은 제외합니다. keyword(나눔 글 제목), status, sort(LATEST|OLDEST)로 조회할 수 있습니다.",
+        "",
+        GIVEAWAY_CURSOR_LIST_NOTES,
+      ].join("\n"),
       responses: { 200: "조회 성공" },
     },
     "PATCH /:requestId": {
