@@ -1,13 +1,5 @@
-import type { EstimateStatus } from "@prisma/client";
-import { EstimateRequestStatus } from "@prisma/client";
-
 import { dashboardRepository } from "./dashboard.repository";
-import type {
-  DashboardPeriod,
-  DashboardQuery,
-  DashboardServiceSummary,
-  DashboardSummary,
-} from "./dashboard.type";
+import type { DashboardPeriod, DashboardQuery, DashboardSummary } from "./dashboard.type";
 import { DASHBOARD_PERIOD_DAYS } from "./dashboard.validator";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
@@ -18,13 +10,13 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
  * 관리자가 여러 명이거나 새로고침을 반복해도 이 주기 안에서는 DB 를 다시 치지 않는다.
  * 배치(스케줄러 + 스냅샷 테이블) 대신 이 방식을 쓰는 이유는 아래와 같다.
  *
- *   · 기간 지표는 created_at 인덱스로 1% 만 읽으므로 데이터가 쌓여도 느려지지 않는다
- *     (로컬 169만행 기준 7일 groupBy 60ms, 데이터 10배여도 스캔량 동일)
+ *   · 기간 지표는 시각 인덱스로 범위를 잘라내므로 데이터가 쌓여도 스캔량이 늘지 않는다.
+ *     7일 창의 크기는 전체 데이터 총량이 아니라 주간 유입량이 결정한다.
  *   · 배치는 데이터가 최대 주기만큼 낡는다. "처리 대기 신고 12건" 인데 실제로는
- *     30건인 상황은 관리자 도구에서 치명적이다
- *   · 스케줄러·스냅샷 테이블·실패 감지·재실행 로직이 모두 새로 필요하다
+ *     30건인 상황은 관리자 도구에서 치명적이다.
+ *   · 스케줄러·스냅샷 테이블·실패 감지·재실행 로직이 모두 새로 필요하다.
  *
- * 응답이 2초를 넘거나 DB 부하가 눈에 띄면 그때 TTL 을 늘리거나 Redis 로 옮긴다.
+ * 응답이 계속 느리거나 DB 부하가 눈에 띄면 TTL 을 늘리거나 Redis 로 옮긴다.
  */
 const CACHE_TTL_MS = 60_000;
 
@@ -42,43 +34,6 @@ function resolveSince(period: DashboardPeriod, now: Date): Date {
   return new Date(now.getTime() - DASHBOARD_PERIOD_DAYS[period] * MS_PER_DAY);
 }
 
-/** groupBy 결과를 상태 → 건수 맵으로 바꾼다. */
-function toCountMap<T extends string>(
-  groups: { status: T; _count: { _all: number } }[],
-): Map<T, number> {
-  return new Map(groups.map((group) => [group.status, group._count._all]));
-}
-
-function buildServiceSummary(raw: {
-  requestGroups: { status: EstimateRequestStatus; _count: { _all: number } }[];
-  estimateGroups: { status: EstimateStatus; _count: { _all: number } }[];
-  completedCount: number;
-  confirmedCount: number;
-}): DashboardServiceSummary {
-  const requestCounts = toCountMap(raw.requestGroups);
-
-  /*
-   * PENDING(임시저장)은 기사에게 노출된 적이 없으므로 "요청" 집계에서 뺀다.
-   * 관리자가 보는 "견적 요청 N건" 은 실제로 접수된 건수여야 한다.
-   */
-  let requestedCount = 0;
-
-  for (const [status, count] of requestCounts) {
-    if (status !== EstimateRequestStatus.PENDING) {
-      requestedCount += count;
-    }
-  }
-
-  const submittedCount = raw.estimateGroups.reduce((sum, group) => sum + group._count._all, 0);
-
-  return {
-    requestedCount,
-    submittedCount,
-    confirmedCount: raw.confirmedCount,
-    completedCount: raw.completedCount,
-  };
-}
-
 async function computeDashboard(period: DashboardPeriod, now: Date): Promise<DashboardSummary> {
   const since = resolveSince(period, now);
 
@@ -86,10 +41,11 @@ async function computeDashboard(period: DashboardPeriod, now: Date): Promise<Das
    * 순차 실행하면 각 집계 시간이 그대로 더해진다.
    * 병렬이면 가장 느린 하나로 수렴하므로 응답이 크게 짧아진다.
    */
-  const [members, pending, serviceRaw, contents, recent] = await Promise.all([
+  const [members, pending, requests, estimates, contents, recent] = await Promise.all([
     dashboardRepository.findMemberSummary(since),
     dashboardRepository.findPendingSummary(),
-    dashboardRepository.findServiceSummary(since),
+    dashboardRepository.findRequestSummary(since),
+    dashboardRepository.findEstimateSummary(since),
     dashboardRepository.findContentSummary(),
     dashboardRepository.findRecentItems(),
   ]);
@@ -99,7 +55,12 @@ async function computeDashboard(period: DashboardPeriod, now: Date): Promise<Das
     since,
     members,
     pending,
-    service: buildServiceSummary(serviceRaw),
+    service: {
+      requestedCount: requests.requestedCount,
+      submittedCount: estimates.submittedCount,
+      confirmedCount: estimates.confirmedCount,
+      completedCount: requests.completedCount,
+    },
     contents,
     recent,
   };
@@ -109,7 +70,7 @@ export const dashboardService = {
   /**
    * 관리자 대시보드 요약을 조회합니다.
    *
-   * 기간 지표(견적 요청/개설/확정/이사 완료)에만 period 가 적용되고,
+   * 기간 지표(견적 요청/개설/확정/이사 완료, 신규 가입)에만 period 가 적용되고,
    * 회원 수·처리 대기 건수·콘텐츠 숨김 수는 현재 상태 전체를 집계합니다.
    */
   async getDashboard(query: DashboardQuery): Promise<DashboardSummary> {
