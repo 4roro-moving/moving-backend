@@ -2,12 +2,14 @@ import { getImageUrl } from "../../../utils/image-url";
 
 import type {
   AdminReportRow,
+  CustomerReportTarget,
   GiveawayReportTarget,
   MoverReportTarget,
   ResidenceReviewReportTarget,
   ReviewReportTarget,
 } from "./reports.repository";
 import type {
+  AdminCustomerReportTarget,
   AdminGiveawayReportTarget,
   AdminReportDetail,
   AdminMoverReportTarget,
@@ -24,14 +26,12 @@ export function mapAdminReportListItem(report: AdminReportRow): AdminReportListI
     reason: report.reason,
     detail: report.detail,
     status: report.status,
-
     reporter: {
       id: report.reporter.id,
       name: report.reporter.name,
       email: report.reporter.email,
       role: report.reporter.role,
     },
-
     handler: report.handler
       ? {
           id: report.handler.id,
@@ -39,10 +39,8 @@ export function mapAdminReportListItem(report: AdminReportRow): AdminReportListI
           email: report.handler.email,
         }
       : null,
-
     handlerNote: report.handlerNote,
     handledAt: report.handledAt,
-
     createdAt: report.createdAt,
     updatedAt: report.updatedAt,
   };
@@ -77,13 +75,11 @@ export function mapReviewReportTarget(
     content: target.content,
     isHidden: target.isHidden,
     createdAt: target.createdAt,
-
     author: {
       id: target.customer.id,
       name: target.customer.name,
       email: target.customer.email,
     },
-
     mover: {
       id: target.mover.id,
       name: target.mover.name,
@@ -105,6 +101,19 @@ export function mapMoverReportTarget(
   };
 }
 
+export function mapCustomerReportTarget(
+  target: NonNullable<CustomerReportTarget>,
+): AdminCustomerReportTarget {
+  return {
+    type: "CUSTOMER",
+    id: target.id,
+    name: target.name,
+    email: target.email,
+    imageUrl: target.customerProfile?.imageUrl ?? null,
+    isActive: target.isActive,
+  };
+}
+
 export function mapResidenceReviewReportTarget(
   target: NonNullable<ResidenceReviewReportTarget>,
 ): AdminResidenceReviewReportTarget {
@@ -116,13 +125,11 @@ export function mapResidenceReviewReportTarget(
     rating: target.rating,
     isHidden: target.isHidden,
     createdAt: target.createdAt,
-
     author: {
       id: target.author.id,
       name: target.author.name,
       email: target.author.email,
     },
-
     region: {
       id: target.region.id,
       name: target.region.name,
@@ -141,20 +148,17 @@ export function mapGiveawayReportTarget(
     status: target.status,
     isHidden: target.isHidden,
     createdAt: target.createdAt,
-
     author: {
       id: target.author.id,
       name: target.author.name,
       email: target.author.email,
     },
-
     region: target.region
       ? {
           id: target.region.id,
           name: target.region.name,
         }
       : null,
-
     images: target.images.map((image) => ({
       id: image.id,
       imageKey: image.imageKey,

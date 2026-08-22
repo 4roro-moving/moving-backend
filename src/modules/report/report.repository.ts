@@ -56,6 +56,26 @@ export const reportRepository = {
     });
   },
 
+  findResidenceReviewTargetById(residenceReviewId: number, db: DbClient = prisma) {
+    return db.residenceReview.findUnique({
+      where: { id: residenceReviewId },
+      select: {
+        id: true,
+        authorId: true,
+      },
+    });
+  },
+
+  findGiveawayTargetById(giveawayId: number, db: DbClient = prisma) {
+    return db.giveaway.findUnique({
+      where: { id: giveawayId },
+      select: {
+        id: true,
+        authorId: true,
+      },
+    });
+  },
+
   findExistingReport(
     params: {
       targetType: ReportTargetType;
@@ -150,6 +170,16 @@ export type ReportableUser = {
   deletedAt: Date | null;
 };
 
+export type ResidenceReviewReportTarget = {
+  id: number;
+  authorId: string;
+};
+
+export type GiveawayReportTarget = {
+  id: number;
+  authorId: string;
+};
+
 export type ExistingReport = {
   id: number;
 };
@@ -162,6 +192,11 @@ export type MyReportRecord = Awaited<
 export interface ReportRepository {
   findReviewTargetById(reviewId: number, db?: DbClient): Promise<ReviewReportTarget | null>;
   findUserById(userId: string, db?: DbClient): Promise<ReportableUser | null>;
+  findResidenceReviewTargetById(
+    residenceReviewId: number,
+    db?: DbClient,
+  ): Promise<ResidenceReviewReportTarget | null>;
+  findGiveawayTargetById(giveawayId: number, db?: DbClient): Promise<GiveawayReportTarget | null>;
   findExistingReport(
     params: {
       targetType: ReportTargetType;

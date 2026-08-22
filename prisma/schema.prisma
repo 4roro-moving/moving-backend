@@ -204,6 +204,7 @@ enum RefreshTokenRevokedReason {
 enum ReportTargetType {
   REVIEW
   MOVER
+  CUSTOMER
   RESIDENCE_REVIEW // 거주 후기
   GIVEAWAY // 나눔 글
 }

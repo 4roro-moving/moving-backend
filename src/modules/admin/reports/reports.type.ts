@@ -14,9 +14,7 @@ import type {
 } from "./reports.validator";
 
 export type ListAdminReportsQuery = z.infer<typeof listAdminReportsQuerySchema>;
-
 export type ReportIdParam = z.infer<typeof reportIdParamSchema>;
-
 export type HandleReportBody = z.infer<typeof handleReportBodySchema>;
 
 export interface AdminReportUser {
@@ -39,13 +37,10 @@ export interface AdminReportListItem {
   reason: ReportReason;
   detail: string | null;
   status: ReportStatus;
-
   reporter: AdminReportUser;
-
   handler: AdminReportHandler | null;
   handlerNote: string | null;
   handledAt: Date | null;
-
   createdAt: Date;
   updatedAt: Date;
 }
@@ -80,6 +75,15 @@ export interface AdminMoverReportTarget {
   name: string;
   email: string;
   nickname: string | null;
+  isActive: boolean;
+}
+
+export interface AdminCustomerReportTarget {
+  type: "CUSTOMER";
+  id: string;
+  name: string;
+  email: string;
+  imageUrl: string | null;
   isActive: boolean;
 }
 
@@ -129,6 +133,7 @@ export interface AdminGiveawayReportTarget {
 export type AdminReportTarget =
   | AdminReviewReportTarget
   | AdminMoverReportTarget
+  | AdminCustomerReportTarget
   | AdminResidenceReviewReportTarget
   | AdminGiveawayReportTarget;
 
