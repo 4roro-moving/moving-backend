@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { ReportTargetType } from "@prisma/client";
+
 import { listAdminReportsQuerySchema } from "./reports.validator";
 
 describe("listAdminReportsQuerySchema", () => {
@@ -30,5 +32,13 @@ describe("listAdminReportsQuerySchema", () => {
     }
 
     assert.equal(result.error.issues[0]?.message, "검색어는 100자 이하여야 합니다.");
+  });
+
+  it("CUSTOMER targetType 필터를 허용한다", () => {
+    const result = listAdminReportsQuerySchema.safeParse({
+      targetType: ReportTargetType.CUSTOMER,
+    });
+
+    assert.equal(result.success, true);
   });
 });

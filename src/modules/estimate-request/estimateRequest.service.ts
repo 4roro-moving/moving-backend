@@ -456,6 +456,24 @@ export const estimateRequestService = {
         throw new AppError("ALREADY_DESIGNATED");
       }
 
+      /*
+       * 기사가 제공하지 않는 이사 유형은 지정할 수 없다.
+       *
+       * 한도 검사보다 앞에 둔다. 한도 초과는 다른 기사를 취소하면 풀리는
+       * 일시적 상태지만, 서비스 유형 불일치는 사용자가 해결할 수 없는
+       * 근본 조건이라 먼저 알려주는 편이 낫다.
+       *
+       * 이 검증이 없으면 지정 알림은 발송되지만, 기사의 "받은 요청" 목록이
+       * 서비스 유형으로 필터링되어 해당 요청이 보이지 않는 모순이 생긴다.
+       */
+      const providedMoveTypes = mover.moverProfile?.serviceTypes.map(
+        (serviceType) => serviceType.moveType,
+      );
+
+      if (!providedMoveTypes?.includes(request.moveType)) {
+        throw new AppError("DESIGNATION_SERVICE_TYPE_MISMATCH");
+      }
+
       const designationCount = await estimateRequestRepository.countDesignations(
         estimateRequestId,
         tx,

@@ -1,3 +1,5 @@
+import "dotenv/config";
+
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
@@ -9,9 +11,11 @@ import { s3Client } from "../../lib/s3";
 import { reportImageService } from "./report-image.service";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
+
 const OWNED_KEY = `temp/reports/${USER_ID}/` + "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa.jpg";
 
 const RUN_S3_INTEGRATION_TESTS = process.env.RUN_S3_INTEGRATION_TESTS === "1";
+
 const s3IntegrationTest = RUN_S3_INTEGRATION_TESTS ? it : it.skip;
 
 function createNotFoundError(): S3ServiceException {
@@ -40,6 +44,7 @@ describe("reportImageService.validateUploadedImages", () => {
 
   it("rejects unsupported MIME types", async () => {
     const originalSend = s3Client.send.bind(s3Client);
+
     s3Client.send = (async () => ({
       ContentType: "image/gif",
       ContentLength: 1024,
@@ -57,6 +62,7 @@ describe("reportImageService.validateUploadedImages", () => {
 
   it("rejects images larger than 5MB", async () => {
     const originalSend = s3Client.send.bind(s3Client);
+
     s3Client.send = (async () => ({
       ContentType: "image/jpeg",
       ContentLength: 5 * 1024 * 1024 + 1,
@@ -74,6 +80,7 @@ describe("reportImageService.validateUploadedImages", () => {
 
   it("rejects missing S3 objects", async () => {
     const originalSend = s3Client.send.bind(s3Client);
+
     s3Client.send = (async () => {
       throw createNotFoundError();
     }) as typeof s3Client.send;

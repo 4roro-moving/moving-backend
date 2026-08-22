@@ -8,6 +8,7 @@ import { notificationService } from "../../notification/notification.service";
 import {
   mapAdminReportDetail,
   mapAdminReportListItem,
+  mapCustomerReportTarget,
   mapGiveawayReportTarget,
   mapMoverReportTarget,
   mapResidenceReviewReportTarget,
@@ -23,6 +24,7 @@ import {
   type AdminReportDetailRow,
   type AdminReportListFilters,
   type AdminReportRow,
+  type CustomerReportTarget,
   type GiveawayReportTarget,
   type MoverReportTarget,
   type ResidenceReviewReportTarget,
@@ -77,14 +79,12 @@ export interface ReportsRepository {
   ): Promise<AdminReportDetailRow | null>;
 
   findReviewTargetById(reviewId: number, db?: DbClient): Promise<ReviewReportTarget>;
-
   findMoverTargetById(moverId: string, db?: DbClient): Promise<MoverReportTarget>;
-
+  findCustomerTargetById(customerId: string, db?: DbClient): Promise<CustomerReportTarget>;
   findResidenceReviewTargetById(
     residenceReviewId: number,
     db?: DbClient,
   ): Promise<ResidenceReviewReportTarget>;
-
   findGiveawayTargetById(giveawayId: number, db?: DbClient): Promise<GiveawayReportTarget>;
 
   createActivityLog(input: CreateActivityLogInput, db?: DbClient): Promise<ActivityLogResult>;
@@ -174,7 +174,6 @@ export function createReportsService(
         }
 
         const target = await repository.findReviewTargetById(reviewId);
-
         return target ? mapReviewReportTarget(target) : null;
       }
 
@@ -186,8 +185,18 @@ export function createReportsService(
         }
 
         const target = await repository.findMoverTargetById(moverId);
-
         return target ? mapMoverReportTarget(target) : null;
+      }
+
+      case ReportTargetType.CUSTOMER: {
+        const customerId = parseUuidReportTargetId(targetId);
+
+        if (customerId === null) {
+          return null;
+        }
+
+        const target = await repository.findCustomerTargetById(customerId);
+        return target ? mapCustomerReportTarget(target) : null;
       }
 
       case ReportTargetType.RESIDENCE_REVIEW: {
@@ -198,7 +207,6 @@ export function createReportsService(
         }
 
         const target = await repository.findResidenceReviewTargetById(residenceReviewId);
-
         return target ? mapResidenceReviewReportTarget(target) : null;
       }
 
@@ -210,7 +218,6 @@ export function createReportsService(
         }
 
         const target = await repository.findGiveawayTargetById(giveawayId);
-
         return target ? mapGiveawayReportTarget(target) : null;
       }
     }
