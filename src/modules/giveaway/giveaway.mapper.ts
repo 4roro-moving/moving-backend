@@ -31,7 +31,7 @@ function toPublicAuthor(author: PublicAuthorSource) {
   return {
     id: author.id,
     name: author.name,
-    profileImageUrl: getProfileImageUrl(author.customerProfile?.imageUrl ?? null),
+    imageUrl: getProfileImageUrl(author.customerProfile?.imageUrl ?? null),
   };
 }
 

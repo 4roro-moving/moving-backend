@@ -104,6 +104,17 @@ export function assertRequestMessageEditable(
   }
 }
 
+function assertRequestBelongsToGiveaway(
+  giveaway: GiveawayOwnershipRow,
+  request: GiveawayRequestRow,
+) {
+  if (request.giveawayId !== giveaway.id) {
+    throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND", {
+      message: "해당 나눔 글의 신청을 찾을 수 없습니다.",
+    });
+  }
+}
+
 export function assertRequestCancellable(
   request: GiveawayRequestRow,
   giveaway: GiveawayOwnershipRow,
@@ -140,11 +151,7 @@ export function assertRequestSelectable(
     throw new AppError("GIVEAWAY_RECEIVER_ALREADY_SELECTED");
   }
 
-  if (request.giveawayId !== giveaway.id) {
-    throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND", {
-      message: "해당 나눔 글의 신청을 찾을 수 없습니다.",
-    });
-  }
+  assertRequestBelongsToGiveaway(giveaway, request);
 
   if (request.status !== GIVEAWAY_REQUEST_STATUS.PENDING) {
     throw new AppError("GIVEAWAY_REQUEST_NOT_SELECTABLE");
@@ -157,26 +164,11 @@ export function assertRequestRejectable(
 ) {
   assertGiveawayVisible(giveaway);
   assertGiveawayNotCompleted(giveaway);
+  assertRequestBelongsToGiveaway(giveaway, request);
 
-  if (request.giveawayId !== giveaway.id) {
-    throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND", {
-      message: "해당 나눔 글의 신청을 찾을 수 없습니다.",
-    });
+  if (request.status !== GIVEAWAY_REQUEST_STATUS.PENDING) {
+    throw new AppError("GIVEAWAY_REQUEST_NOT_REJECTABLE");
   }
-
-  if (request.status === GIVEAWAY_REQUEST_STATUS.PENDING) {
-    return;
-  }
-
-  if (
-    request.status === GIVEAWAY_REQUEST_STATUS.SELECTED &&
-    giveaway.status === GIVEAWAY_STATUS.IN_PROGRESS &&
-    giveaway.receiverId === request.requesterId
-  ) {
-    return;
-  }
-
-  throw new AppError("GIVEAWAY_REQUEST_NOT_REJECTABLE");
 }
 
 export function assertGiveawayCompletable(giveaway: GiveawayOwnershipRow) {

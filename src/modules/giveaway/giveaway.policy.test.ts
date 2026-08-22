@@ -394,21 +394,20 @@ describe("assertRequestRejectable", () => {
     );
   });
 
-  it("IN_PROGRESS의 SELECTED 수령 신청은 거절할 수 있다", () => {
-    assert.doesNotThrow(() =>
-      assertRequestRejectable(
-        inProgressGiveaway,
-        createRequest({ status: GIVEAWAY_REQUEST_STATUS.SELECTED }),
-      ),
+  it("PENDING이 아니면 GIVEAWAY_REQUEST_NOT_REJECTABLE", () => {
+    assert.throws(
+      () =>
+        assertRequestRejectable(
+          inProgressGiveaway,
+          createRequest({ status: GIVEAWAY_REQUEST_STATUS.SELECTED }),
+        ),
+      isAppError("GIVEAWAY_REQUEST_NOT_REJECTABLE"),
     );
-  });
-
-  it("AVAILABLE의 SELECTED 신청은 GIVEAWAY_REQUEST_NOT_REJECTABLE", () => {
     assert.throws(
       () =>
         assertRequestRejectable(
           availableGiveaway,
-          createRequest({ status: GIVEAWAY_REQUEST_STATUS.SELECTED }),
+          createRequest({ status: GIVEAWAY_REQUEST_STATUS.REJECTED }),
         ),
       isAppError("GIVEAWAY_REQUEST_NOT_REJECTABLE"),
     );

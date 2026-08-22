@@ -1,5 +1,6 @@
 import { Prisma } from "@prisma/client";
 
+import type { ErrorCode } from "../../constants/error-code";
 import { AppError } from "../../lib/app-error";
 import type { CursorPagination } from "../../types/response.type";
 import { lockGiveawayForUpdate } from "../../utils/giveaway-lock.util";
@@ -210,6 +211,40 @@ async function findVisibleGiveawayOrThrow(giveawayId: number, db?: DbClient) {
   assertGiveawayVisible(giveaway);
 
   return giveaway;
+}
+
+async function findRequestOrThrow(requestId: number, db?: DbClient) {
+  const request = await giveawayRepository.findRequestById(requestId, db);
+
+  if (!request) {
+    throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND");
+  }
+
+  return request;
+}
+
+async function changeRequestStatusOrThrow(
+  params: Parameters<typeof giveawayRepository.updateRequestStatus>[0],
+  failureCode: ErrorCode,
+  db?: DbClient,
+) {
+  const updated = await giveawayRepository.updateRequestStatus(params, db);
+
+  if (!updated) {
+    throw new AppError(failureCode);
+  }
+}
+
+async function restoreGiveawayToAvailableOrThrow(
+  params: { giveawayId: number; receiverId: string },
+  failureCode: ErrorCode,
+  db?: DbClient,
+) {
+  const restored = await giveawayRepository.restoreGiveawayToAvailable(params, db);
+
+  if (!restored) {
+    throw new AppError(failureCode);
+  }
 }
 
 async function getGiveawayDetail(giveawayId: number, viewerId: string) {
@@ -534,11 +569,7 @@ async function updateGiveawayRequest(
   requesterId: string,
   input: UpdateGiveawayRequestInput,
 ) {
-  const request = await giveawayRepository.findRequestById(requestId);
-
-  if (!request) {
-    throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND");
-  }
+  const request = await findRequestOrThrow(requestId);
 
   const giveaway = await findGiveawayOwnershipOrThrow(request.giveawayId);
 
@@ -555,86 +586,51 @@ async function updateGiveawayRequest(
     throw new AppError("GIVEAWAY_REQUEST_NOT_EDITABLE");
   }
 
-  const saved = await giveawayRepository.findRequestById(requestId);
-
-  if (!saved) {
-    throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND");
-  }
-
-  return toGiveawayRequestItem(saved);
+  return toGiveawayRequestItem(await findRequestOrThrow(requestId));
 }
 
 async function cancelGiveawayRequest(requestId: number, requesterId: string) {
   return runTransaction(
     async (tx) => {
-      const request = await giveawayRepository.findRequestById(requestId, tx);
-
-      if (!request) {
-        throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND");
-      }
-
+      const request = await findRequestOrThrow(requestId, tx);
       const giveaway = await findGiveawayOwnershipOrThrow(request.giveawayId, tx);
 
       assertRequestOwner(request, requesterId);
       assertRequestCancellable(request, giveaway);
 
-      if (request.status === GIVEAWAY_REQUEST_STATUS.PENDING) {
-        const cancelled = await giveawayRepository.updateRequestStatus(
+      if (request.status === GIVEAWAY_REQUEST_STATUS.SELECTED) {
+        await changeRequestStatusOrThrow(
+          {
+            requestId,
+            requesterId,
+            fromStatus: GIVEAWAY_REQUEST_STATUS.SELECTED,
+            toStatus: GIVEAWAY_REQUEST_STATUS.CANCELLED,
+          },
+          "GIVEAWAY_REQUEST_CANCEL_NOT_ALLOWED",
+          tx,
+        );
+        await restoreGiveawayToAvailableOrThrow(
+          {
+            giveawayId: request.giveawayId,
+            receiverId: requesterId,
+          },
+          "GIVEAWAY_REQUEST_CANCEL_NOT_ALLOWED",
+          tx,
+        );
+      } else {
+        await changeRequestStatusOrThrow(
           {
             requestId,
             requesterId,
             fromStatus: GIVEAWAY_REQUEST_STATUS.PENDING,
             toStatus: GIVEAWAY_REQUEST_STATUS.CANCELLED,
           },
+          "GIVEAWAY_REQUEST_CANCEL_NOT_ALLOWED",
           tx,
         );
-
-        if (!cancelled) {
-          throw new AppError("GIVEAWAY_REQUEST_CANCEL_NOT_ALLOWED");
-        }
-
-        const updated = await giveawayRepository.findRequestById(requestId, tx);
-
-        if (!updated) {
-          throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND");
-        }
-
-        return toGiveawayRequestItem(updated);
       }
 
-      const cancelled = await giveawayRepository.updateRequestStatus(
-        {
-          requestId,
-          requesterId,
-          fromStatus: GIVEAWAY_REQUEST_STATUS.SELECTED,
-          toStatus: GIVEAWAY_REQUEST_STATUS.CANCELLED,
-        },
-        tx,
-      );
-
-      if (!cancelled) {
-        throw new AppError("GIVEAWAY_REQUEST_CANCEL_NOT_ALLOWED");
-      }
-
-      const restored = await giveawayRepository.restoreGiveawayToAvailable(
-        {
-          giveawayId: request.giveawayId,
-          receiverId: requesterId,
-        },
-        tx,
-      );
-
-      if (!restored) {
-        throw new AppError("GIVEAWAY_REQUEST_CANCEL_NOT_ALLOWED");
-      }
-
-      const updated = await giveawayRepository.findRequestById(requestId, tx);
-
-      if (!updated) {
-        throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND");
-      }
-
-      return toGiveawayRequestItem(updated);
+      return toGiveawayRequestItem(await findRequestOrThrow(requestId, tx));
     },
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
@@ -650,27 +646,20 @@ async function selectGiveawayRequest(giveawayId: number, requestId: number, auth
 
         assertGiveawayAuthor(giveaway, authorId);
 
-        const request = await giveawayRepository.findRequestById(requestId, tx);
-
-        if (!request) {
-          throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND");
-        }
+        const request = await findRequestOrThrow(requestId, tx);
 
         assertRequestSelectable(giveaway, request);
 
-        const selected = await giveawayRepository.updateRequestStatus(
+        await changeRequestStatusOrThrow(
           {
             requestId,
             giveawayId,
             fromStatus: GIVEAWAY_REQUEST_STATUS.PENDING,
             toStatus: GIVEAWAY_REQUEST_STATUS.SELECTED,
           },
+          "GIVEAWAY_REQUEST_NOT_SELECTABLE",
           tx,
         );
-
-        if (!selected) {
-          throw new AppError("GIVEAWAY_REQUEST_NOT_SELECTABLE");
-        }
 
         const progressed = await giveawayRepository.markGiveawayInProgress(
           {
@@ -712,54 +701,22 @@ async function rejectGiveawayRequest(giveawayId: number, requestId: number, auth
 
     assertGiveawayAuthor(giveaway, authorId);
 
-    const request = await giveawayRepository.findRequestById(requestId, tx);
-
-    if (!request) {
-      throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND");
-    }
+    const request = await findRequestOrThrow(requestId, tx);
 
     assertRequestRejectable(giveaway, request);
 
-    const fromStatus =
-      request.status === GIVEAWAY_REQUEST_STATUS.SELECTED
-        ? GIVEAWAY_REQUEST_STATUS.SELECTED
-        : GIVEAWAY_REQUEST_STATUS.PENDING;
-
-    const rejected = await giveawayRepository.updateRequestStatus(
+    await changeRequestStatusOrThrow(
       {
         requestId,
         giveawayId,
-        fromStatus,
+        fromStatus: GIVEAWAY_REQUEST_STATUS.PENDING,
         toStatus: GIVEAWAY_REQUEST_STATUS.REJECTED,
       },
+      "GIVEAWAY_REQUEST_NOT_REJECTABLE",
       tx,
     );
 
-    if (!rejected) {
-      throw new AppError("GIVEAWAY_REQUEST_NOT_REJECTABLE");
-    }
-
-    if (fromStatus === GIVEAWAY_REQUEST_STATUS.SELECTED) {
-      const restored = await giveawayRepository.restoreGiveawayToAvailable(
-        {
-          giveawayId,
-          receiverId: request.requesterId,
-        },
-        tx,
-      );
-
-      if (!restored) {
-        throw new AppError("GIVEAWAY_REQUEST_NOT_REJECTABLE");
-      }
-    }
-
-    const updated = await giveawayRepository.findRequestById(requestId, tx);
-
-    if (!updated) {
-      throw new AppError("GIVEAWAY_REQUEST_NOT_FOUND");
-    }
-
-    return toGiveawayRequestItem(updated);
+    return toGiveawayRequestItem(await findRequestOrThrow(requestId, tx));
   });
 }
 

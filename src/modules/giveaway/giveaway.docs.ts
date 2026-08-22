@@ -158,11 +158,8 @@ registerRouterDocs(giveawayRouter, {
     },
     "POST /:giveawayId/requests/:requestId/reject": {
       summary: "신청 거절",
-      description: [
-        "작성자가 PENDING 신청, 또는 진행 중 나눔의 SELECTED 신청을 REJECTED로 변경합니다.",
-        "SELECTED를 거절하면 receiverId를 비우고 글 상태를 AVAILABLE로 되돌립니다.",
-        "완료된 나눔은 거절할 수 없습니다.",
-      ].join("\n"),
+      description:
+        "작성자가 PENDING 신청을 REJECTED로 변경합니다. 완료된 나눔은 거절할 수 없습니다.",
       responses: {
         200: "거절 성공",
         403: "작성자가 아닙니다.",
