@@ -248,14 +248,15 @@ export const customersRepository = {
           COUNT(rp.id)::int AS "receivedReportCount",
           COUNT(rp.id) FILTER (WHERE rp.status = ${"PENDING"}::"ReportStatus")::int
             AS "pendingReceivedReportCount",
-          COALESCE((
-            SELECT COUNT(*)::int
-            FROM inquiries AS i
-            WHERE i.author_id = u.id
-              AND i.status = ${InquiryStatus.OPEN}::"InquiryStatus"
-          ), 0) AS "openInquiryCount",
+          COALESCE(oi."openInquiryCount", 0) AS "openInquiryCount",
           COUNT(*) OVER()::bigint AS "totalCount"
         FROM "User" AS u
+        LEFT JOIN (
+          SELECT i.author_id, COUNT(*)::int AS "openInquiryCount"
+          FROM inquiries AS i
+          WHERE i.status = ${InquiryStatus.OPEN}::"InquiryStatus"
+          GROUP BY i.author_id
+        ) AS oi ON oi.author_id = u.id
         LEFT JOIN reviews AS rv ON rv.customer_id = u.id
         LEFT JOIN reports AS rp
           ON rp.target_type = ${ReportTargetType.REVIEW}::"ReportTargetType"
@@ -270,7 +271,8 @@ export const customersRepository = {
           u."isActive",
           u."isProfileCompleted",
           u."deletedAt",
-          u."createdAt"
+          u."createdAt",
+          oi."openInquiryCount"
         ORDER BY ${buildCustomerReportOrderBy(sorts)}
         LIMIT ${take} OFFSET ${skip}
     `);

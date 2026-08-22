@@ -312,14 +312,15 @@ export const moversRepository = {
           COUNT(rp.id)::int AS "receivedReportCount",
           COUNT(rp.id) FILTER (WHERE rp.status = ${"PENDING"}::"ReportStatus")::int
             AS "pendingReceivedReportCount",
-          COALESCE((
-            SELECT COUNT(*)::int
-            FROM inquiries AS i
-            WHERE i.author_id = u.id
-              AND i.status = ${InquiryStatus.OPEN}::"InquiryStatus"
-          ), 0) AS "openInquiryCount",
+          COALESCE(oi."openInquiryCount", 0) AS "openInquiryCount",
           COUNT(*) OVER()::bigint AS "totalCount"
         FROM "User" AS u
+        LEFT JOIN (
+          SELECT i.author_id, COUNT(*)::int AS "openInquiryCount"
+          FROM inquiries AS i
+          WHERE i.status = ${InquiryStatus.OPEN}::"InquiryStatus"
+          GROUP BY i.author_id
+        ) AS oi ON oi.author_id = u.id
         LEFT JOIN mover_profiles AS mp ON mp."userId" = u.id
         LEFT JOIN reports AS rp
           ON rp.target_type = ${ReportTargetType.MOVER}::"ReportTargetType"
@@ -339,7 +340,8 @@ export const moversRepository = {
           mp.career,
           mp."averageRating",
           mp."reviewCount",
-          mp."confirmedCount"
+          mp."confirmedCount",
+          oi."openInquiryCount"
         ORDER BY ${buildMoverReportOrderBy(sorts)}
         LIMIT ${take} OFFSET ${skip}
     `);
