@@ -60,6 +60,29 @@ function toParticipant(user: { id: string; name: string; role: UserRole }) {
   };
 }
 
+function getChatMessageAvailability(estimate: {
+  status: EstimateStatus;
+  estimateRequest: {
+    status: EstimateRequestStatus;
+  };
+}): Pick<ChatRoomSummary, "canSendMessage" | "messageDisabledReason"> {
+  if (CHAT_ROOM_BLOCKED_ESTIMATE_STATUSES.includes(estimate.status)) {
+    return {
+      canSendMessage: false,
+      messageDisabledReason: "취소되었거나 만료된 견적의 채팅방에서는 메시지를 보낼 수 없습니다.",
+    };
+  }
+
+  if (CHAT_ROOM_BLOCKED_REQUEST_STATUSES.includes(estimate.estimateRequest.status)) {
+    return {
+      canSendMessage: false,
+      messageDisabledReason: "종료된 견적 요청의 채팅방에서는 메시지를 보낼 수 없습니다.",
+    };
+  }
+
+  return { canSendMessage: true, messageDisabledReason: null };
+}
+
 function mapRoom(room: ChatRoomRow): ChatRoomSummary {
   return {
     id: room.id,
@@ -67,6 +90,7 @@ function mapRoom(room: ChatRoomRow): ChatRoomSummary {
     estimateRequestId: room.estimateRequestId,
     customer: toParticipant(room.customer),
     mover: toParticipant(room.mover),
+    ...getChatMessageAvailability(room.estimate),
     lastMessageAt: room.lastMessageAt,
     createdAt: room.createdAt,
     updatedAt: room.updatedAt,
@@ -150,15 +174,11 @@ function assertChatRoomActive(estimate: {
     status: EstimateRequestStatus;
   };
 }): void {
-  if (CHAT_ROOM_BLOCKED_ESTIMATE_STATUSES.includes(estimate.status)) {
-    throw new AppError("CONFLICT", {
-      message: "취소되었거나 만료된 견적의 채팅방은 새 메시지를 보낼 수 없습니다.",
-    });
-  }
+  const availability = getChatMessageAvailability(estimate);
 
-  if (CHAT_ROOM_BLOCKED_REQUEST_STATUSES.includes(estimate.estimateRequest.status)) {
+  if (!availability.canSendMessage) {
     throw new AppError("CONFLICT", {
-      message: "종료된 견적 요청의 채팅방은 새 메시지를 보낼 수 없습니다.",
+      message: availability.messageDisabledReason ?? "메시지를 보낼 수 없는 채팅방입니다.",
     });
   }
 }
