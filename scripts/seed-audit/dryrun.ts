@@ -100,7 +100,13 @@ type E = {
   createdAt: Date;
   confirmedAt: Date | null;
 };
-type V = { id: number; customerId: string; moverId: string; estimateId: number; createdAt: Date };
+type V = {
+  id: number;
+  customerId: string;
+  moverId: string;
+  estimateId: number;
+  createdAt: Date;
+};
 
 const reqs = flow.rows.estimateRequests as R[];
 const ests = flow.rows.estimates as E[];
@@ -138,6 +144,24 @@ check(
     new Set((ub.rows.users as { phone: string }[]).map((u) => u.phone)).size,
 );
 check("mover nickname unique", ub.movers.length - new Set(ub.movers.map((m) => m.nickname)).size);
+
+// AdminProfile — User(role=ADMIN) 와 1:1, SUPER_ADMIN 은 정확히 1명
+{
+  const aps = ub.rows.adminProfiles as {
+    id: number;
+    userId: string;
+    adminRole: string;
+  }[];
+  const adminIds = new Set(ub.admins.map((a) => a.id));
+  check("adminProfile id unique", aps.length - new Set(aps.map((a) => a.id)).size);
+  check("adminProfile userId unique", aps.length - new Set(aps.map((a) => a.userId)).size);
+  check(
+    "모든 ADMIN 이 프로필 보유",
+    ub.admins.filter((a) => !aps.some((p) => p.userId === a.id)).length,
+  );
+  check("adminProfile 대상이 ADMIN", aps.filter((a) => !adminIds.has(a.userId)).length);
+  check("SUPER_ADMIN 1명", Math.abs(aps.filter((a) => a.adminRole === "SUPER_ADMIN").length - 1));
+}
 check(
   "unavailable (mover,date) unique",
   (ub.rows.moverUnavailableDates as { moverId: string; date: Date }[]).length -
@@ -176,17 +200,31 @@ check(
 );
 check(
   "report unique",
-  (admin.rows.reports as { targetType: string; targetId: string; reporterId: string }[]).length -
+  (
+    admin.rows.reports as {
+      targetType: string;
+      targetId: string;
+      reporterId: string;
+    }[]
+  ).length -
     new Set(
-      (admin.rows.reports as { targetType: string; targetId: string; reporterId: string }[]).map(
-        (r) => `${r.targetType}|${r.targetId}|${r.reporterId}`,
-      ),
+      (
+        admin.rows.reports as {
+          targetType: string;
+          targetId: string;
+          reporterId: string;
+        }[]
+      ).map((r) => `${r.targetType}|${r.targetId}|${r.reporterId}`),
     ).size,
 );
 // 부분 unique: PENDING/SELECTED 인 활성 신청만 글·유저당 1건 (재신청 허용 마이그레이션)
 {
   const active = (
-    comm.rows.giveawayRequests as { giveawayId: number; requesterId: string; status: string }[]
+    comm.rows.giveawayRequests as {
+      giveawayId: number;
+      requesterId: string;
+      status: string;
+    }[]
   ).filter((g) => g.status === "PENDING" || g.status === "SELECTED");
   check(
     "giveaway 활성신청 (gid,requester) unique",
@@ -332,9 +370,12 @@ check(
   "giveaway no self-request",
   (() => {
     const byId = new Map(gws.map((g) => [g.id, g]));
-    return (comm.rows.giveawayRequests as { giveawayId: number; requesterId: string }[]).filter(
-      (r) => byId.get(r.giveawayId)?.authorId === r.requesterId,
-    ).length;
+    return (
+      comm.rows.giveawayRequests as {
+        giveawayId: number;
+        requesterId: string;
+      }[]
+    ).filter((r) => byId.get(r.giveawayId)?.authorId === r.requesterId).length;
   })(),
 );
 
@@ -344,7 +385,11 @@ const stats = comm.rows.regionReviewStatistics as {
   ratingSum: number;
   reviewCount: number;
 }[];
-const rr = comm.rows.residenceReviews as { regionId: number; rating: number; isHidden: boolean }[];
+const rr = comm.rows.residenceReviews as {
+  regionId: number;
+  rating: number;
+  isHidden: boolean;
+}[];
 check(
   "region stat matches",
   stats.filter((s) => {
@@ -391,7 +436,13 @@ check(
   "hidden review has HIDE log",
   (() => {
     const logged = new Set(
-      (admin.rows.activityLogs as { action: string; targetType: string; targetId: string }[])
+      (
+        admin.rows.activityLogs as {
+          action: string;
+          targetType: string;
+          targetId: string;
+        }[]
+      )
         .filter((l) => l.action === "HIDE" && l.targetType === "REVIEW")
         .map((l) => l.targetId),
     );

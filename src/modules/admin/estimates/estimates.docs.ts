@@ -19,7 +19,7 @@ registerRouterDocs(adminEstimateRouter, {
         "관리자가 확정된 거래를 수동으로 취소합니다.",
         "",
         "- 대상 견적과 견적 요청이 모두 `CONFIRMED`이고, 해당 견적이 요청의 `confirmedEstimateId`인 경우에만 취소합니다.",
-        "- 견적 요청·확정 견적·대기 중 견적 수정 요청을 취소하고, 이력·ActivityLog·채팅 SYSTEM 메시지·고객/기사 알림을 생성합니다.",
+        "- 견적 요청·확정 견적·대기 중 견적 수정 요청을 취소하고, 이력·ActivityLog·고객/기사 알림을 생성합니다.",
       ].join("\n"),
       responses: {
         200: "취소 성공",

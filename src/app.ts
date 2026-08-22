@@ -19,7 +19,7 @@ import { adminResidenceReviewRouter } from "./modules/admin/residence-reviews/re
 import adminEstimateRouter from "./modules/admin/estimates/estimates.route";
 import adminCustomerRouter from "./modules/admin/member-management/customers/customers.route";
 import adminMoverRouter from "./modules/admin/member-management/movers/movers.route";
-import noticeRouter from "./modules/admin/notice/notice.route";
+import adminNoticeRouter from "./modules/admin/notice/notice.route";
 import { authRouter } from "./modules/auth/auth.route";
 import { chatRouter } from "./modules/chat/chat.route";
 import estimateRequestRouter from "./modules/estimate-request/estimateRequest.route";
@@ -37,12 +37,14 @@ import {
   residenceReviewRouter,
 } from "./modules/residence-review/residence-review.route";
 import reviewRouter from "./modules/review/review.route";
+import publicNoticeRouter from "./modules/notice/notice.route";
 
 import { adminFaqRouter, publicFaqRouter } from "./modules/admin/faq/faq.route";
 import { adminInquiryRouter, inquiryRouter } from "./modules/inquiry/inquiry.route";
 import { adminAuthRouter } from "./modules/admin/auth/admin-auth.route";
 import { adminTermsRouter, publicTermsRouter } from "./modules/terms/terms.route";
 import { adminReportRouter } from "./modules/admin/reports/reports.route";
+import adminManagementRouter from "./modules/admin/admin-management/admin-management.route";
 
 // Swagger UI로 전환할 때 사용
 // import type { RequestHandler } from "express";
@@ -187,12 +189,14 @@ app.use("/api/giveaways", giveawayRouter);
 app.use("/api/giveaway-requests", giveawayRequestRouter);
 app.use("/api/residence-reviews", residenceReviewRouter);
 app.use("/api/residence-reviews", publicResidenceReviewRouter);
+app.use("/api/notices", publicNoticeRouter);
 
 /*
  * 관리자 API
  */
 app.use("/api/admin/auth", adminAuthRouter);
-app.use("/api/admin/notices", noticeRouter);
+app.use("/api/admin/admins", adminManagementRouter);
+app.use("/api/admin/notices", adminNoticeRouter);
 app.use("/api/admin/reviews", adminReviewRouter);
 app.use("/api/admin/residence-reviews", adminResidenceReviewRouter);
 app.use("/api/admin/giveaways", adminGiveawayRouter);

@@ -202,6 +202,28 @@ const findProfileByNicknameExcludingUser = async (
 };
 
 /*
+ * 현재 기사님의 완료된 이사 수를 조회한다.
+ *
+ * 확정된 견적이 연결된 견적 요청 중
+ * 실제 요청 상태가 COMPLETED인 건만 집계한다.
+ */
+const countCompletedMovesByUserId = async (
+  userId: string,
+  db: DbClient = prisma,
+): Promise<number> => {
+  return db.estimateRequest.count({
+    where: {
+      status: "COMPLETED",
+      confirmedEstimate: {
+        is: {
+          moverId: userId,
+        },
+      },
+    },
+  });
+};
+
+/*
  * 전달받은 지역 ID 중 실제 존재하는 지역의 개수 조회
  */
 const countRegionsByIds = async (regionIds: number[], db: DbClient = prisma): Promise<number> => {
@@ -373,6 +395,7 @@ export const profileRepository = {
   findProfileByUserId,
   findProfileByNickname,
   findProfileByNicknameExcludingUser,
+  countCompletedMovesByUserId,
   countRegionsByIds,
   createProfile,
   updateUser,

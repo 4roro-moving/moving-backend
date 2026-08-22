@@ -4,18 +4,21 @@ import { prisma } from "../../../lib/prisma";
 import type { DbClient } from "../../../utils/transaction";
 
 /** 회원 상세 화면에서 제공하는 정지·해제 이력의 기본 최신 건수입니다. */
-export const MEMBER_SUSPENSION_HISTORY_LIMIT = 5;
+const MEMBER_SUSPENSION_HISTORY_LIMIT = 5;
 
 const suspensionHistorySelect = {
   id: true,
   action: true,
   reason: true,
+  internalNote: true,
   createdAt: true,
+  admin: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
 } satisfies Prisma.UserSuspensionSelect;
-
-export type MemberSuspensionHistoryRow = Prisma.UserSuspensionGetPayload<{
-  select: typeof suspensionHistorySelect;
-}>;
 
 export const memberRepository = {
   /** 회원 계정의 정지·해제 이력 최신 일부와 전체 건수를 조회합니다. */

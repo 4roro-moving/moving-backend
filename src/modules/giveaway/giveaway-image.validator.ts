@@ -4,17 +4,29 @@ import { GIVEAWAY_IMAGE, GIVEAWAY_IMAGE_CONTENT_TYPES } from "./giveaway-image.t
 
 const uuidPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 
-/*
- * 나눔 이미지 S3 Key 형식을 검증한다.
+function createImageKeysSchema(imageKeySchema: z.ZodType<string>) {
+  return z
+    .array(imageKeySchema)
+    .max(
+      GIVEAWAY_IMAGE.MAX_COUNT,
+      `이미지는 최대 ${String(GIVEAWAY_IMAGE.MAX_COUNT)}장까지 등록할 수 있습니다.`,
+    )
+    .refine((imageKeys) => new Set(imageKeys).size === imageKeys.length, {
+      message: "이미지 Key는 중복될 수 없습니다.",
+    });
+}
+
+/**
+ * 나눔 이미지 임시 S3 Key.
  *
- * giveaways/{userId}/{imageId}.{extension}
+ * temp/giveaways/{userId}/{imageId}.{extension}
  */
-export const giveawayImageKeySchema = z
+export const giveawayTempImageKeySchema = z
   .string({ error: "이미지 Key는 문자열이어야 합니다." })
   .trim()
   .regex(
     new RegExp(
-      `^${GIVEAWAY_IMAGE.KEY_PREFIX}/${uuidPattern}/${uuidPattern}\\.(jpg|png|webp)$`,
+      `^${GIVEAWAY_IMAGE.TEMP_PREFIX}/${uuidPattern}/${uuidPattern}\\.(jpg|png|webp)$`,
       "i",
     ),
     {
@@ -22,15 +34,35 @@ export const giveawayImageKeySchema = z
     },
   );
 
-export const giveawayImageKeysSchema = z
-  .array(giveawayImageKeySchema)
-  .max(
-    GIVEAWAY_IMAGE.MAX_COUNT,
-    `이미지는 최대 ${String(GIVEAWAY_IMAGE.MAX_COUNT)}장까지 등록할 수 있습니다.`,
-  )
-  .refine((imageKeys) => new Set(imageKeys).size === imageKeys.length, {
-    message: "이미지 Key는 중복될 수 없습니다.",
-  });
+/**
+ * 나눔 이미지 최종 S3 Key.
+ *
+ * giveaways/{userId}/{imageId}.{extension}
+ */
+export const giveawayFinalImageKeySchema = z
+  .string({ error: "이미지 Key는 문자열이어야 합니다." })
+  .trim()
+  .regex(
+    new RegExp(
+      `^${GIVEAWAY_IMAGE.FINAL_PREFIX}/${uuidPattern}/${uuidPattern}\\.(jpg|png|webp)$`,
+      "i",
+    ),
+    {
+      error: "올바른 나눔 이미지 Key 형식이 아닙니다.",
+    },
+  );
+
+/**
+ * 글 작성 시에는 Presigned URL로 발급된 temp Key만 받는다.
+ */
+export const giveawayCreateImageKeysSchema = createImageKeysSchema(giveawayTempImageKeySchema);
+
+/**
+ * 글 수정 시에는 유지할 기존 final Key와 신규 temp Key를 함께 받을 수 있다.
+ */
+export const giveawayUpdateImageKeysSchema = createImageKeysSchema(
+  z.union([giveawayTempImageKeySchema, giveawayFinalImageKeySchema]),
+);
 
 export const createGiveawayImageUploadUrlSchema = z.strictObject({
   contentType: z.enum(GIVEAWAY_IMAGE_CONTENT_TYPES, {

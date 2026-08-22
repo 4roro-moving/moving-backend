@@ -30,6 +30,13 @@ export const ERROR_CODES = {
     message: "이용이 제한된 계정입니다. 자세한 사항은 고객센터로 문의해 주세요.",
   },
 
+  // 26.08.20 김나연 - [추가] 소셜 로그인으로 접근한 계정이 존재하지 않을 때 에러
+  OAUTH_ACCOUNT_NOT_FOUND: {
+    status: 404,
+    code: "OAUTH_ACCOUNT_NOT_FOUND",
+    message: "가입된 소셜 계정이 없습니다. 회원가입을 진행해 주세요.",
+  },
+
   NOT_FOUND: {
     status: 404,
     code: "NOT_FOUND",
@@ -149,6 +156,12 @@ export const ERROR_CODES = {
     status: 409,
     code: "DESIGNATION_LIMIT_EXCEEDED",
     message: "지정 견적은 최대 3명까지 요청할 수 있습니다.",
+  },
+
+  DESIGNATION_SERVICE_TYPE_MISMATCH: {
+    status: 409,
+    code: "DESIGNATION_SERVICE_TYPE_MISMATCH",
+    message: "기사님이 제공하지 않는 이사 유형입니다.",
   },
 
   DESIGNATION_NOT_FOUND: {
@@ -318,6 +331,12 @@ export const ERROR_CODES = {
     status: 409,
     code: "GIVEAWAY_NOT_EDITABLE",
     message: "신청 가능 상태의 나눔 글만 수정할 수 있습니다.",
+  },
+  GIVEAWAY_UPDATE_CONFLICT: {
+    status: 409,
+    code: "GIVEAWAY_UPDATE_CONFLICT",
+    message:
+      "나눔 글이 다른 요청으로 먼저 수정되었습니다. 최신 내용을 확인한 뒤 다시 시도해 주세요.",
   },
   GIVEAWAY_NOT_DELETABLE: {
     status: 409,

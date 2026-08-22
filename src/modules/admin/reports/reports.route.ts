@@ -1,6 +1,12 @@
 import { Router } from "express";
 
-import { authenticate, authorize } from "../../../middlewares/auth";
+import { ADMIN_PERMISSIONS } from "../../../lib/auth/admin-permissions";
+
+import { requireActiveAdmin } from "../../../middlewares/admin";
+
+import { authorizeAdmin } from "../../../middlewares/admin-auth";
+
+import { authenticate } from "../../../middlewares/auth";
 import { validate } from "../../../middlewares/validate";
 import { asyncHandler } from "../../../utils/async-handler.util";
 
@@ -17,7 +23,11 @@ import {
  */
 const adminReportRouter = Router();
 
-adminReportRouter.use(authenticate, authorize("ADMIN"));
+adminReportRouter.use(
+  authenticate,
+  requireActiveAdmin,
+  authorizeAdmin(ADMIN_PERMISSIONS.REPORT_MANAGE),
+);
 
 adminReportRouter.get(
   "/",

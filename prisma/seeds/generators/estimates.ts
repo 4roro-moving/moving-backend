@@ -121,10 +121,24 @@ export function generateEstimateFlow(
   const regionByName = new Map(regions.map((r) => [r.name, r.id]));
   const regionNameById = new Map(regions.map((r) => [r.id, r.name]));
 
-  /** 지역별 기사 인덱스 — 요청 지역과 견적 낸 기사의 서비스 지역을 맞추기 위함 */
+  /*
+   * 지역별 기사 인덱스.
+   *
+   * 요청마다 "이 시점에 이미 가입한 활성 기사"를 골라야 하는데, 매번 풀 전체를
+   * filter 하면 O(요청수 × 풀크기) 가 되어 규모가 커질수록 급격히 느려진다.
+   * (기사 5,000 → 30,000 으로 늘렸을 때 생성 시간이 데이터 3.4배 대비 20배 증가)
+   *
+   * 그래서 활성 기사만 남기고 가입일 오름차순으로 한 번만 정렬해 둔다.
+   * 이후에는 이진 탐색으로 "가입일 <= 요청일" 구간의 끝을 찾아
+   * 그 앞부분에서만 표본을 뽑으면 된다. O(log 풀크기) 로 떨어진다.
+   */
   const moversByRegion = new Map<number, SeedMover[]>();
 
   for (const mover of movers) {
+    if (!mover.isActive) {
+      continue;
+    }
+
     for (const regionId of mover.regionIds) {
       const list = moversByRegion.get(regionId) ?? [];
       list.push(mover);
@@ -132,7 +146,31 @@ export function generateEstimateFlow(
     }
   }
 
-  const activeMovers = movers.filter((m) => m.isActive);
+  for (const list of moversByRegion.values()) {
+    list.sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
+  }
+
+  /** 정렬된 풀에서 createdAt <= cutoff 인 원소 개수를 이진 탐색으로 구한다 */
+  const eligibleCount = (pool: SeedMover[], cutoff: number): number => {
+    let lo = 0;
+    let hi = pool.length;
+
+    while (lo < hi) {
+      const mid = (lo + hi) >>> 1;
+
+      if (pool[mid]!.createdAt.getTime() <= cutoff) {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+
+    return lo;
+  };
+
+  const activeMovers = movers
+    .filter((m) => m.isActive)
+    .sort((a, b) => a.createdAt.getTime() - b.createdAt.getTime());
 
   const estimateRequests: unknown[] = [];
   const estimateRequestHistories: unknown[] = [];
@@ -330,19 +368,16 @@ export function generateEstimateFlow(
 
       /*
        * 요청 시점에 아직 가입하지 않은 기사는 견적을 낼 수 없다.
-       * 이 필터가 없으면 "가입 2026-03 기사가 2025-12 에 견적 제출" 같은
-       * 데이터가 만들어진다.
+       * 풀이 가입일 오름차순이므로 이진 탐색으로 구한 개수 앞부분이 곧 후보다.
+       * (배열을 새로 만들지 않으므로 GC 압력도 줄어든다)
        */
-      const eligible =
-        wantCount === 0
-          ? []
-          : candidatePool.filter((m) => m.isActive && m.createdAt.getTime() <= createdAt.getTime());
+      const eligibleSize = wantCount === 0 ? 0 : eligibleCount(candidatePool, createdAt.getTime());
 
       const picked =
-        eligible.length === 0
+        eligibleSize === 0
           ? []
-          : sampleIndices(rng, eligible.length, Math.min(wantCount, eligible.length)).map(
-              (i) => eligible[i]!,
+          : sampleIndices(rng, eligibleSize, Math.min(wantCount, eligibleSize)).map(
+              (i) => candidatePool[i]!,
             );
 
       /*
@@ -546,10 +581,25 @@ export function generateEstimateFlow(
         continue;
       }
 
+      /*
+       * 지정 견적.
+       *
+       * 지정 대상은 그 이사 유형을 실제로 제공하는 기사여야 한다.
+       * 서버(designateMover)가 DESIGNATION_SERVICE_TYPE_MISMATCH 로 막는 조건이라,
+       * 지키지 않으면 "앱으로는 만들 수 없는 데이터"가 시드에 들어간다.
+       * (지정 알림은 가는데 기사의 받은 요청 목록에는 안 보이는 상태)
+       *
+       * 최대 3명 (MAX_DESIGNATED_MOVERS).
+       */
       const isDesignatedRequest = chance(rng, DESIGNATED_REQUEST_RATE);
-      // 지정은 최대 3명 (서비스 정책)
+
       const designatedSet = new Set<string>(
-        isDesignatedRequest ? picked.slice(0, Math.min(3, picked.length)).map((m) => m.id) : [],
+        isDesignatedRequest
+          ? picked
+              .filter((m) => m.moveTypes.includes(moveType))
+              .slice(0, 3)
+              .map((m) => m.id)
+          : [],
       );
 
       for (const moverId of designatedSet) {
@@ -657,7 +707,10 @@ export function generateEstimateFlow(
         });
 
         if (isConfirmed) {
-          confirmedLinks.push({ requestId: currentRequestId, estimateId: currentEstimateId });
+          confirmedLinks.push({
+            requestId: currentRequestId,
+            estimateId: currentEstimateId,
+          });
           confirmedByMover.set(mover.id, (confirmedByMover.get(mover.id) ?? 0) + 1);
 
           /* ── 채팅방 (확정 견적당 1개) ───────────────────────────── */
@@ -745,9 +798,16 @@ export function generateEstimateFlow(
 
       if (chance(rng, REJECTION_RATE) && candidatePool.length > picked.length) {
         const pickedIds = new Set(picked.map((m) => m.id));
-        const rejector = candidatePool.find(
-          (m) => !pickedIds.has(m.id) && m.isActive && m.createdAt.getTime() <= createdAt.getTime(),
-        );
+        let rejector: SeedMover | undefined;
+
+        for (let i = 0; i < eligibleSize; i += 1) {
+          const candidate = candidatePool[i]!;
+
+          if (!pickedIds.has(candidate.id)) {
+            rejector = candidate;
+            break;
+          }
+        }
 
         if (rejector) {
           estimateRequestRejections.push({

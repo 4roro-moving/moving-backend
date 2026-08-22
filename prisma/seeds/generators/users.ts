@@ -2,14 +2,14 @@
  * 계정 생성
  * ============================================================================
  *
- *  User(UUID PK) 를 Node 에서 미리 만들어 두는 것이 핵심이다.
- *  이 덕분에 이후 모든 생성기가 DB 를 되조회하지 않고 FK 를 조립할 수 있고,
- *  프로필 이미지 S3 키(profiles/{userId}/...)도 적재 전에 확정된다.
+ * User(UUID PK) 를 Node 에서 미리 만들어 두는 것이 핵심이다.
+ * 이 덕분에 이후 모든 생성기가 DB 를 되조회하지 않고 FK 를 조립할 수 있고,
+ * 프로필 이미지 S3 키(profiles/{userId}/...)도 적재 전에 확정된다.
  *
- *  ── imageUrl 규약 ──────────────────────────────────────────────────────
- *  DB 에는 S3 "키"만 저장한다. 완성 URL 을 넣으면 utils/image-url.ts 의
- *  http(s) 바이패스 분기를 타서 CloudFront 경로가 전혀 검증되지 않는다.
- *  (기존 시드가 picsum 완성 URL 을 넣어 정합성이 깨져 있던 지점)
+ * ── imageUrl 규약 ──────────────────────────────────────────────────────
+ * DB 에는 S3 "키"만 저장한다. 완성 URL 을 넣으면 utils/image-url.ts 의
+ * http(s) 바이패스 분기를 타서 CloudFront 경로가 전혀 검증되지 않는다.
+ * (기존 시드가 picsum 완성 URL 을 넣어 정합성이 깨져 있던 지점)
  * ============================================================================
  */
 
@@ -20,7 +20,14 @@ import {
   type SeedConfig,
 } from "../config.js";
 import { ANCHOR_CUSTOMER_COUNT, ANCHOR_MOVER_COUNT } from "../config.js";
-import { adminEmail, customerEmail, isSuspended, moverEmail } from "../anchors/index.js";
+import {
+  SUPER_ADMIN_EMAIL,
+  SUPER_ADMIN_NAME,
+  adminEmail,
+  customerEmail,
+  isSuspended,
+  moverEmail,
+} from "../anchors/index.js";
 import { paretoCount, pickSeasonalPastDate, weightedPick } from "../lib/distributions.js";
 import { makeUuidV7 } from "../lib/ids.js";
 import { chance, deriveRng, pick, randInt, sampleIndices, type Rng } from "../lib/rng.js";
@@ -48,8 +55,10 @@ export interface SeedUser {
   isActive: boolean;
   isProfileCompleted: boolean;
   createdAt: Date;
+
   /** 앵커 계정이면 1-based 번호, 벌크면 null */
   anchorIndex: number | null;
+
   /** 프로필 이미지 S3 키. 이미지 없는 계정은 null */
   imageKey: string | null;
 }
@@ -73,8 +82,13 @@ export interface UserBundle {
   admins: SeedUser[];
   customers: SeedCustomer[];
   movers: SeedMover[];
+
   rows: {
     users: unknown[];
+
+    // User.role = ADMIN 계정의 관리자 내부 역할 정보.
+    adminProfiles: unknown[];
+
     customerProfiles: unknown[];
     moverProfiles: unknown[];
     customerServiceAreas: unknown[];
@@ -102,11 +116,19 @@ function profileImageKey(userId: string, poolIndex: number): string {
 function pickAuth(
   rng: Rng,
   userId: string,
-): { authProvider: SeedUser["authProvider"]; providerUserId: string | null; hasPassword: boolean } {
+): {
+  authProvider: SeedUser["authProvider"];
+  providerUserId: string | null;
+  hasPassword: boolean;
+} {
   const provider = weightedPick<"LOCAL" | "GOOGLE" | "NAVER" | "KAKAO">(rng, AUTH_PROVIDER_WEIGHTS);
 
   if (provider === "LOCAL") {
-    return { authProvider: "LOCAL", providerUserId: null, hasPassword: true };
+    return {
+      authProvider: "LOCAL",
+      providerUserId: null,
+      hasPassword: true,
+    };
   }
 
   return {
@@ -126,6 +148,10 @@ export function generateUsers(
   const regionByName = new Map(regions.map((r) => [r.name, r.id]));
 
   const users: unknown[] = [];
+
+  // ADMIN User와 1:1로 연결되는 관리자 프로필.
+  const adminProfiles: unknown[] = [];
+
   const customerProfiles: unknown[] = [];
   const moverProfiles: unknown[] = [];
   const customerServiceAreas: unknown[] = [];
@@ -155,6 +181,9 @@ export function generateUsers(
    * 관리자를 다른 계정과 같은 방식(과거 18개월 랜덤)으로 만들면
    * "공지를 쓴 관리자가 그 공지보다 나중에 가입", "약관 작성자가 약관보다 늦게 가입"
    * 같은 모순이 생긴다. 실제로도 운영자 계정이 먼저 있는 게 자연스럽다.
+   *
+   * 이 시드에서 생성하는 관리자들은 실제 서비스 운영을 담당하는 일반 ADMIN이다.
+   * SUPER_ADMIN은 관리자 계정 관리 전용이므로 일반 관리자 시드와 분리한다.
    */
   const SERVICE_EPOCH = new Date(now.getTime() - 730 * 86_400_000);
 
@@ -194,7 +223,77 @@ export function generateUsers(
       createdAt,
       updatedAt: createdAt,
     });
+
+    // 시드가 만드는 admin1~N 은 전부 서비스 운영 담당(ADMIN)이다.
+    adminProfiles.push({
+      id: i,
+      userId: admin.id,
+      adminRole: "ADMIN",
+      createdAt,
+      updatedAt: createdAt,
+    });
   }
+
+  /* ── 슈퍼 관리자 ───────────────────────────────────────────────────── */
+
+  /*
+   * SUPER_ADMIN 은 admin1~N 과 별개 계정으로 만든다.
+   *
+   * 두 역할은 상하 관계가 아니라 책임이 분리된 관계다.
+   * (SUPER_ADMIN = 관리자 계정 관리 전담, ADMIN = 서비스 운영 전담)
+   * 번호 체계에 섞으면 "admin1 로 신고 관리가 안 된다"는 혼란이 생기므로
+   * 이메일도 superadmin@test.com 으로 구분한다.
+   *
+   * ── 시드가 직접 만드는 이유 ────────────────────────────────────────
+   * 이 시드는 시작할 때 TRUNCATE ... CASCADE 로 전 테이블을 비운다.
+   * scripts/bootstrap-super-admin.ts 로 만든 계정도 함께 지워지므로,
+   * 시드를 돌릴 때마다 부트스트랩을 다시 실행해야 하고 그걸 잊으면
+   * "관리자 계정 관리를 아무도 할 수 없는" 상태가 조용히 만들어진다.
+   * 부트스트랩 스크립트는 운영 환경 최초 1회용으로 남겨둔다.
+   */
+  const superAdminCreatedAt = new Date(SERVICE_EPOCH.getTime() - 3_600_000);
+  const superAdminId = makeUuidV7(rng, superAdminCreatedAt.getTime());
+
+  const superAdmin: SeedUser = {
+    id: superAdminId,
+    email: SUPER_ADMIN_EMAIL,
+    name: SUPER_ADMIN_NAME,
+    phone: makePhone(phoneSeq),
+    role: "ADMIN",
+    authProvider: "LOCAL",
+    providerUserId: null,
+    isActive: true,
+    isProfileCompleted: true,
+    createdAt: superAdminCreatedAt,
+    anchorIndex: 0,
+    imageKey: null,
+  };
+
+  phoneSeq += 1;
+  admins.push(superAdmin);
+
+  users.push({
+    id: superAdmin.id,
+    email: superAdmin.email,
+    password: passwordHash,
+    authProvider: "LOCAL",
+    providerUserId: null,
+    name: superAdmin.name,
+    phone: superAdmin.phone,
+    role: "ADMIN",
+    isActive: true,
+    isProfileCompleted: true,
+    createdAt: superAdminCreatedAt,
+    updatedAt: superAdminCreatedAt,
+  });
+
+  adminProfiles.push({
+    id: config.admins + 1,
+    userId: superAdmin.id,
+    adminRole: "SUPER_ADMIN",
+    createdAt: superAdminCreatedAt,
+    updatedAt: superAdminCreatedAt,
+  });
 
   /* ── 고객 ──────────────────────────────────────────────────────────── */
 
@@ -208,7 +307,11 @@ export function generateUsers(
      * 벌크만 소셜을 섞는다.
      */
     const auth = isAnchor
-      ? { authProvider: "LOCAL" as const, providerUserId: null, hasPassword: true }
+      ? {
+          authProvider: "LOCAL" as const,
+          providerUserId: null,
+          hasPassword: true,
+        }
       : pickAuth(rng, id);
 
     // 앵커 9번 위치는 정지 계정
@@ -279,6 +382,7 @@ export function generateUsers(
         regionId,
         createdAt,
       });
+
       customerAreaId += 1;
     }
 
@@ -299,10 +403,12 @@ export function generateUsers(
         moveType,
         createdAt,
       });
+
       customerTypeId += 1;
     }
 
     customer.moveTypes = [...chosenTypes];
+
     customers.push(customer);
     customerProfileId += 1;
   }
@@ -315,7 +421,11 @@ export function generateUsers(
     const id = makeUuidV7(rng, createdAt.getTime());
 
     const auth = isAnchor
-      ? { authProvider: "LOCAL" as const, providerUserId: null, hasPassword: true }
+      ? {
+          authProvider: "LOCAL" as const,
+          providerUserId: null,
+          hasPassword: true,
+        }
       : pickAuth(rng, id);
 
     const suspended = isAnchor && isSuspended(i);
@@ -330,7 +440,12 @@ export function generateUsers(
     const homeRegionName = weightedPick<string>(rng, REGION_WEIGHTS);
     const homeRegionId = regionByName.get(homeRegionName) ?? 1;
 
-    const career = paretoCount(rng, { min: 1, max: 30, alpha: 2.2 });
+    const career = paretoCount(rng, {
+      min: 1,
+      max: 30,
+      alpha: 2.2,
+    });
+
     const nickname = makeMoverNickname(i - 1, homeRegionName);
 
     /*
@@ -344,7 +459,9 @@ export function generateUsers(
      * null 분기 렌더링도 함께 검증하기 위함이다.
      */
     const hasActivityBase = chance(rng, 0.88);
+
     const baseRegion = REGIONS.find((r) => r.name === homeRegionName) ?? REGIONS[0]!;
+
     const baseAddress = hasActivityBase ? makeAddress(rng, homeRegionName) : null;
 
     /*
@@ -411,13 +528,16 @@ export function generateUsers(
       activityBaseAddress: baseAddress?.address ?? null,
       activityBaseDetailAddress: hasActivityBase ? makeDetailAddress(rng) : null,
       activityBaseZipCode: baseAddress?.zipCode ?? null,
+
       // Decimal(9,6) / Decimal(10,6) — 소수 6자리로 맞춘다
       activityBaseLatitude: hasActivityBase
         ? Number((baseRegion.latitude + jitter(0.14)).toFixed(6))
         : null,
+
       activityBaseLongitude: hasActivityBase
         ? Number((baseRegion.longitude + jitter(0.16)).toFixed(6))
         : null,
+
       confirmedCount: 0,
       averageRating: 0,
       reviewCount: 0,
@@ -445,6 +565,7 @@ export function generateUsers(
         regionId,
         createdAt,
       });
+
       moverAreaId += 1;
     }
 
@@ -465,6 +586,7 @@ export function generateUsers(
         moveType,
         createdAt,
       });
+
       moverTypeId += 1;
     }
 
@@ -474,7 +596,13 @@ export function generateUsers(
      * 휴무일: 미래 날짜만. 과거 휴무일은 의미가 없고,
      * mover-calendar 조회가 미래 기준으로 동작한다.
      */
-    const dayOffCount = paretoCount(rng, { min: 1, max: 12, alpha: 1.8, zeroRatio: 0.35 });
+    const dayOffCount = paretoCount(rng, {
+      min: 1,
+      max: 12,
+      alpha: 1.8,
+      zeroRatio: 0.35,
+    });
+
     const dayOffs = sampleIndices(rng, 120, dayOffCount);
 
     for (const offset of dayOffs) {
@@ -487,6 +615,7 @@ export function generateUsers(
         createdAt: now,
         updatedAt: now,
       });
+
       unavailableId += 1;
     }
 
@@ -498,8 +627,10 @@ export function generateUsers(
     admins,
     customers,
     movers,
+
     rows: {
       users,
+      adminProfiles,
       customerProfiles,
       moverProfiles,
       customerServiceAreas,

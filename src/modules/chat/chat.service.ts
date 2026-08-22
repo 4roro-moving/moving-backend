@@ -9,6 +9,10 @@ import logger from "../../config/logger";
 import { AppError } from "../../lib/app-error";
 import { getImageUrl } from "../../utils/image-url";
 import { isPastInKst } from "../../utils/kst";
+import {
+  lockEstimateForUpdate,
+  lockEstimateRequestForUpdate,
+} from "../../utils/estimate-request-lock.util";
 import { runTransaction } from "../../utils/transaction";
 import { resolveEstimateMoveDate } from "../estimate/estimate-date";
 import { resolveMoveDate } from "../estimate-request/estimateRequest.policy";
@@ -56,6 +60,29 @@ function toParticipant(user: { id: string; name: string; role: UserRole }) {
   };
 }
 
+function getChatMessageAvailability(estimate: {
+  status: EstimateStatus;
+  estimateRequest: {
+    status: EstimateRequestStatus;
+  };
+}): Pick<ChatRoomSummary, "canSendMessage" | "messageDisabledReason"> {
+  if (CHAT_ROOM_BLOCKED_ESTIMATE_STATUSES.includes(estimate.status)) {
+    return {
+      canSendMessage: false,
+      messageDisabledReason: "취소되었거나 만료된 견적의 채팅방에서는 메시지를 보낼 수 없습니다.",
+    };
+  }
+
+  if (CHAT_ROOM_BLOCKED_REQUEST_STATUSES.includes(estimate.estimateRequest.status)) {
+    return {
+      canSendMessage: false,
+      messageDisabledReason: "종료된 견적 요청의 채팅방에서는 메시지를 보낼 수 없습니다.",
+    };
+  }
+
+  return { canSendMessage: true, messageDisabledReason: null };
+}
+
 function mapRoom(room: ChatRoomRow): ChatRoomSummary {
   return {
     id: room.id,
@@ -63,6 +90,7 @@ function mapRoom(room: ChatRoomRow): ChatRoomSummary {
     estimateRequestId: room.estimateRequestId,
     customer: toParticipant(room.customer),
     mover: toParticipant(room.mover),
+    ...getChatMessageAvailability(room.estimate),
     lastMessageAt: room.lastMessageAt,
     createdAt: room.createdAt,
     updatedAt: room.updatedAt,
@@ -139,21 +167,18 @@ function isNotificationUniqueError(error: unknown): boolean {
   return hasUserId && normalizedTarget.includes("type") && hasSourceId;
 }
 
-function assertChatRoomCreatable(estimate: {
+/** 종료된 거래의 채팅방은 과거 메시지 조회만 허용하고, 새 채팅·수정 요청은 차단합니다. */
+function assertChatRoomActive(estimate: {
   status: EstimateStatus;
   estimateRequest: {
     status: EstimateRequestStatus;
   };
 }): void {
-  if (CHAT_ROOM_BLOCKED_ESTIMATE_STATUSES.includes(estimate.status)) {
-    throw new AppError("CONFLICT", {
-      message: "취소되었거나 만료된 견적은 채팅방을 생성할 수 없습니다.",
-    });
-  }
+  const availability = getChatMessageAvailability(estimate);
 
-  if (CHAT_ROOM_BLOCKED_REQUEST_STATUSES.includes(estimate.estimateRequest.status)) {
+  if (!availability.canSendMessage) {
     throw new AppError("CONFLICT", {
-      message: "종료된 견적 요청은 채팅방을 생성할 수 없습니다.",
+      message: availability.messageDisabledReason ?? "메시지를 보낼 수 없는 채팅방입니다.",
     });
   }
 }
@@ -274,7 +299,7 @@ export const chatService = {
       throw new AppError("ESTIMATE_NOT_FOUND");
     }
 
-    assertChatRoomCreatable(estimate);
+    assertChatRoomActive(estimate);
 
     const customerId = estimate.estimateRequest.customerId;
     const moverId = estimate.moverId;
@@ -408,7 +433,7 @@ export const chatService = {
 
   async createTextMessageForJoinedRoom(senderId: string, roomId: number, content: string) {
     // 소켓의 chat:room:join에서 이미 권한 검증이 끝난 전송 경로입니다.
-    const room = await chatRepository.findRoomById(roomId);
+    const room = await chatRepository.findRoomForRevision(roomId);
 
     if (!room) {
       throw new AppError("NOT_FOUND", {
@@ -417,8 +442,29 @@ export const chatService = {
     }
 
     assertParticipant(room, senderId);
+    assertChatRoomActive(room.estimate);
 
     const message = await runTransaction(async (tx) => {
+      const requestLocked = await lockEstimateRequestForUpdate(tx, room.estimateRequestId);
+      const estimateLocked = await lockEstimateForUpdate(tx, room.estimateId);
+
+      if (!requestLocked || !estimateLocked) {
+        throw new AppError("NOT_FOUND", {
+          message: "채팅방을 찾을 수 없습니다.",
+        });
+      }
+
+      const currentRoom = await chatRepository.findRoomForRevision(roomId, tx);
+
+      if (!currentRoom) {
+        throw new AppError("NOT_FOUND", {
+          message: "채팅방을 찾을 수 없습니다.",
+        });
+      }
+
+      assertParticipant(currentRoom, senderId);
+      assertChatRoomActive(currentRoom.estimate);
+
       const createdMessage = await chatRepository.createTextMessage(
         {
           roomId,
@@ -438,7 +484,7 @@ export const chatService = {
 
   async createImageMessageForJoinedRoom(senderId: string, roomId: number, imageKey: string) {
     // 소켓의 chat:room:join에서 이미 권한 검증이 끝난 전송 경로입니다.
-    const room = await chatRepository.findRoomById(roomId);
+    const room = await chatRepository.findRoomForRevision(roomId);
 
     if (!room) {
       throw new AppError("NOT_FOUND", {
@@ -447,9 +493,31 @@ export const chatService = {
     }
 
     assertParticipant(room, senderId);
+    // 종료된 거래에서는 S3 최종 저장 전에 차단합니다.
+    assertChatRoomActive(room.estimate);
     const finalImageKey = await chatImageService.finalizeUploadedImage(senderId, roomId, imageKey);
 
     const message = await runTransaction(async (tx) => {
+      const requestLocked = await lockEstimateRequestForUpdate(tx, room.estimateRequestId);
+      const estimateLocked = await lockEstimateForUpdate(tx, room.estimateId);
+
+      if (!requestLocked || !estimateLocked) {
+        throw new AppError("NOT_FOUND", {
+          message: "채팅방을 찾을 수 없습니다.",
+        });
+      }
+
+      const currentRoom = await chatRepository.findRoomForRevision(roomId, tx);
+
+      if (!currentRoom) {
+        throw new AppError("NOT_FOUND", {
+          message: "채팅방을 찾을 수 없습니다.",
+        });
+      }
+
+      assertParticipant(currentRoom, senderId);
+      assertChatRoomActive(currentRoom.estimate);
+
       const createdMessage = await chatRepository.createImageMessage(
         {
           roomId,

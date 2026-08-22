@@ -18,8 +18,6 @@ const confirmedEstimateSelect = {
       confirmedEstimateId: true,
     },
   },
-  // 견적별 채팅방은 1개이므로, 취소 대상 견적의 채팅방만 조회합니다.
-  chatRoom: { select: { id: true } },
 } satisfies Prisma.EstimateSelect;
 
 export type ConfirmedEstimateRow = Prisma.EstimateGetPayload<{
@@ -27,7 +25,7 @@ export type ConfirmedEstimateRow = Prisma.EstimateGetPayload<{
 }>;
 
 export const adminEstimatesRepository = {
-  /** 확정 거래 취소 대상의 현재 상태와 연결된 채팅방 조회 */
+  /** 확정 거래 취소 대상의 현재 상태와 연결 관계를 조회합니다. */
   findForCancellation(estimateId: number, db: DbClient = prisma) {
     return db.estimate.findUnique({ where: { id: estimateId }, select: confirmedEstimateSelect });
   },
@@ -77,22 +75,24 @@ export const adminEstimatesRepository = {
     return db.estimateRequestHistory.create({ data });
   },
 
-  /** 이미 존재하는 채팅방에만 관리자 SYSTEM 메시지를 추가합니다. */
-  createSystemMessages(data: Prisma.ChatMessageCreateManyInput[], db: DbClient = prisma) {
-    return db.chatMessage.createMany({ data });
-  },
-
-  /** SYSTEM 메시지 생성 뒤 채팅 목록이 최신 메시지 순으로 정렬되도록 갱신합니다. */
-  updateChatRoomsLastMessageAt(roomIds: number[], lastMessageAt: Date, db: DbClient = prisma) {
-    return db.chatRoom.updateMany({
-      where: { id: { in: roomIds } },
-      data: { lastMessageAt },
-    });
-  },
-
-  /** 재시도 시 알림 중복 생성을 막습니다. */
+  /** 재시도 시 중복을 제외하고 실제 생성된 알림만 반환합니다. */
   createNotifications(data: Prisma.NotificationCreateManyInput[], db: DbClient = prisma) {
-    return db.notification.createMany({ data, skipDuplicates: true });
+    return db.notification.createManyAndReturn({
+      data,
+      skipDuplicates: true,
+      select: {
+        userId: true,
+        id: true,
+        type: true,
+        title: true,
+        content: true,
+        linkUrl: true,
+        isRead: true,
+        readAt: true,
+        expiresAt: true,
+        createdAt: true,
+      },
+    });
   },
 
   /** 관리자 취소 조치와 사유를 운영 감사 로그에 저장합니다. */

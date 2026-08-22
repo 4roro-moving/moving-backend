@@ -11,8 +11,9 @@ import { adminAuthRepository } from "../modules/admin/auth/admin-auth.repository
  * DB의 isActive 및 deletedAt 상태를 확인하여
  * 비활성화된 관리자의 접근을 즉시 차단한다.
  *
- * 조회한 관리자 정보는 req.admin에 저장하여
- * 이후 Controller에서 같은 사용자를 다시 조회하지 않도록 한다.
+ * 조회한 관리자 정보는 req.admin에,
+ * AdminProfile은 req.adminProfile에 저장하여
+ * 이후 Controller·authorizeAdmin에서 DB를 다시 조회하지 않도록 한다.
  */
 export const requireActiveAdmin: RequestHandler = async (req, _res, next) => {
   try {
@@ -58,6 +59,12 @@ export const requireActiveAdmin: RequestHandler = async (req, _res, next) => {
       isActive: admin.isActive,
       createdAt: admin.createdAt,
     };
+
+    if (admin.adminProfile) {
+      req.adminProfile = {
+        adminRole: admin.adminProfile.adminRole,
+      };
+    }
 
     return next();
   } catch (error) {

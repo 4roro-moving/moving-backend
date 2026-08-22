@@ -16,6 +16,7 @@ const termsSelect = {
   title: true,
   content: true,
   isRequired: true,
+  audience: true,
   effectiveAt: true,
   publishedAt: true,
   authorId: true,

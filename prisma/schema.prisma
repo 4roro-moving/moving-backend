@@ -37,6 +37,16 @@ enum UserRole {
   ADMIN
 }
 
+/// 관리자 내부 역할
+///
+/// User.role = ADMIN 인 계정의 관리자 역할을 세분화합니다.
+/// ADMIN       : 실제 서비스 운영을 담당하는 일반 관리자
+/// SUPER_ADMIN : 일반 관리자 계정의 생성/정지/해제/비활성화를 담당하는 관리자
+enum AdminRole {
+  ADMIN
+  SUPER_ADMIN
+}
+
 /// 로그인(가입) 방식
 ///
 /// LOCAL 은 이메일+비밀번호, 나머지는 소셜 로그인입니다.
@@ -132,6 +142,7 @@ enum NotificationType {
   ESTIMATE_REQUEST_CANCELED_BY_ACCOUNT_SUSPENSION // (기사) 고객 계정이 정지되어 견적 요청 취소됨
   ESTIMATE_CANCELED_BY_ACCOUNT_SUSPENSION // (고객) 기사 계정이 정지되어 견적 취소됨
   ESTIMATE_CANCELED_BY_ADMIN // (고객/기사) 관리자가 확정 견적을 취소함
+  REPORT_RESULT // 신고 처리 결과 안내
 }
 
 /// 채팅 메시지 유형
@@ -193,6 +204,7 @@ enum RefreshTokenRevokedReason {
 enum ReportTargetType {
   REVIEW
   MOVER
+  CUSTOMER
   RESIDENCE_REVIEW // 거주 후기
   GIVEAWAY // 나눔 글
 }
@@ -257,6 +269,16 @@ enum NoticeAudience {
   MOVER
 }
 
+/// 공지 카테고리
+///
+/// 사용자 공지 목록에서 공지 유형별 필터링에 사용합니다.
+/// SERVICE: 서비스 안내, MAINTENANCE: 점검 안내, EVENT: 이벤트 안내
+enum NoticeCategory {
+  SERVICE
+  MAINTENANCE
+  EVENT
+}
+
 /// 활동 로그의 동작 종류
 ///
 /// ActivityLog.action 에 저장되며 targetType 과 조합해
@@ -318,7 +340,6 @@ enum TermsAudience {
   MOVER
 }
 
-
 // ===========================================================================
 // USER / AUTHENTICATION
 // ===========================================================================
@@ -357,6 +378,8 @@ model User {
   customerProfile CustomerProfile?
   /// 기사님 프로필 (역할이 MOVER 인 경우에만 존재).
   moverProfile    MoverProfile?
+  /// 관리자 프로필 (역할이 ADMIN 인 경우에만 존재).
+  adminProfile    AdminProfile?
   /// 발급된 Refresh Token 목록. 다중 기기 로그인을 위해 1:N.
   refreshTokens   RefreshToken[]
 
@@ -536,19 +559,19 @@ model CustomerProfile {
 /// - confirmedCount 는 견적 확정 시 갱신합니다.
 model MoverProfile {
   /// PK.
-  id             Int     @id @default(autoincrement())
+  id                        Int      @id @default(autoincrement())
   /// 소유 사용자. 1:1 이므로 unique.
-  userId         String  @unique @db.Uuid
+  userId                    String   @unique @db.Uuid
   /// 화면에 표시되는 기사님 별명. 중복 불가입니다.
-  nickname       String  @unique
+  nickname                  String   @unique
   /// 프로필 이미지 URL. 미설정 허용.
-  imageUrl       String?
+  imageUrl                  String?
   /// 경력 연수. 기본 0.
-  career         Int     @default(0)
+  career                    Int      @default(0)
   /// 한 줄 소개.
-  shortIntro     String
+  shortIntro                String
   /// 상세 소개(긴 텍스트).
-  description    String  @db.Text
+  description               String   @db.Text
   /// 기사님의 주 활동 거점 도로명 주소. 기존 프로필 호환을 위해 DB에서는 nullable.
   activityBaseAddress       String?  @map("activity_base_address")
   /// 활동 거점의 건물명·층 등 상세 주소.
@@ -560,11 +583,11 @@ model MoverProfile {
   /// 활동 거점 경도. 지도 마커 표시에 사용.
   activityBaseLongitude     Decimal? @map("activity_base_longitude") @db.Decimal(10, 6)
   /// 고객에게 확정된 견적 수. 정렬/노출용 비정규화 필드.
-  confirmedCount Int     @default(0)
+  confirmedCount            Int      @default(0)
   /// 리뷰 평균 평점(소수점 1자리). 리뷰 변경 시 갱신하는 비정규화 필드.
-  averageRating  Decimal @default(0) @db.Decimal(2, 1)
+  averageRating             Decimal  @default(0) @db.Decimal(2, 1)
   /// 리뷰 수. 리뷰 변경 시 갱신하는 비정규화 필드.
-  reviewCount    Int     @default(0)
+  reviewCount               Int      @default(0)
 
   /// 소유 사용자 관계. 계정 삭제 시 함께 삭제(Cascade).
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -586,6 +609,40 @@ model MoverProfile {
   /// 확정 많은 순 정렬 최적화.
   @@index([confirmedCount(sort: Desc), id])
   @@map("mover_profiles")
+}
+
+/// 관리자 프로필
+///
+/// User.role = ADMIN 인 계정의 관리자 전용 정보를 관리합니다.
+/// 일반 관리자와 SUPER_ADMIN의 역할을 구분하기 위해 사용합니다.
+///
+/// - ADMIN       : 서비스 운영 기능을 담당하는 일반 관리자
+/// - SUPER_ADMIN : 일반 관리자 계정의 생성, 정지/해제, 비활성화를 담당하는 관리자
+model AdminProfile {
+  /// PK.
+  id Int @id @default(autoincrement())
+
+  /// 관리자 User ID.
+  /// User와 1:1 관계를 보장하기 위해 unique 제약을 적용합니다.
+  userId String @unique @map("user_id") @db.Uuid
+
+  /// 관리자 내부 역할.
+  /// 별도 지정이 없는 경우 일반 관리자(ADMIN)로 생성됩니다.
+  adminRole AdminRole @default(ADMIN) @map("admin_role")
+
+  /// 관리자 계정과 연결된 User.
+  /// User 삭제 시 해당 관리자 프로필도 함께 삭제됩니다.
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  /// 관리자 프로필 생성 시각.
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// 관리자 프로필 수정 시각.
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// 관리자 역할 기준 조회 최적화.
+  @@index([adminRole])
+  @@map("admin_profiles")
 }
 
 /// 기사 휴무일 저장
@@ -1490,34 +1547,34 @@ model GiveawayImage {
 ///   새 신청 row 로 재신청할 수 있습니다. (부분 unique 는 migration SQL 참고)
 /// - 글당 SELECTED 는 1건입니다. (giveaway_requests_one_selected_per_giveaway_idx)
 model GiveawayRequest {
-	// PK
-	id          Int                       @id @default(autoincrement())
-	// 신청 대상 나눔 정보.
-	giveawayId  Int                       @map("giveaway_id")
-	// 신청자 정보.
-	requesterId String                    @map("requester_id") @db.Uuid
-	// 신청 상태 정보.
-	status      GiveawayRequestStatus @default(PENDING)
-	// 나눔 요청 메시지.
-	message     String?                   @db.Text
-	
-	// 나눔 관계. 글 삭제 시 신청 정보도 함께 삭제(Cascade)
-	giveaway Giveaway @relation(fields: [giveawayId], references: [id], onDelete: Cascade)
-	// 신청자 관계. 계정 삭제 시 함께 삭제(Cascade)
-	requester User     @relation("GiveawayRequests", fields: [requesterId], references: [id], onDelete: Cascade)
-	
-	// 신청 시각.
-	createdAt DateTime @default(now()) @map("created_at")
-	// 신청 수정 시각.
-	updatedAt DateTime @updatedAt @map("updated_at")
-	
-	// 신청자별 신청 목록 조회 최적화.
-	@@index([requesterId, status, createdAt])
-	// 나눔 글별 신청 목록 조회 최적화. (작성자)
-	@@index([giveawayId, status])
-	// 글·신청자별 최신 신청 조회 최적화. (상세 myRequest, 재신청)
-	@@index([giveawayId, requesterId])
-	@@map("giveaway_requests")
+  // PK
+  id          Int                   @id @default(autoincrement())
+  // 신청 대상 나눔 정보.
+  giveawayId  Int                   @map("giveaway_id")
+  // 신청자 정보.
+  requesterId String                @map("requester_id") @db.Uuid
+  // 신청 상태 정보.
+  status      GiveawayRequestStatus @default(PENDING)
+  // 나눔 요청 메시지.
+  message     String?               @db.Text
+
+  // 나눔 관계. 글 삭제 시 신청 정보도 함께 삭제(Cascade)
+  giveaway  Giveaway @relation(fields: [giveawayId], references: [id], onDelete: Cascade)
+  // 신청자 관계. 계정 삭제 시 함께 삭제(Cascade)
+  requester User     @relation("GiveawayRequests", fields: [requesterId], references: [id], onDelete: Cascade)
+
+  // 신청 시각.
+  createdAt DateTime @default(now()) @map("created_at")
+  // 신청 수정 시각.
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 신청자별 신청 목록 조회 최적화.
+  @@index([requesterId, status, createdAt])
+  // 나눔 글별 신청 목록 조회 최적화. (작성자)
+  @@index([giveawayId, status])
+  // 글·신청자별 최신 신청 조회 최적화. (상세 myRequest, 재신청)
+  @@index([giveawayId, requesterId])
+  @@map("giveaway_requests")
 }
 
 // ===========================================================================
@@ -1555,6 +1612,8 @@ model Report {
   reporter User  @relation("ReportReporter", fields: [reporterId], references: [id], onDelete: Cascade)
   /// 처리 관리자 관계. 관리자 계정 삭제 시 이 필드만 null 로(SetNull).
   handler  User? @relation("ReportHandler", fields: [handledBy], references: [id], onDelete: SetNull)
+  /// 신고에 첨부된 증빙 이미지들.
+  images   ReportImage[]
 
   /// 생성 시각.
   createdAt DateTime @default(now()) @map("created_at")
@@ -1570,6 +1629,29 @@ model Report {
   /// 신고자 기준 조회 최적화.
   @@index([reporterId])
   @@map("reports")
+}
+
+/// 신고 첨부 이미지
+///
+/// 신고 생성 시 업로드된 증빙 이미지의 S3 key를 저장합니다.
+/// URL은 응답 시점에 CloudFront 경로로 변환합니다.
+model ReportImage {
+  /// PK.
+  id       Int    @id @default(autoincrement())
+  /// 소속 신고.
+  reportId Int    @map("report_id")
+  /// S3 객체 key.
+  imageKey String @map("image_key")
+
+  /// 소속 신고 관계. 신고 삭제 시 함께 삭제(Cascade).
+  report Report @relation(fields: [reportId], references: [id], onDelete: Cascade)
+
+  /// 생성 시각.
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// 신고별 이미지 조회 최적화.
+  @@index([reportId])
+  @@map("report_images")
 }
 
 /// 회원 정지 / 해제 이력
@@ -1693,6 +1775,8 @@ model Notice {
   content          String         @db.Text
   /// 노출 대상 그룹. 기본 ALL.
   audience         NoticeAudience @default(ALL)
+  /// 공지 카테고리. 기본 SERVICE.
+  category NoticeCategory         @default(SERVICE)
   /// 목록 상단 고정 여부.
   isPinned         Boolean        @default(false) @map("is_pinned")
   /// 노출 여부. false 면 숨김.
@@ -1711,7 +1795,7 @@ model Notice {
   updatedAt DateTime @updatedAt @map("updated_at")
 
   /// 노출/고정/최신순 목록 조회 최적화.
-  @@index([isVisible, isPinned, createdAt])
+  @@index([isVisible, isPinned(sort: Desc), createdAt(sort: Desc), id])
   /// 대상 그룹별 조회 최적화.
   @@index([audience])
   @@map("notices")
@@ -1751,27 +1835,27 @@ model Faq {
 /// 약관. 유형(type) + 버전(version) 조합으로 관리하며, 수정 시 새 버전을 생성한다.
 model Terms {
   /// PK.
-  id          Int         @id @default(autoincrement())
+  id          Int           @id @default(autoincrement())
   /// 약관 유형.
   type        TermsType
   /// 버전. "1.0", "2026.08.01" 등 자유 형식.
   version     String
   /// 게시 상태. 기본 DRAFT.
-  status      TermsStatus @default(DRAFT)
+  status      TermsStatus   @default(DRAFT)
   /// 약관 제목.
   title       String
   /// 약관 본문.
-  content     String      @db.Text
+  content     String        @db.Text
   /// 필수 동의 여부. false 면 선택 동의(예: 마케팅).
-  isRequired  Boolean     @default(true) @map("is_required")
+  isRequired  Boolean       @default(true) @map("is_required")
   /// 동의 대상 역할. 기사님 전용 정책 등을 구분합니다.
   audience    TermsAudience @default(ALL)
   /// 시행일(효력 발생 시각).
-  effectiveAt DateTime?   @map("effective_at")
+  effectiveAt DateTime?     @map("effective_at")
   /// 게시일.
-  publishedAt DateTime?   @map("published_at")
+  publishedAt DateTime?     @map("published_at")
   /// 작성 관리자.
-  authorId    String      @map("author_id") @db.Uuid
+  authorId    String        @map("author_id") @db.Uuid
 
   /// 작성 관리자 관계. 작성자 보존을 위해 계정 삭제를 막음(Restrict).
   author User @relation("TermsAuthor", fields: [authorId], references: [id], onDelete: Restrict)

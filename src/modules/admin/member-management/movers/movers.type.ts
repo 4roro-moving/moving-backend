@@ -4,30 +4,26 @@ import type {
   MoveType,
   ReportReason,
   ReportStatus,
+  ReportTargetType,
   SuspensionAction,
 } from "@prisma/client";
 import type { z } from "zod";
 
+import type { MEMBER_STATUS, MemberStatus } from "../member-status.constants";
 import type {
   HistorySummary,
   MemberDetailAccount,
   MemberListBase,
   MemberSuspensionHistoryItem,
 } from "../member.type";
-import type {
-  listMoverQuerySchema,
-  moverIdParamSchema,
-  updateMoverStatusBodySchema,
-} from "./movers.validator";
-import type { MemberStatus } from "../member-status.constants";
+import type { listMoverQuerySchema, moverIdParamSchema } from "./movers.validator";
 
 export type ListMoverQuery = z.infer<typeof listMoverQuerySchema>;
 export type MoverIdParam = z.infer<typeof moverIdParamSchema>;
-export type UpdateMoverStatusBody = z.infer<typeof updateMoverStatusBodySchema>;
 
 export type UpdateMoverStatusResponse = {
   id: string;
-  status: Exclude<MemberStatus, "WITHDRAWN">;
+  status: Exclude<MemberStatus, typeof MEMBER_STATUS.WITHDRAWN>;
   suspension: {
     id: number;
     action: SuspensionAction;
@@ -65,20 +61,37 @@ export type MoverInProgressEstimateItem = {
   estimateRequestId: number;
   status: EstimateStatus;
   price: number;
+  customer: {
+    id: string;
+    name: string;
+  };
+  moveType: MoveType;
   moveDate: Date;
+  confirmedAt: Date | null;
   cancelable: boolean;
+  /** 기사가 견적을 전송한 시각입니다. */
   createdAt: Date;
 };
 
 /** 완료 거래는 Estimate가 아닌 EstimateRequest 상태로 표시합니다. */
-export type MoverEstimateActivityStatus =
-  EstimateStatus | Extract<EstimateRequestStatus, "COMPLETED">;
+export type MoverEstimateActivityStatus = EstimateStatus | typeof EstimateRequestStatus.COMPLETED;
 
 export type MoverRecentEstimateItem = {
   id: number;
+  estimateRequestId: number;
   status: MoverEstimateActivityStatus;
   price: number;
+  customer: {
+    id: string;
+    name: string;
+  };
+  moveType: MoveType;
+  moveDate: Date;
   confirmedAt: Date | null;
+  expiredAt: Date | null;
+  canceledAt: Date | null;
+  /** 기사가 견적을 전송한 시각입니다. */
+  createdAt: Date;
 };
 
 export type MoverReviewHistoryItem = {
@@ -97,6 +110,15 @@ export type MoverReceivedReportHistoryItem = {
   createdAt: Date;
 };
 
+export type MoverFiledReportHistoryItem = {
+  id: number;
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: ReportReason;
+  status: ReportStatus;
+  createdAt: Date;
+};
+
 export type MoverDetail = {
   account: MemberDetailAccount;
   profile: MoverDetailProfile;
@@ -106,6 +128,7 @@ export type MoverDetail = {
   };
   reviewHistory: HistorySummary<MoverReviewHistoryItem>;
   reportHistory: {
+    filed: HistorySummary<MoverFiledReportHistoryItem>;
     received: HistorySummary<MoverReceivedReportHistoryItem>;
   };
   suspensionHistory: HistorySummary<MemberSuspensionHistoryItem>;

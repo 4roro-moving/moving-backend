@@ -100,15 +100,49 @@ export const moversStatusRepository = {
   },
 
   createSystemMessages(data: Prisma.ChatMessageCreateManyInput[], db: DbClient = prisma) {
-    return db.chatMessage.createMany({ data });
+    return db.chatMessage.createManyAndReturn({
+      data,
+      select: {
+        id: true,
+        roomId: true,
+        senderId: true,
+        type: true,
+        content: true,
+        imageUrl: true,
+        isRead: true,
+        readAt: true,
+        createdAt: true,
+      },
+    });
   },
 
   updateChatRoomsLastMessageAt(roomIds: number[], lastMessageAt: Date, db: DbClient = prisma) {
-    return db.chatRoom.updateMany({ where: { id: { in: roomIds } }, data: { lastMessageAt } });
+    return db.chatRoom.updateMany({
+      where: {
+        id: { in: roomIds },
+        OR: [{ lastMessageAt: null }, { lastMessageAt: { lt: lastMessageAt } }],
+      },
+      data: { lastMessageAt },
+    });
   },
 
   createNotifications(data: Prisma.NotificationCreateManyInput[], db: DbClient = prisma) {
-    return db.notification.createMany({ data, skipDuplicates: true });
+    return db.notification.createManyAndReturn({
+      data,
+      skipDuplicates: true,
+      select: {
+        userId: true,
+        id: true,
+        type: true,
+        title: true,
+        content: true,
+        linkUrl: true,
+        isRead: true,
+        readAt: true,
+        expiresAt: true,
+        createdAt: true,
+      },
+    });
   },
 
   createMoverSuspension(

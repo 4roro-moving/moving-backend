@@ -3,11 +3,9 @@ import type { Request, Response } from "express";
 import { AppError } from "../../../../lib/app-error";
 import { sendResponse } from "../../../../utils/response.util";
 import { customersService } from "./customers.service";
-import type {
-  CustomerIdParam,
-  ListCustomerQuery,
-  UpdateCustomerStatusBody,
-} from "./customers.type";
+
+import type { UpdateMemberStatusBody } from "../member-status.validator";
+import type { CustomerIdParam, ListCustomerQuery } from "./customers.type";
 
 export const customersController = {
   // GET /api/admin/users
@@ -31,7 +29,7 @@ export const customersController = {
   // PATCH /api/admin/users/:id/status
   updateCustomerStatus: async (req: Request, res: Response) => {
     const { id } = res.locals.params as CustomerIdParam;
-    const input = req.body as UpdateCustomerStatusBody;
+    const input = req.body as UpdateMemberStatusBody;
 
     // 런타임에서는 requireActiveAdmin이 req.admin을 보장하지만,
     // TypeScript는 Express 미들웨어 실행 순서를 추론하지 못해 req.admin을 optional로 판단합니다.

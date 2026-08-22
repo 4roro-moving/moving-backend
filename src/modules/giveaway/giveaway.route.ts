@@ -16,6 +16,7 @@ import {
   listGiveawayQuerySchema,
   listGiveawayRequestQuerySchema,
   listMyGiveawayQuerySchema,
+  listMyGiveawayRequestQuerySchema,
   rejectGiveawayRequestParamSchema,
   selectGiveawayRequestParamSchema,
   updateGiveawayRequestSchema,
@@ -103,7 +104,7 @@ giveawayRequestRouter.use(authenticate, authorize(GIVEAWAY_USER_ROLE.CUSTOMER));
 
 giveawayRequestRouter.get(
   "/me",
-  validate({ query: listGiveawayRequestQuerySchema }),
+  validate({ query: listMyGiveawayRequestQuerySchema }),
   asyncHandler(giveawayController.getMyGiveawayRequestList),
 );
 

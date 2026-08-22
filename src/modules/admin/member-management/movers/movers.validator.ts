@@ -39,6 +39,7 @@ export const updateMoverStatusBodySchema = z.object({
       MAX_STATUS_INTERNAL_NOTE_LENGTH,
       `내부 메모는 ${String(MAX_STATUS_INTERNAL_NOTE_LENGTH)}자 이하여야 합니다.`,
     )
+    .transform((value) => value || undefined)
     .optional(),
 });
 

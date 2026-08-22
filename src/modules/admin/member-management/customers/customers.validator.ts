@@ -12,12 +12,12 @@ import {
   memberListSortsSchema,
 } from "../member-list.validator";
 
-const MAX_STATUS_REASON_LENGTH = 500;
-const MAX_STATUS_INTERNAL_NOTE_LENGTH = 1_000;
-
 export const customerIdParamSchema = z.object({
   id: z.uuid("올바른 회원 ID가 아닙니다."),
 });
+
+const MAX_STATUS_REASON_LENGTH = 500;
+const MAX_STATUS_INTERNAL_NOTE_LENGTH = 1_000;
 
 export const updateCustomerStatusBodySchema = z.object({
   action: z.enum(SuspensionAction, {
@@ -38,6 +38,7 @@ export const updateCustomerStatusBodySchema = z.object({
       MAX_STATUS_INTERNAL_NOTE_LENGTH,
       `내부 메모는 ${String(MAX_STATUS_INTERNAL_NOTE_LENGTH)}자 이하여야 합니다.`,
     )
+    .transform((value) => value || undefined)
     .optional(),
 });
 

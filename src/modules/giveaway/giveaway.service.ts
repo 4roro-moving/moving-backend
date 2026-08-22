@@ -1,10 +1,22 @@
 import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
-import { buildPagination } from "../../utils/pagination.util";
+import type { CursorPagination } from "../../types/response.type";
+import { lockGiveawayForUpdate } from "../../utils/giveaway-lock.util";
+import { escapeLikePattern } from "../../utils/search.util";
 import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
+import { cleanupGiveawayImagesSafely } from "./giveaway-image.cleanup";
 import { giveawayImageService } from "./giveaway-image.service";
+import {
+  decodeGiveawayCursor,
+  decodeGiveawayRequestCursor,
+  encodeGiveawayNextCursor,
+  encodeGiveawayRequestNextCursor,
+  sliceGiveawayCursorPage,
+  toGiveawayCursorQuery,
+  toGiveawayRequestCursorQuery,
+} from "./giveaway.cursor";
 import {
   toGiveawayDetail,
   toGiveawayListItem,
@@ -33,6 +45,7 @@ import type {
   ListGiveawayQuery,
   ListGiveawayRequestQuery,
   ListMyGiveawayQuery,
+  ListMyGiveawayRequestQuery,
   UpdateGiveawayInput,
   UpdateGiveawayRequestInput,
 } from "./giveaway.type";
@@ -42,6 +55,91 @@ function toImageRecords(imageKeys: string[]) {
     imageKey,
     sortOrder: index,
   }));
+}
+
+export function toRemovedGiveawayImageKeys(latestKeys: string[], nextKeys: string[]): string[] {
+  const nextKeySet = new Set(nextKeys);
+
+  return latestKeys.filter((key) => !nextKeySet.has(key));
+}
+
+function assertReusableGiveawayImageKeys(
+  nextKeys: string[],
+  latestKeySet: Set<string>,
+  currentKeySet: Set<string>,
+  newlyCopied: Set<string>,
+) {
+  for (const key of nextKeys) {
+    if (newlyCopied.has(key) || latestKeySet.has(key)) {
+      continue;
+    }
+
+    if (currentKeySet.has(key)) {
+      throw new AppError("GIVEAWAY_UPDATE_CONFLICT");
+    }
+
+    throw new AppError("BAD_REQUEST", {
+      message: "다른 나눔 글의 이미지는 재사용할 수 없습니다.",
+    });
+  }
+}
+
+function toTitleContainsFilter(keyword: string | undefined): Prisma.StringFilter | undefined {
+  if (keyword === undefined) {
+    return undefined;
+  }
+
+  return {
+    contains: escapeLikePattern(keyword),
+    mode: "insensitive",
+  };
+}
+
+function toGiveawayUpdateData(
+  input: UpdateGiveawayInput,
+  images?: Array<{ imageKey: string; sortOrder: number }>,
+) {
+  const updateData: Parameters<typeof giveawayRepository.updateGiveaway>[1] = {};
+
+  if (input.title !== undefined) {
+    updateData.title = input.title;
+  }
+
+  if (input.description !== undefined) {
+    updateData.description = input.description;
+  }
+
+  if (input.regionId !== undefined) {
+    updateData.regionId = input.regionId;
+  }
+
+  if (images !== undefined) {
+    updateData.images = images;
+  }
+
+  return updateData;
+}
+
+async function cleanupTemporaryImages(userId: string, keys: string[]) {
+  await cleanupGiveawayImagesSafely(
+    keys,
+    (key) => giveawayImageService.deleteTemporaryImage(userId, key),
+    {
+      userId,
+      action: "DELETE_TEMP_IMAGE",
+    },
+  );
+}
+
+async function cleanupPreviousImages(userId: string, keys: string[]) {
+  await cleanupGiveawayImagesSafely(
+    keys,
+    (key) => giveawayImageService.deleteFinalImage(userId, key),
+    {
+      userId,
+      action: "DELETE_PREVIOUS_IMAGE",
+    },
+  );
 }
 
 function isUniqueConstraintError(error: unknown, fields: string[]): boolean {
@@ -125,7 +223,7 @@ async function getGiveawayDetail(giveawayId: number, viewerId: string) {
 }
 
 async function listVisibleGiveaways(
-  query: ListGiveawayQuery,
+  query: ListMyGiveawayQuery & Pick<ListGiveawayQuery, "keyword" | "regionId">,
   extraWhere: Prisma.GiveawayWhereInput = {},
 ) {
   await assertRegionExists(query.regionId);
@@ -143,15 +241,35 @@ async function listVisibleGiveaways(
     where.regionId = query.regionId;
   }
 
-  const { giveaways, totalCount } = await giveawayRepository.findGiveawaysWithCount({
-    skip: (query.page - 1) * query.limit,
-    take: query.limit,
-    where,
+  const title = toTitleContainsFilter(query.keyword);
+
+  if (title !== undefined) {
+    where.title = title;
+  }
+
+  const cursorQuery = toGiveawayCursorQuery({
+    sort: query.sort,
+    status: query.status,
+    regionId: query.regionId,
+    keyword: query.keyword,
   });
+  const decodedCursor = decodeGiveawayCursor(query.cursor, cursorQuery);
+  const { giveaways, totalCount } = await giveawayRepository.findGiveawaysByCursorWithCount({
+    take: query.limit + 1,
+    where,
+    orderBy: giveawayRepository.toCreatedAtOrderBy(query.sort),
+    ...(decodedCursor ? { cursor: decodedCursor } : {}),
+  });
+  const { pageItems, hasNext } = sliceGiveawayCursorPage(giveaways, query.limit);
 
   return {
-    giveaways: giveaways.map(toGiveawayListItem),
-    pagination: buildPagination(totalCount, query.page, query.limit),
+    giveaways: pageItems.map(toGiveawayListItem),
+    pagination: {
+      limit: query.limit,
+      totalCount,
+      hasNext,
+      nextCursor: encodeGiveawayNextCursor(pageItems.at(-1), hasNext, cursorQuery),
+    } satisfies CursorPagination,
   };
 }
 
@@ -168,73 +286,143 @@ async function listReceivedGiveaways(receiverId: string, query: ListMyGiveawayQu
 }
 
 async function createGiveaway(authorId: string, input: CreateGiveawayInput) {
-  await giveawayImageService.validateUploadedImages(authorId, input.imageKeys);
+  await assertRegionExists(input.regionId);
 
-  return runTransaction(async (tx) => {
-    await assertRegionExists(input.regionId, tx);
+  const tempKeys = input.imageKeys;
+  const finalizedKeys = await giveawayImageService.finalizeUploadedImages(authorId, tempKeys);
 
-    const createData: Parameters<typeof giveawayRepository.createGiveaway>[0] = {
-      authorId,
-      title: input.title,
-      description: input.description,
-      images: toImageRecords(input.imageKeys),
-    };
+  let giveaway;
 
-    if (input.regionId !== undefined) {
-      createData.regionId = input.regionId;
-    }
+  try {
+    giveaway = await runTransaction(async (tx) => {
+      await assertRegionExists(input.regionId, tx);
 
-    const giveaway = await giveawayRepository.createGiveaway(createData, tx);
+      const createData: Parameters<typeof giveawayRepository.createGiveaway>[0] = {
+        authorId,
+        title: input.title,
+        description: input.description,
+        images: toImageRecords(finalizedKeys),
+      };
 
-    return toGiveawayDetail(giveaway, { id: authorId }, null);
-  });
+      if (input.regionId !== undefined) {
+        createData.regionId = input.regionId;
+      }
+
+      return giveawayRepository.createGiveaway(createData, tx);
+    });
+  } catch (error) {
+    await giveawayImageService.rollbackFinalizedImages(authorId, finalizedKeys);
+    throw error;
+  }
+
+  await cleanupTemporaryImages(authorId, tempKeys);
+
+  return toGiveawayDetail(giveaway, { id: authorId }, null);
 }
 
 async function updateGiveaway(giveawayId: number, authorId: string, input: UpdateGiveawayInput) {
-  if (input.imageKeys !== undefined) {
-    await giveawayImageService.validateUploadedImages(authorId, input.imageKeys);
+  if (input.imageKeys === undefined) {
+    return runTransaction(async (tx) => {
+      const owned = await findGiveawayOwnershipOrThrow(giveawayId, tx);
+
+      assertGiveawayAuthor(owned, authorId);
+      assertGiveawayEditable(owned);
+      await assertRegionExists(input.regionId, tx);
+
+      const giveaway = await giveawayRepository.updateGiveaway(
+        giveawayId,
+        toGiveawayUpdateData(input),
+        tx,
+      );
+
+      return toGiveawayDetail(giveaway, { id: authorId }, null);
+    });
   }
 
-  return runTransaction(async (tx) => {
-    const owned = await findGiveawayOwnershipOrThrow(giveawayId, tx);
+  const current = await findVisibleGiveawayOrThrow(giveawayId);
 
-    assertGiveawayAuthor(owned, authorId);
-    assertGiveawayEditable(owned);
-    await assertRegionExists(input.regionId, tx);
+  assertGiveawayAuthor(current, authorId);
+  assertGiveawayEditable(current);
+  await assertRegionExists(input.regionId);
 
-    const updateData: Parameters<typeof giveawayRepository.updateGiveaway>[1] = {};
+  const currentKeys = current.images.map((image) => image.imageKey);
+  const prepared = await giveawayImageService.prepareUpdatedImages(
+    authorId,
+    input.imageKeys,
+    currentKeys,
+  );
+  const newlyCopied = new Set(prepared.finalizedKeys);
 
-    if (input.title !== undefined) {
-      updateData.title = input.title;
-    }
+  let giveaway;
+  let removedKeys: string[];
 
-    if (input.description !== undefined) {
-      updateData.description = input.description;
-    }
+  try {
+    ({ giveaway, removedKeys } = await runTransaction(async (tx) => {
+      // 동일 글 이미지 수정을 직렬화한 뒤, update 직전 latestKeys로 cleanup 대상을 계산한다.
+      const locked = await lockGiveawayForUpdate(tx, giveawayId);
 
-    if (input.regionId !== undefined) {
-      updateData.regionId = input.regionId;
-    }
+      if (!locked) {
+        throw new AppError("GIVEAWAY_NOT_FOUND");
+      }
 
-    if (input.imageKeys !== undefined) {
-      updateData.images = toImageRecords(input.imageKeys);
-    }
+      const latest = await findVisibleGiveawayOrThrow(giveawayId, tx);
 
-    const giveaway = await giveawayRepository.updateGiveaway(giveawayId, updateData, tx);
+      assertGiveawayAuthor(latest, authorId);
+      assertGiveawayEditable(latest);
+      await assertRegionExists(input.regionId, tx);
 
-    return toGiveawayDetail(giveaway, { id: authorId }, null);
-  });
+      const latestKeys = latest.images.map((image) => image.imageKey);
+
+      assertReusableGiveawayImageKeys(
+        prepared.nextKeys,
+        new Set(latestKeys),
+        new Set(currentKeys),
+        newlyCopied,
+      );
+
+      const updated = await giveawayRepository.updateGiveaway(
+        giveawayId,
+        toGiveawayUpdateData(input, toImageRecords(prepared.nextKeys)),
+        tx,
+      );
+
+      return {
+        giveaway: updated,
+        removedKeys: toRemovedGiveawayImageKeys(latestKeys, prepared.nextKeys),
+      };
+    }));
+  } catch (error) {
+    await giveawayImageService.rollbackFinalizedImages(authorId, prepared.finalizedKeys);
+    throw error;
+  }
+
+  await cleanupTemporaryImages(authorId, prepared.tempKeys);
+  await cleanupPreviousImages(authorId, removedKeys);
+
+  return toGiveawayDetail(giveaway, { id: authorId }, null);
 }
 
 async function deleteGiveaway(giveawayId: number, authorId: string) {
-  await runTransaction(async (tx) => {
-    const owned = await findGiveawayOwnershipOrThrow(giveawayId, tx);
+  const imageKeys = await runTransaction(async (tx) => {
+    const locked = await lockGiveawayForUpdate(tx, giveawayId);
 
-    assertGiveawayAuthor(owned, authorId);
-    assertGiveawayDeletable(owned);
+    if (!locked) {
+      throw new AppError("GIVEAWAY_NOT_FOUND");
+    }
+
+    const giveaway = await findVisibleGiveawayOrThrow(giveawayId, tx);
+
+    assertGiveawayAuthor(giveaway, authorId);
+    assertGiveawayDeletable(giveaway);
+
+    const keys = giveaway.images.map((image) => image.imageKey);
 
     await giveawayRepository.deleteGiveaway(giveawayId, tx);
+
+    return keys;
   });
+
+  await cleanupPreviousImages(authorId, imageKeys);
 }
 
 async function completeGiveaway(giveawayId: number, authorId: string) {
@@ -275,15 +463,27 @@ async function listGiveawayRequests(
     where.status = query.status;
   }
 
-  const { requests, totalCount } = await giveawayRepository.findRequestsWithCount({
-    skip: (query.page - 1) * query.limit,
-    take: query.limit,
-    where,
+  const cursorQuery = toGiveawayRequestCursorQuery({
+    sort: query.sort,
+    status: query.status,
   });
+  const decodedCursor = decodeGiveawayRequestCursor(query.cursor, cursorQuery);
+  const { requests, totalCount } = await giveawayRepository.findRequestsByCursorWithCount({
+    take: query.limit + 1,
+    where,
+    orderBy: giveawayRepository.toCreatedAtOrderBy(query.sort),
+    ...(decodedCursor ? { cursor: decodedCursor } : {}),
+  });
+  const { pageItems, hasNext } = sliceGiveawayCursorPage(requests, query.limit);
 
   return {
-    requests: requests.map(toGiveawayRequestItem),
-    pagination: buildPagination(totalCount, query.page, query.limit),
+    requests: pageItems.map(toGiveawayRequestItem),
+    pagination: {
+      limit: query.limit,
+      totalCount,
+      hasNext,
+      nextCursor: encodeGiveawayRequestNextCursor(pageItems.at(-1), hasNext, cursorQuery),
+    } satisfies CursorPagination,
   };
 }
 
@@ -544,27 +744,47 @@ async function rejectGiveawayRequest(giveawayId: number, requestId: number, auth
   });
 }
 
-async function listMyGiveawayRequests(requesterId: string, query: ListGiveawayRequestQuery) {
+async function listMyGiveawayRequests(requesterId: string, query: ListMyGiveawayRequestQuery) {
+  const giveawayWhere: Prisma.GiveawayWhereInput = {
+    isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
+  };
+  const title = toTitleContainsFilter(query.keyword);
+
+  if (title !== undefined) {
+    giveawayWhere.title = title;
+  }
+
   const where: Prisma.GiveawayRequestWhereInput = {
     requesterId,
-    giveaway: {
-      isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
-    },
+    giveaway: giveawayWhere,
   };
 
   if (query.status !== undefined) {
     where.status = query.status;
   }
 
-  const { requests, totalCount } = await giveawayRepository.findMyRequestsWithCount({
-    skip: (query.page - 1) * query.limit,
-    take: query.limit,
-    where,
+  const cursorQuery = toGiveawayRequestCursorQuery({
+    sort: query.sort,
+    status: query.status,
+    keyword: query.keyword,
   });
+  const decodedCursor = decodeGiveawayRequestCursor(query.cursor, cursorQuery);
+  const { requests, totalCount } = await giveawayRepository.findMyRequestsByCursorWithCount({
+    take: query.limit + 1,
+    where,
+    orderBy: giveawayRepository.toCreatedAtOrderBy(query.sort),
+    ...(decodedCursor ? { cursor: decodedCursor } : {}),
+  });
+  const { pageItems, hasNext } = sliceGiveawayCursorPage(requests, query.limit);
 
   return {
-    requests: requests.map(toMyGiveawayRequestItem),
-    pagination: buildPagination(totalCount, query.page, query.limit),
+    requests: pageItems.map(toMyGiveawayRequestItem),
+    pagination: {
+      limit: query.limit,
+      totalCount,
+      hasNext,
+      nextCursor: encodeGiveawayRequestNextCursor(pageItems.at(-1), hasNext, cursorQuery),
+    } satisfies CursorPagination,
   };
 }
 

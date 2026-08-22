@@ -31,6 +31,16 @@ const chatRoomSelect = {
       },
     },
   },
+  estimate: {
+    select: {
+      status: true,
+      estimateRequest: {
+        select: {
+          status: true,
+        },
+      },
+    },
+  },
 } satisfies Prisma.ChatRoomSelect;
 
 const chatMessageSelect = {

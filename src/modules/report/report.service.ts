@@ -1,17 +1,31 @@
 import { Prisma, UserRole } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
+import { getImageUrl } from "../../utils/image-url";
+import { buildPagination } from "../../utils/pagination.util";
+import { runTransaction, type DbClient } from "../../utils/transaction";
 
-import { reportRepository, type ReportRecord, type ReportRepository } from "./report.repository";
-import type { CreateReportInput, ReportItem } from "./report.type";
+import {
+  reportRepository,
+  type MyReportRecord,
+  type ReportRecord,
+  type ReportRepository,
+} from "./report.repository";
+import { reportImageService } from "./report-image.service";
+import type {
+  CreateReportInput,
+  ListMyReportsQuery,
+  MyReportItem,
+  ReportItem,
+} from "./report.type";
 
-function toReviewTargetIdNumber(targetId: string): number {
+function toNumericTargetIdNumber(targetId: string): number {
   return Number(targetId);
 }
 
 function normalizeTargetId(targetType: CreateReportInput["targetType"], targetId: string): string {
-  if (targetType === "REVIEW") {
-    return String(toReviewTargetIdNumber(targetId));
+  if (targetType === "REVIEW" || targetType === "RESIDENCE_REVIEW" || targetType === "GIVEAWAY") {
+    return String(toNumericTargetIdNumber(targetId));
   }
 
   return targetId.toLowerCase();
@@ -25,6 +39,27 @@ function toReportItem(report: ReportRecord): ReportItem {
     reason: report.reason,
     status: report.status,
     description: report.detail ?? null,
+    images: report.images.map((image) => ({
+      id: image.id,
+      imageUrl: getImageUrl(image.imageKey) ?? "",
+    })),
+    createdAt: report.createdAt,
+  };
+}
+
+function toMyReportItem(report: MyReportRecord): MyReportItem {
+  return {
+    id: report.id,
+    targetType: report.targetType,
+    targetId: report.targetId,
+    reason: report.reason,
+    status: report.status,
+    description: report.detail ?? null,
+    images: report.images.map((image) => ({
+      id: image.id,
+      imageUrl: getImageUrl(image.imageKey) ?? "",
+    })),
+    handledAt: report.handledAt,
     createdAt: report.createdAt,
   };
 }
@@ -34,6 +69,7 @@ function normalizeErrorMetaIdentifier(value: string): string {
 }
 
 const reportUniqueMetaFields = ["targettype", "targetid", "reporterid"] as const;
+
 const reportModelMetaIdentifiers = ["report", "reports"] as const;
 
 function hasAllReportUniqueFields(values: string[]): boolean {
@@ -85,7 +121,9 @@ function isReportUniqueConstraintError(
   }
 
   const target = error.meta?.target;
+
   const isReportModel = isReportModelMetaIdentifier(error.meta?.modelName);
+
   const hasExplicitNonReportModel =
     typeof error.meta?.modelName === "string" &&
     normalizeErrorMetaIdentifier(error.meta.modelName).length > 0 &&
@@ -116,18 +154,58 @@ function isReportUniqueConstraintError(
   return isReportModel;
 }
 
-export function createReportService(repository: ReportRepository = reportRepository) {
+type TransactionRunner = <T>(callback: (tx: DbClient) => Promise<T>) => Promise<T>;
+
+interface ReportImageManager {
+  promoteUploadedImages(
+    userId: string,
+    imageKeys: string[] | undefined,
+  ): Promise<{
+    tempKeys: string[];
+    finalKeys: string[];
+  }>;
+
+  cleanupTempImages(tempKeys: string[]): Promise<void>;
+
+  cleanupFinalImages(finalKeys: string[]): Promise<void>;
+}
+
+export function createReportService(
+  repository: ReportRepository = reportRepository,
+  imageManager: ReportImageManager = reportImageService,
+  transactionRunner: TransactionRunner = runTransaction,
+) {
   return {
+    async getMyReports(params: { reporterId: string; query: ListMyReportsQuery }) {
+      const { reporterId, query } = params;
+
+      const { page, limit } = query;
+
+      const { reports, totalCount } = await repository.findMineWithCount({
+        reporterId,
+        skip: (page - 1) * limit,
+        take: limit,
+      });
+
+      return {
+        reports: reports.map(toMyReportItem),
+        pagination: buildPagination(totalCount, page, limit),
+      };
+    },
+
     async createReport(params: {
       reporterId: string;
       input: CreateReportInput;
     }): Promise<ReportItem> {
       const { reporterId, input } = params;
+
       const normalizedTargetId = normalizeTargetId(input.targetType, input.targetId);
+
       const detail = input.description && input.description.length > 0 ? input.description : null;
 
       if (input.targetType === "REVIEW") {
-        const reviewId = toReviewTargetIdNumber(normalizedTargetId);
+        const reviewId = toNumericTargetIdNumber(normalizedTargetId);
+
         const review = await repository.findReviewTargetById(reviewId);
 
         if (!review) {
@@ -139,7 +217,7 @@ export function createReportService(repository: ReportRepository = reportReposit
         }
       }
 
-      if (input.targetType === "MOVER") {
+      if (input.targetType === "MOVER" || input.targetType === "CUSTOMER") {
         if (reporterId.toLowerCase() === normalizedTargetId) {
           throw new AppError("REPORT_SELF_NOT_ALLOWED");
         }
@@ -150,8 +228,38 @@ export function createReportService(repository: ReportRepository = reportReposit
           throw new AppError("REPORT_TARGET_NOT_FOUND");
         }
 
-        if (user.role !== UserRole.MOVER) {
+        const expectedRole = input.targetType === "MOVER" ? UserRole.MOVER : UserRole.CUSTOMER;
+
+        if (user.role !== expectedRole) {
           throw new AppError("REPORT_TARGET_NOT_REPORTABLE");
+        }
+      }
+
+      if (input.targetType === "RESIDENCE_REVIEW") {
+        const residenceReviewId = toNumericTargetIdNumber(normalizedTargetId);
+
+        const residenceReview = await repository.findResidenceReviewTargetById(residenceReviewId);
+
+        if (!residenceReview) {
+          throw new AppError("REPORT_TARGET_NOT_FOUND");
+        }
+
+        if (residenceReview.authorId === reporterId) {
+          throw new AppError("REPORT_SELF_NOT_ALLOWED");
+        }
+      }
+
+      if (input.targetType === "GIVEAWAY") {
+        const giveawayId = toNumericTargetIdNumber(normalizedTargetId);
+
+        const giveaway = await repository.findGiveawayTargetById(giveawayId);
+
+        if (!giveaway) {
+          throw new AppError("REPORT_TARGET_NOT_FOUND");
+        }
+
+        if (giveaway.authorId === reporterId) {
+          throw new AppError("REPORT_SELF_NOT_ALLOWED");
         }
       }
 
@@ -165,18 +273,32 @@ export function createReportService(repository: ReportRepository = reportReposit
         throw new AppError("REPORT_ALREADY_EXISTS");
       }
 
+      const promoted = await imageManager.promoteUploadedImages(reporterId, input.imageKeys);
+
       try {
-        const created = await repository.createReport({
-          targetType: input.targetType,
-          targetId: normalizedTargetId,
-          reporterId,
-          reason: input.reason,
-          detail,
-          status: "PENDING",
-        });
+        const created = await transactionRunner((tx) =>
+          repository.createReport(
+            {
+              targetType: input.targetType,
+              targetId: normalizedTargetId,
+              reporterId,
+              reason: input.reason,
+              detail,
+              status: "PENDING",
+              ...(promoted.finalKeys.length > 0 && {
+                imageKeys: promoted.finalKeys,
+              }),
+            },
+            tx,
+          ),
+        );
+
+        await imageManager.cleanupTempImages(promoted.tempKeys);
 
         return toReportItem(created);
       } catch (error) {
+        await imageManager.cleanupFinalImages(promoted.finalKeys);
+
         if (isReportUniqueConstraintError(error)) {
           throw new AppError("REPORT_ALREADY_EXISTS");
         }
