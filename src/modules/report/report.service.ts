@@ -55,6 +55,10 @@ function toMyReportItem(report: MyReportRecord): MyReportItem {
     reason: report.reason,
     status: report.status,
     description: report.detail ?? null,
+    images: report.images.map((image) => ({
+      id: image.id,
+      imageUrl: getImageUrl(image.imageKey) ?? "",
+    })),
     handledAt: report.handledAt,
     createdAt: report.createdAt,
   };
@@ -65,6 +69,7 @@ function normalizeErrorMetaIdentifier(value: string): string {
 }
 
 const reportUniqueMetaFields = ["targettype", "targetid", "reporterid"] as const;
+
 const reportModelMetaIdentifiers = ["report", "reports"] as const;
 
 function hasAllReportUniqueFields(values: string[]): boolean {
@@ -116,7 +121,9 @@ function isReportUniqueConstraintError(
   }
 
   const target = error.meta?.target;
+
   const isReportModel = isReportModelMetaIdentifier(error.meta?.modelName);
+
   const hasExplicitNonReportModel =
     typeof error.meta?.modelName === "string" &&
     normalizeErrorMetaIdentifier(error.meta.modelName).length > 0 &&
@@ -159,6 +166,7 @@ interface ReportImageManager {
   }>;
 
   cleanupTempImages(tempKeys: string[]): Promise<void>;
+
   cleanupFinalImages(finalKeys: string[]): Promise<void>;
 }
 
@@ -170,6 +178,7 @@ export function createReportService(
   return {
     async getMyReports(params: { reporterId: string; query: ListMyReportsQuery }) {
       const { reporterId, query } = params;
+
       const { page, limit } = query;
 
       const { reports, totalCount } = await repository.findMineWithCount({
@@ -189,11 +198,14 @@ export function createReportService(
       input: CreateReportInput;
     }): Promise<ReportItem> {
       const { reporterId, input } = params;
+
       const normalizedTargetId = normalizeTargetId(input.targetType, input.targetId);
+
       const detail = input.description && input.description.length > 0 ? input.description : null;
 
       if (input.targetType === "REVIEW") {
         const reviewId = toNumericTargetIdNumber(normalizedTargetId);
+
         const review = await repository.findReviewTargetById(reviewId);
 
         if (!review) {
@@ -225,6 +237,7 @@ export function createReportService(
 
       if (input.targetType === "RESIDENCE_REVIEW") {
         const residenceReviewId = toNumericTargetIdNumber(normalizedTargetId);
+
         const residenceReview = await repository.findResidenceReviewTargetById(residenceReviewId);
 
         if (!residenceReview) {
@@ -238,6 +251,7 @@ export function createReportService(
 
       if (input.targetType === "GIVEAWAY") {
         const giveawayId = toNumericTargetIdNumber(normalizedTargetId);
+
         const giveaway = await repository.findGiveawayTargetById(giveawayId);
 
         if (!giveaway) {
