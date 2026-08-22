@@ -1,4 +1,4 @@
-import { Prisma, ReportTargetType, UserRole } from "@prisma/client";
+import { InquiryStatus, Prisma, ReportTargetType, UserRole } from "@prisma/client";
 import type { AuthProvider } from "@prisma/client";
 
 import { prisma } from "../../../../lib/prisma";
@@ -155,6 +155,7 @@ type CustomerListRawRow = {
   createdAt: Date;
   receivedReportCount: number;
   pendingReceivedReportCount: number;
+  openInquiryCount: number;
   totalCount: bigint;
 };
 
@@ -168,6 +169,8 @@ function buildCustomerReportOrderBy(sorts: string[]): Prisma.Sql {
   const columns: Record<string, Prisma.Sql> = {
     PENDING_DESC: Prisma.sql`"pendingReceivedReportCount" DESC`,
     PENDING_ASC: Prisma.sql`"pendingReceivedReportCount" ASC`,
+    OPEN_INQUIRY_DESC: Prisma.sql`"openInquiryCount" DESC`,
+    OPEN_INQUIRY_ASC: Prisma.sql`"openInquiryCount" ASC`,
     CREATED_AT_DESC: Prisma.sql`u."createdAt" DESC`,
     CREATED_AT_ASC: Prisma.sql`u."createdAt" ASC`,
   };
@@ -224,12 +227,12 @@ function buildCustomerListWhereSql(filters: ListCustomerQuery): Prisma.Sql {
 }
 
 export const customersRepository = {
-  /** 고객 목록과 리뷰 기반 피신고 건수를 함께 조회합니다. */
+  /** 고객 목록과 리뷰 기반 피신고·고객이 접수한 미처리 문의 건수를 함께 조회합니다. */
   async findManyWithCount({ skip, take, sorts, filters }: ListParams, db: DbClient = prisma) {
     const whereSql = buildCustomerListWhereSql(filters);
 
     /**
-     * 필터·리뷰 기반 신고 집계·다중 정렬을 적용한 전체 결과에서 LIMIT/OFFSET을 적용해 현재 페이지 행만 조회합니다.
+     * 필터·리뷰 기반 신고 집계·미처리 문의 집계·다중 정렬을 적용한 전체 결과에서 LIMIT/OFFSET을 적용해 현재 페이지 행만 조회합니다.
      */
     const rows = await db.$queryRaw<CustomerListRawRow[]>(Prisma.sql`
         SELECT
@@ -245,6 +248,12 @@ export const customersRepository = {
           COUNT(rp.id)::int AS "receivedReportCount",
           COUNT(rp.id) FILTER (WHERE rp.status = ${"PENDING"}::"ReportStatus")::int
             AS "pendingReceivedReportCount",
+          COALESCE((
+            SELECT COUNT(*)::int
+            FROM inquiries AS i
+            WHERE i.author_id = u.id
+              AND i.status = ${InquiryStatus.OPEN}::"InquiryStatus"
+          ), 0) AS "openInquiryCount",
           COUNT(*) OVER()::bigint AS "totalCount"
         FROM "User" AS u
         LEFT JOIN reviews AS rv ON rv.customer_id = u.id

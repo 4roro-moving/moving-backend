@@ -15,6 +15,7 @@ export function toMemberListBase(member: {
   isProfileCompleted: boolean;
   receivedReportCount: number;
   pendingReceivedReportCount: number;
+  openInquiryCount: number;
   deletedAt: Date | null;
   createdAt: Date;
 }): MemberListBase {
@@ -27,6 +28,7 @@ export function toMemberListBase(member: {
     isProfileCompleted: member.isProfileCompleted,
     receivedReportCount: member.receivedReportCount,
     pendingReceivedReportCount: member.pendingReceivedReportCount,
+    openInquiryCount: member.openInquiryCount,
     createdAt: member.createdAt,
   };
 }

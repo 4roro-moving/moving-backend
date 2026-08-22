@@ -23,6 +23,7 @@ registerRouterDocs(adminCustomerRouter, {
       description: [
         "관리자가 일반 고객(CUSTOMER) 목록을 검색·필터링·페이지네이션하여 조회합니다.",
         "",
+        "- 각 항목의 `openInquiryCount`는 고객이 접수한 문의 중 관리자의 답변을 기다리는 `OPEN` 상태 건수입니다.",
         "- `keyword`: 이름·이메일 부분일치(대소문자 무시)",
         "- `status`: ACTIVE | SUSPENDED | WITHDRAWN (미지정 시 탈퇴 회원 제외)",
         "- `authProvider`: LOCAL | GOOGLE | NAVER | KAKAO",
@@ -31,7 +32,7 @@ registerRouterDocs(adminCustomerRouter, {
         "- `sorts`: 반복 query로 전달하는 정렬 기준(최대 5개, 같은 기준 중복 불가). 예: `sorts=PENDING_DESC&sorts=CREATED_AT_ASC`",
         "  - 앞에 전달한 값부터 우선 정렬합니다. `sorts`를 생략하면 `CREATED_AT_DESC`(최신 가입순)를 적용합니다.",
         "  - `CREATED_AT_DESC` 또는 `CREATED_AT_ASC`를 지정하지 않으면 `createdAt DESC`, `id ASC`를 보조 정렬로 적용합니다.",
-        "  - 허용값: `CREATED_AT_DESC` | `CREATED_AT_ASC` | `PENDING_DESC` | `PENDING_ASC`",
+        "  - 허용값: `CREATED_AT_DESC` | `CREATED_AT_ASC` | `PENDING_DESC` | `PENDING_ASC` | `OPEN_INQUIRY_DESC` | `OPEN_INQUIRY_ASC`",
         "- 기사님 목록은 `GET /api/admin/movers` 에서 별도 제공",
       ].join("\n"),
       responses: { 200: "조회 성공" },

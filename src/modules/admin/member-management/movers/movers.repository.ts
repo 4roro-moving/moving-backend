@@ -1,6 +1,7 @@
 import {
   EstimateRequestStatus,
   EstimateStatus,
+  InquiryStatus,
   Prisma,
   ReportTargetType,
   UserRole,
@@ -187,6 +188,8 @@ function buildMoverReportOrderBy(sorts: string[]): Prisma.Sql {
   const columns: Record<string, Prisma.Sql> = {
     PENDING_DESC: Prisma.sql`"pendingReceivedReportCount" DESC`,
     PENDING_ASC: Prisma.sql`"pendingReceivedReportCount" ASC`,
+    OPEN_INQUIRY_DESC: Prisma.sql`"openInquiryCount" DESC`,
+    OPEN_INQUIRY_ASC: Prisma.sql`"openInquiryCount" ASC`,
     CONFIRMED_DESC: Prisma.sql`COALESCE(mp."confirmedCount", 0) DESC`,
     CONFIRMED_ASC: Prisma.sql`COALESCE(mp."confirmedCount", 0) ASC`,
     RATING_DESC: Prisma.sql`COALESCE(mp."averageRating", 0) DESC`,
@@ -272,12 +275,12 @@ function buildMoverListWhereSql(filters: ListMoverQuery): Prisma.Sql {
 }
 
 export const moversRepository = {
-  /** 기사 목록과 피신고 건수를 함께 조회합니다. */
+  /** 기사 목록과 피신고·기사가 접수한 미처리 문의 건수를 함께 조회합니다. */
   async findManyWithCount({ skip, take, sorts, filters }: ListParams, db: DbClient = prisma) {
     const whereSql = buildMoverListWhereSql(filters);
 
     /**
-     * 필터·신고 집계·다중 정렬을 적용한 전체 결과에서 LIMIT/OFFSET을 적용해 현재 페이지 행만 조회합니다.
+     * 필터·신고 집계·미처리 문의 집계·다중 정렬을 적용한 전체 결과에서 LIMIT/OFFSET을 적용해 현재 페이지 행만 조회합니다.
      * 기사 프로필과 서비스 지역·유형도 함께 조회해 Prisma로 프로필·지역·유형을 각각 다시 조회하는 쿼리를 줄입니다.
      */
     const rows = await db.$queryRaw<MoverListRawRow[]>(Prisma.sql`
@@ -309,6 +312,12 @@ export const moversRepository = {
           COUNT(rp.id)::int AS "receivedReportCount",
           COUNT(rp.id) FILTER (WHERE rp.status = ${"PENDING"}::"ReportStatus")::int
             AS "pendingReceivedReportCount",
+          COALESCE((
+            SELECT COUNT(*)::int
+            FROM inquiries AS i
+            WHERE i.author_id = u.id
+              AND i.status = ${InquiryStatus.OPEN}::"InquiryStatus"
+          ), 0) AS "openInquiryCount",
           COUNT(*) OVER()::bigint AS "totalCount"
         FROM "User" AS u
         LEFT JOIN mover_profiles AS mp ON mp."userId" = u.id

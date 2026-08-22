@@ -18,13 +18,16 @@ export type MemberListBase = {
   isProfileCompleted: boolean;
   receivedReportCount: number;
   pendingReceivedReportCount: number;
+  /** 관리자의 답변을 기다리는 OPEN 상태 1:1 문의 건수입니다. */
+  openInquiryCount: number;
   createdAt: Date;
 };
 
-/** 회원이 피신고된 전체·미처리 신고 집계입니다. */
+/** 회원 목록에서 제공하는 피신고·회원이 접수한 미처리 문의 집계입니다. */
 export type MemberReceivedReportCounts = {
   receivedReportCount: number;
   pendingReceivedReportCount: number;
+  openInquiryCount: number;
 };
 
 /** 고객·기사 상세 응답에서 공통으로 제공하는 계정 정보입니다. */
