@@ -136,7 +136,7 @@ async function attachListMeta(giveaways: AdminGiveawayRow[]): Promise<AdminGivea
 }
 
 function getGiveawayNotificationContent(giveaway: AdminGiveawayRow): string {
-  return `「${giveaway.title}」`;
+  return `「${giveaway.title}」에 대한 나눔게시물`;
 }
 
 async function toggleGiveawayVisibility(params: {

@@ -140,7 +140,7 @@ async function attachListMeta(
 }
 
 function getResidenceReviewNotificationContent(review: AdminResidenceReviewRow): string {
-  return `「${review.title}」`;
+  return `「${review.title}」에 대한 거주후기`;
 }
 
 async function toggleResidenceReviewVisibility(params: {

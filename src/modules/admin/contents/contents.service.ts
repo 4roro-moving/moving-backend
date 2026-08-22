@@ -100,7 +100,7 @@ function toAdminReviewListItem(
 
 function getMoverNotificationSubject(review: AdminReviewRow): string {
   const moverName = review.mover.moverProfile?.nickname ?? review.mover.name;
-  return `${moverName} 기사님`;
+  return `${moverName} 기사님에 대한 리뷰`;
 }
 
 async function attachListMeta(reviews: AdminReviewRow[]): Promise<AdminReviewListItem[]> {
