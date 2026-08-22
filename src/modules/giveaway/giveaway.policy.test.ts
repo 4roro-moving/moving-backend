@@ -53,7 +53,7 @@ function createRequest(overrides: Partial<GiveawayRequestRow> = {}): GiveawayReq
     message: "받고 싶습니다",
     createdAt: new Date("2026-08-18T00:00:00.000Z"),
     updatedAt: new Date("2026-08-18T00:00:00.000Z"),
-    requester: { id: "requester-1", name: "신청자" },
+    requester: { id: "requester-1", name: "신청자", customerProfile: null },
     ...overrides,
   };
 }
@@ -394,7 +394,16 @@ describe("assertRequestRejectable", () => {
     );
   });
 
-  it("PENDING이 아니면 GIVEAWAY_REQUEST_NOT_REJECTABLE", () => {
+  it("IN_PROGRESS의 SELECTED 수령 신청은 거절할 수 있다", () => {
+    assert.doesNotThrow(() =>
+      assertRequestRejectable(
+        inProgressGiveaway,
+        createRequest({ status: GIVEAWAY_REQUEST_STATUS.SELECTED }),
+      ),
+    );
+  });
+
+  it("AVAILABLE의 SELECTED 신청은 GIVEAWAY_REQUEST_NOT_REJECTABLE", () => {
     assert.throws(
       () =>
         assertRequestRejectable(

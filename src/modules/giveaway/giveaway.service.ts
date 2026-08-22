@@ -720,11 +720,16 @@ async function rejectGiveawayRequest(giveawayId: number, requestId: number, auth
 
     assertRequestRejectable(giveaway, request);
 
+    const fromStatus =
+      request.status === GIVEAWAY_REQUEST_STATUS.SELECTED
+        ? GIVEAWAY_REQUEST_STATUS.SELECTED
+        : GIVEAWAY_REQUEST_STATUS.PENDING;
+
     const rejected = await giveawayRepository.updateRequestStatus(
       {
         requestId,
         giveawayId,
-        fromStatus: GIVEAWAY_REQUEST_STATUS.PENDING,
+        fromStatus,
         toStatus: GIVEAWAY_REQUEST_STATUS.REJECTED,
       },
       tx,
@@ -732,6 +737,20 @@ async function rejectGiveawayRequest(giveawayId: number, requestId: number, auth
 
     if (!rejected) {
       throw new AppError("GIVEAWAY_REQUEST_NOT_REJECTABLE");
+    }
+
+    if (fromStatus === GIVEAWAY_REQUEST_STATUS.SELECTED) {
+      const restored = await giveawayRepository.restoreGiveawayToAvailable(
+        {
+          giveawayId,
+          receiverId: request.requesterId,
+        },
+        tx,
+      );
+
+      if (!restored) {
+        throw new AppError("GIVEAWAY_REQUEST_NOT_REJECTABLE");
+      }
     }
 
     const updated = await giveawayRepository.findRequestById(requestId, tx);

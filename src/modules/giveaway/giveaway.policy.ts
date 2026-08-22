@@ -164,9 +164,19 @@ export function assertRequestRejectable(
     });
   }
 
-  if (request.status !== GIVEAWAY_REQUEST_STATUS.PENDING) {
-    throw new AppError("GIVEAWAY_REQUEST_NOT_REJECTABLE");
+  if (request.status === GIVEAWAY_REQUEST_STATUS.PENDING) {
+    return;
   }
+
+  if (
+    request.status === GIVEAWAY_REQUEST_STATUS.SELECTED &&
+    giveaway.status === GIVEAWAY_STATUS.IN_PROGRESS &&
+    giveaway.receiverId === request.requesterId
+  ) {
+    return;
+  }
+
+  throw new AppError("GIVEAWAY_REQUEST_NOT_REJECTABLE");
 }
 
 export function assertGiveawayCompletable(giveaway: GiveawayOwnershipRow) {

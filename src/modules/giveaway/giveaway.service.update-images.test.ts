@@ -52,7 +52,7 @@ function createDetail(imageKeys: string[]): GiveawayDetailRow {
     isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
     createdAt: new Date("2026-08-22T00:00:00.000Z"),
     updatedAt: new Date("2026-08-22T00:00:00.000Z"),
-    author: { id: AUTHOR_ID, name: "작성자" },
+    author: { id: AUTHOR_ID, name: "작성자", customerProfile: null },
     receiver: null,
     region: null,
     images: imageKeys.map((imageKey, index) => ({
