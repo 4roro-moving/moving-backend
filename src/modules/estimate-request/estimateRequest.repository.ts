@@ -248,7 +248,20 @@ export const estimateRequestRepository = {
         isProfileCompleted: true,
         deletedAt: null,
       },
-      select: { id: true },
+      /*
+       * serviceTypes 까지 함께 조회한다.
+       * 지정 시점에 기사가 그 이사 유형을 제공하는지 대조해야 하기 때문이다.
+       * (기사의 "받은 요청" 목록이 서비스 유형으로 필터링되므로,
+       *  대조 없이 지정하면 알림만 가고 목록에는 안 보이는 상태가 된다)
+       */
+      select: {
+        id: true,
+        moverProfile: {
+          select: {
+            serviceTypes: { select: { moveType: true } },
+          },
+        },
+      },
     });
   },
 

@@ -20,7 +20,14 @@ import {
   type SeedConfig,
 } from "../config.js";
 import { ANCHOR_CUSTOMER_COUNT, ANCHOR_MOVER_COUNT } from "../config.js";
-import { adminEmail, customerEmail, isSuspended, moverEmail } from "../anchors/index.js";
+import {
+  SUPER_ADMIN_EMAIL,
+  SUPER_ADMIN_NAME,
+  adminEmail,
+  customerEmail,
+  isSuspended,
+  moverEmail,
+} from "../anchors/index.js";
 import { paretoCount, pickSeasonalPastDate, weightedPick } from "../lib/distributions.js";
 import { makeUuidV7 } from "../lib/ids.js";
 import { chance, deriveRng, pick, randInt, sampleIndices, type Rng } from "../lib/rng.js";
@@ -217,19 +224,76 @@ export function generateUsers(
       updatedAt: createdAt,
     });
 
-    /*
-     * 일반 관리자용 AdminProfile.
-     *
-     * SUPER_ADMIN은 최초 1계정만 별도로 생성하며,
-     * 일반 Seed 관리자에게는 ADMIN 역할만 부여한다.
-     */
+    // 시드가 만드는 admin1~N 은 전부 서비스 운영 담당(ADMIN)이다.
     adminProfiles.push({
+      id: i,
       userId: admin.id,
       adminRole: "ADMIN",
       createdAt,
       updatedAt: createdAt,
     });
   }
+
+  /* ── 슈퍼 관리자 ───────────────────────────────────────────────────── */
+
+  /*
+   * SUPER_ADMIN 은 admin1~N 과 별개 계정으로 만든다.
+   *
+   * 두 역할은 상하 관계가 아니라 책임이 분리된 관계다.
+   * (SUPER_ADMIN = 관리자 계정 관리 전담, ADMIN = 서비스 운영 전담)
+   * 번호 체계에 섞으면 "admin1 로 신고 관리가 안 된다"는 혼란이 생기므로
+   * 이메일도 superadmin@test.com 으로 구분한다.
+   *
+   * ── 시드가 직접 만드는 이유 ────────────────────────────────────────
+   * 이 시드는 시작할 때 TRUNCATE ... CASCADE 로 전 테이블을 비운다.
+   * scripts/bootstrap-super-admin.ts 로 만든 계정도 함께 지워지므로,
+   * 시드를 돌릴 때마다 부트스트랩을 다시 실행해야 하고 그걸 잊으면
+   * "관리자 계정 관리를 아무도 할 수 없는" 상태가 조용히 만들어진다.
+   * 부트스트랩 스크립트는 운영 환경 최초 1회용으로 남겨둔다.
+   */
+  const superAdminCreatedAt = new Date(SERVICE_EPOCH.getTime() - 3_600_000);
+  const superAdminId = makeUuidV7(rng, superAdminCreatedAt.getTime());
+
+  const superAdmin: SeedUser = {
+    id: superAdminId,
+    email: SUPER_ADMIN_EMAIL,
+    name: SUPER_ADMIN_NAME,
+    phone: makePhone(phoneSeq),
+    role: "ADMIN",
+    authProvider: "LOCAL",
+    providerUserId: null,
+    isActive: true,
+    isProfileCompleted: true,
+    createdAt: superAdminCreatedAt,
+    anchorIndex: 0,
+    imageKey: null,
+  };
+
+  phoneSeq += 1;
+  admins.push(superAdmin);
+
+  users.push({
+    id: superAdmin.id,
+    email: superAdmin.email,
+    password: passwordHash,
+    authProvider: "LOCAL",
+    providerUserId: null,
+    name: superAdmin.name,
+    phone: superAdmin.phone,
+    role: "ADMIN",
+    isActive: true,
+    isProfileCompleted: true,
+    createdAt: superAdminCreatedAt,
+    updatedAt: superAdminCreatedAt,
+  });
+
+  adminProfiles.push({
+    id: config.admins + 1,
+    userId: superAdmin.id,
+    adminRole: "SUPER_ADMIN",
+    createdAt: superAdminCreatedAt,
+    updatedAt: superAdminCreatedAt,
+  });
 
   /* ── 고객 ──────────────────────────────────────────────────────────── */
 

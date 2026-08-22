@@ -39,6 +39,16 @@ export function adminEmail(index: number): string {
   return `admin${index}@test.com`;
 }
 
+/**
+ * 슈퍼 관리자 계정.
+ *
+ * 일반 관리자(admin1~N)와 이메일 체계를 분리한다.
+ * SUPER_ADMIN 은 관리자 계정 관리 전용이라 서비스 운영 권한이 없고,
+ * 번호로 섞여 있으면 "admin1 로 신고 관리가 안 된다"는 혼란이 생긴다.
+ */
+export const SUPER_ADMIN_EMAIL = "superadmin@test.com";
+export const SUPER_ADMIN_NAME = "슈퍼관리자";
+
 /** 1-based 배치 내 위치 (1~10) */
 export function positionInBatch(index: number): number {
   return ((index - 1) % GROUP_SIZE) + 1;
