@@ -156,6 +156,14 @@ const VISIBILITY_TOGGLE_CONFIG: Record<
   },
 };
 
+/** 숨김: 사유 확인 화면 / 복구: 내가 작성한 리뷰 목록 */
+function getReviewNotificationLinkUrl(action: VisibilityToggleAction, reviewId: number): string {
+  if (action === "HIDE") {
+    return `/my-contents/review/${String(reviewId)}`;
+  }
+  return `/reviews/me`;
+}
+
 async function toggleReviewVisibility(params: {
   adminId: string;
   reviewId: number;
@@ -199,7 +207,7 @@ async function toggleReviewVisibility(params: {
         type: config.notificationType,
         title: config.notificationTitle,
         content: getMoverNotificationSubject(review),
-        linkUrl: `/my-contents/review/${String(reviewId)}`,
+        linkUrl: getReviewNotificationLinkUrl(action, reviewId),
         expiresAt: null,
       },
       tx,

@@ -48,6 +48,17 @@ const VISIBILITY_TOGGLE_CONFIG: Record<
   },
 };
 
+/** 숨김: 사유 확인 화면 / 복구: 거주후기 상세 */
+function getResidenceReviewNotificationLinkUrl(
+  action: VisibilityToggleAction,
+  residenceReviewId: number,
+): string {
+  if (action === "HIDE") {
+    return `/my-contents/residence-review/${String(residenceReviewId)}`;
+  }
+  return `/residence-reviews/${String(residenceReviewId)}`;
+}
+
 function buildListFilters(query: ListAdminResidenceReviewsQuery) {
   const filters: { isHidden?: boolean; keyword?: string } = {};
 
@@ -192,7 +203,7 @@ async function toggleResidenceReviewVisibility(params: {
           type: config.notificationType,
           title: config.notificationTitle,
           content: getResidenceReviewNotificationContent(review),
-          linkUrl: `/my-contents/residence-review/${String(residenceReviewId)}`,
+          linkUrl: getResidenceReviewNotificationLinkUrl(action, residenceReviewId),
           expiresAt: null,
         },
         tx,
