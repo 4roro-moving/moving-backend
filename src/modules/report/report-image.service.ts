@@ -223,7 +223,6 @@ async function createUploadUrl(
     Bucket: bucketName,
     Key: key,
     ContentType: input.contentType,
-    IfNoneMatch: "*",
   });
 
   const uploadUrl = await getSignedUrl(s3Client, command, {
