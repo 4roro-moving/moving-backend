@@ -2,6 +2,7 @@ import { EstimateRequestStatus, EstimateStatus } from "@prisma/client";
 
 import {
   toMemberDetailAccount,
+  toMemberInquiryHistoryItem,
   toMemberListBase,
   toMemberSuspensionHistoryItem,
 } from "../member.mapper";
@@ -110,6 +111,7 @@ type MoverDetailHistories = {
   filedReports: Awaited<ReturnType<typeof moversRepository.findFiledReportHistory>>;
   receivedReports: Awaited<ReturnType<typeof moversRepository.findReceivedReportHistory>>;
   suspensionHistory: Awaited<ReturnType<typeof memberRepository.findSuspensionHistory>>;
+  inquiryHistory: Awaited<ReturnType<typeof memberRepository.findInquiryHistory>>;
 };
 
 export function toMoverDetail(mover: MoverDetailRow, histories: MoverDetailHistories): MoverDetail {
@@ -156,6 +158,11 @@ export function toMoverDetail(mover: MoverDetailRow, histories: MoverDetailHisto
     suspensionHistory: {
       totalCount: histories.suspensionHistory.totalCount,
       items: histories.suspensionHistory.items.map(toMemberSuspensionHistoryItem),
+    },
+    inquiryHistory: {
+      totalCount: histories.inquiryHistory.totalCount,
+      openCount: histories.inquiryHistory.openCount,
+      items: histories.inquiryHistory.items.map(toMemberInquiryHistoryItem),
     },
   };
 }

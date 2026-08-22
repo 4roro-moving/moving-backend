@@ -13,6 +13,7 @@ import type { MEMBER_STATUS, MemberStatus } from "../member-status.constants";
 import type {
   HistorySummary,
   MemberDetailAccount,
+  MemberInquiryHistory,
   MemberListBase,
   MemberSuspensionHistoryItem,
 } from "../member.type";
@@ -104,4 +105,5 @@ export type CustomerDetail = {
     received: HistorySummary<CustomerReportHistoryItem>;
   };
   suspensionHistory: HistorySummary<MemberSuspensionHistoryItem>;
+  inquiryHistory: MemberInquiryHistory;
 };
