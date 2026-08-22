@@ -229,14 +229,14 @@ type UpdateGiveawayData = {
   images?: Array<{ imageKey: string; sortOrder: number }>;
 };
 
-function findGiveawayById(giveawayId: number, db: DbClient = prisma) {
+async function findGiveawayById(giveawayId: number, db: DbClient = prisma) {
   return db.giveaway.findUnique({
     where: { id: giveawayId },
     select: giveawayDetailSelect,
   });
 }
 
-function findGiveawayOwnership(giveawayId: number, db: DbClient = prisma) {
+async function findGiveawayOwnership(giveawayId: number, db: DbClient = prisma) {
   return db.giveaway.findUnique({
     where: { id: giveawayId },
     select: giveawayOwnershipSelect,
