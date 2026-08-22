@@ -326,6 +326,12 @@ export const ERROR_CODES = {
     code: "GIVEAWAY_NOT_EDITABLE",
     message: "신청 가능 상태의 나눔 글만 수정할 수 있습니다.",
   },
+  GIVEAWAY_UPDATE_CONFLICT: {
+    status: 409,
+    code: "GIVEAWAY_UPDATE_CONFLICT",
+    message:
+      "나눔 글이 다른 요청으로 먼저 수정되었습니다. 최신 내용을 확인한 뒤 다시 시도해 주세요.",
+  },
   GIVEAWAY_NOT_DELETABLE: {
     status: 409,
     code: "GIVEAWAY_NOT_DELETABLE",

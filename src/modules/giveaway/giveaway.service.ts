@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 
 import { AppError } from "../../lib/app-error";
 import type { CursorPagination } from "../../types/response.type";
+import { lockGiveawayForUpdate } from "../../utils/giveaway-lock.util";
 import { escapeLikePattern } from "../../utils/search.util";
 import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
@@ -54,6 +55,33 @@ function toImageRecords(imageKeys: string[]) {
     imageKey,
     sortOrder: index,
   }));
+}
+
+export function toRemovedGiveawayImageKeys(latestKeys: string[], nextKeys: string[]): string[] {
+  const nextKeySet = new Set(nextKeys);
+
+  return latestKeys.filter((key) => !nextKeySet.has(key));
+}
+
+function assertReusableGiveawayImageKeys(
+  nextKeys: string[],
+  latestKeySet: Set<string>,
+  currentKeySet: Set<string>,
+  newlyCopied: Set<string>,
+) {
+  for (const key of nextKeys) {
+    if (newlyCopied.has(key) || latestKeySet.has(key)) {
+      continue;
+    }
+
+    if (currentKeySet.has(key)) {
+      throw new AppError("GIVEAWAY_UPDATE_CONFLICT");
+    }
+
+    throw new AppError("BAD_REQUEST", {
+      message: "다른 나눔 글의 이미지는 재사용할 수 없습니다.",
+    });
+  }
 }
 
 function toTitleContainsFilter(keyword: string | undefined): Prisma.StringFilter | undefined {
@@ -326,38 +354,47 @@ async function updateGiveaway(giveawayId: number, authorId: string, input: Updat
   const newlyCopied = new Set(prepared.finalizedKeys);
 
   let giveaway;
+  let removedKeys: string[];
 
   try {
-    giveaway = await runTransaction(async (tx) => {
-      const locked = await findGiveawayOwnershipOrThrow(giveawayId, tx);
+    ({ giveaway, removedKeys } = await runTransaction(async (tx) => {
+      // 동일 글 이미지 수정을 직렬화한 뒤, update 직전 latestKeys로 cleanup 대상을 계산한다.
+      const locked = await lockGiveawayForUpdate(tx, giveawayId);
 
-      assertGiveawayAuthor(locked, authorId);
-      assertGiveawayEditable(locked);
-      await assertRegionExists(input.regionId, tx);
-
-      const latest = await giveawayRepository.findGiveawayById(giveawayId, tx);
-      const latestKeys = new Set(latest?.images.map((image) => image.imageKey) ?? []);
-
-      for (const key of prepared.nextKeys) {
-        if (!newlyCopied.has(key) && !latestKeys.has(key)) {
-          throw new AppError("BAD_REQUEST", {
-            message: "다른 나눔 글의 이미지는 재사용할 수 없습니다.",
-          });
-        }
+      if (!locked) {
+        throw new AppError("GIVEAWAY_NOT_FOUND");
       }
 
-      return giveawayRepository.updateGiveaway(
+      const latest = await findVisibleGiveawayOrThrow(giveawayId, tx);
+
+      assertGiveawayAuthor(latest, authorId);
+      assertGiveawayEditable(latest);
+      await assertRegionExists(input.regionId, tx);
+
+      const latestKeys = latest.images.map((image) => image.imageKey);
+
+      assertReusableGiveawayImageKeys(
+        prepared.nextKeys,
+        new Set(latestKeys),
+        new Set(currentKeys),
+        newlyCopied,
+      );
+
+      const updated = await giveawayRepository.updateGiveaway(
         giveawayId,
         toGiveawayUpdateData(input, toImageRecords(prepared.nextKeys)),
         tx,
       );
-    });
+
+      return {
+        giveaway: updated,
+        removedKeys: toRemovedGiveawayImageKeys(latestKeys, prepared.nextKeys),
+      };
+    }));
   } catch (error) {
     await giveawayImageService.rollbackFinalizedImages(authorId, prepared.finalizedKeys);
     throw error;
   }
-
-  const removedKeys = currentKeys.filter((key) => !prepared.nextKeys.includes(key));
 
   await cleanupTemporaryImages(authorId, prepared.tempKeys);
   await cleanupPreviousImages(authorId, removedKeys);
@@ -367,13 +404,18 @@ async function updateGiveaway(giveawayId: number, authorId: string, input: Updat
 
 async function deleteGiveaway(giveawayId: number, authorId: string) {
   const imageKeys = await runTransaction(async (tx) => {
-    const owned = await findGiveawayOwnershipOrThrow(giveawayId, tx);
+    const locked = await lockGiveawayForUpdate(tx, giveawayId);
 
-    assertGiveawayAuthor(owned, authorId);
-    assertGiveawayDeletable(owned);
+    if (!locked) {
+      throw new AppError("GIVEAWAY_NOT_FOUND");
+    }
 
-    const giveaway = await giveawayRepository.findGiveawayById(giveawayId, tx);
-    const keys = giveaway?.images.map((image) => image.imageKey) ?? [];
+    const giveaway = await findVisibleGiveawayOrThrow(giveawayId, tx);
+
+    assertGiveawayAuthor(giveaway, authorId);
+    assertGiveawayDeletable(giveaway);
+
+    const keys = giveaway.images.map((image) => image.imageKey);
 
     await giveawayRepository.deleteGiveaway(giveawayId, tx);
 
