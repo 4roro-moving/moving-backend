@@ -5,7 +5,9 @@ import { registerRouterDocs } from "../../config/openapi-router";
 import reportRouter from "./report.route";
 
 const authHeaderSchema = z.object({
-  authorization: z.string().meta({ example: "Bearer <access-token>" }),
+  authorization: z.string().meta({
+    example: "Bearer <access-token>",
+  }),
 });
 
 registerRouterDocs(reportRouter, {
@@ -28,6 +30,8 @@ registerRouterDocs(reportRouter, {
         "- `page`, `limit` 기반 페이지네이션을 사용합니다.",
         "- 관리자 내부 처리 메모(`handlerNote`)는 노출하지 않습니다.",
         "- 처리 상태와 처리 시각(`handledAt`)은 확인할 수 있습니다.",
+        "- 신고 시 첨부한 이미지가 있는 경우 `images` 배열에 이미지 URL을 반환합니다.",
+        "- 첨부 이미지 URL은 저장된 S3 Key를 기반으로 조회 시 변환합니다.",
       ].join("\n"),
       responses: {
         200: "내 신고내역 조회 성공",

@@ -29,6 +29,15 @@ const myReportSelect = {
   reason: true,
   status: true,
   detail: true,
+  images: {
+    orderBy: {
+      id: "asc",
+    },
+    select: {
+      id: true,
+      imageKey: true,
+    },
+  },
   handledAt: true,
   createdAt: true,
 } as const;
@@ -121,7 +130,10 @@ export const reportRepository = {
       db.report.count({ where }),
     ]);
 
-    return { reports, totalCount };
+    return {
+      reports,
+      totalCount,
+    };
   },
 
   createReport(
@@ -185,18 +197,23 @@ export type ExistingReport = {
 };
 
 export type ReportRecord = Awaited<ReturnType<typeof reportRepository.createReport>>;
+
 export type MyReportRecord = Awaited<
   ReturnType<typeof reportRepository.findMineWithCount>
 >["reports"][number];
 
 export interface ReportRepository {
   findReviewTargetById(reviewId: number, db?: DbClient): Promise<ReviewReportTarget | null>;
+
   findUserById(userId: string, db?: DbClient): Promise<ReportableUser | null>;
+
   findResidenceReviewTargetById(
     residenceReviewId: number,
     db?: DbClient,
   ): Promise<ResidenceReviewReportTarget | null>;
+
   findGiveawayTargetById(giveawayId: number, db?: DbClient): Promise<GiveawayReportTarget | null>;
+
   findExistingReport(
     params: {
       targetType: ReportTargetType;
@@ -205,6 +222,7 @@ export interface ReportRepository {
     },
     db?: DbClient,
   ): Promise<ExistingReport | null>;
+
   findMineWithCount(
     params: {
       reporterId: string;
@@ -216,6 +234,7 @@ export interface ReportRepository {
     reports: MyReportRecord[];
     totalCount: number;
   }>;
+
   createReport(
     input: {
       targetType: ReportTargetType;

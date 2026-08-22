@@ -627,11 +627,12 @@ describe("reportService.getMyReports", () => {
               reason: "SPAM",
               status: "RESOLVED",
               detail: "광고성 응답을 반복합니다.",
+              images: [],
               handledAt,
               createdAt,
             },
           ],
-          totalCount: 21,
+          totalCount: 1,
         };
       },
     });
@@ -696,5 +697,51 @@ describe("reportService.getMyReports", () => {
       totalPages: 0,
       hasNext: false,
     });
+  });
+});
+
+describe("reportService.getMyReports", () => {
+  it("returns attached images with public URLs", async () => {
+    const createdAt = new Date("2026-08-22T00:00:00.000Z");
+
+    const service = createService({
+      findMineWithCount: async () => ({
+        reports: [
+          {
+            id: 1,
+            targetType: "MOVER",
+            targetId: VALID_MOVER_ID,
+            reason: "SPAM",
+            status: "PENDING",
+            detail: "신고 내용",
+            images: [
+              {
+                id: 10,
+                imageKey: "reports/customer-1/test.jpg",
+              },
+            ],
+            handledAt: null,
+            createdAt,
+          },
+        ],
+        totalCount: 1,
+      }),
+    });
+
+    const result = await service.getMyReports({
+      reporterId: "customer-1",
+      query: {
+        page: 1,
+        limit: 10,
+      },
+    });
+
+    assert.equal(result.reports.length, 1);
+
+    assert.equal(result.reports[0]?.images.length, 1);
+
+    assert.equal(result.reports[0]?.images[0]?.id, 10);
+
+    assert.ok(result.reports[0]?.images[0]?.imageUrl);
   });
 });

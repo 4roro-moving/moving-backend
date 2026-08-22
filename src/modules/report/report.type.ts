@@ -5,6 +5,7 @@ import type { ReportImageItem } from "./report-image.type";
 import type { createReportSchema, listMyReportsQuerySchema } from "./report.validator";
 
 export type CreateReportInput = z.infer<typeof createReportSchema>;
+
 export type ListMyReportsQuery = z.infer<typeof listMyReportsQuerySchema>;
 
 export interface ReportItem {
@@ -25,6 +26,7 @@ export interface MyReportItem {
   reason: ReportReason;
   status: ReportStatus;
   description: string | null;
+  images: ReportImageItem[];
   handledAt: Date | null;
   createdAt: Date;
 }
