@@ -16,6 +16,8 @@ function createRepositoryStub(overrides: Partial<ReportRepository> = {}): Report
   return {
     findReviewTargetById: async () => null,
     findUserById: async () => null,
+    findResidenceReviewTargetById: async () => null,
+    findGiveawayTargetById: async () => null,
     findExistingReport: async () => null,
     findMineWithCount: async () => ({ reports: [], totalCount: 0 }),
     createReport: async ({ targetType, targetId, reason, status, detail, imageKeys }) => ({

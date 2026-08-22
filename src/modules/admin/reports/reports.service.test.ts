@@ -70,6 +70,7 @@ function createRepositoryStub(overrides: Partial<ReportsRepository> = {}): Repor
     updateReportIfPending: async () => null,
     findReviewTargetById: async () => null,
     findMoverTargetById: async () => null,
+    findCustomerTargetById: async () => null,
     findResidenceReviewTargetById: async () => null,
     findGiveawayTargetById: async () => null,
     createActivityLog: async (input) => ({
