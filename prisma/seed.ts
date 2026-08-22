@@ -393,7 +393,10 @@ async function main(): Promise<void> {
   console.log(`  🎉 시드 완료 (${elapsed}s)`);
   console.log("────────────────────────────────────────────────────");
   console.log(`  공통 비밀번호 : ${TEST_PASSWORD}`);
-  console.log(`  관리자        : admin1@test.com ~ admin${config.admins}@test.com`);
+  console.log(`  슈퍼 관리자   : superadmin@test.com  (SUPER_ADMIN — 관리자 계정 관리 전담)`);
+  console.log(
+    `  일반 관리자   : admin1@test.com ~ admin${config.admins}@test.com  (ADMIN — 서비스 운영 전담)`,
+  );
   console.log(`  고객          : customer001@test.com ~`);
   console.log(`  기사          : mover001@test.com ~`);
   console.log("");

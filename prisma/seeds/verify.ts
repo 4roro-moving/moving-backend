@@ -242,6 +242,47 @@ const CHECKS: Check[] = [
     `,
   },
   {
+    name: "지정 기사의 서비스 유형 일치",
+    why: "기사가 제공하지 않는 이사 유형은 지정할 수 없습니다 (DESIGNATION_SERVICE_TYPE_MISMATCH)",
+    sql: `
+      SELECT COUNT(*)::int AS n FROM "designated_movers" dm
+        JOIN "estimate_requests" er ON er.id = dm."estimateRequestId"
+        JOIN "mover_profiles" mp ON mp."userId" = dm."moverId"
+       WHERE NOT EXISTS (
+         SELECT 1 FROM "mover_service_types" mst
+          WHERE mst."moverProfileId" = mp.id AND mst."moveType" = er."moveType"
+       )
+    `,
+  },
+  {
+    name: "관리자 프로필 존재",
+    why: "AdminProfile 이 없으면 authorizeAdmin 이 FORBIDDEN 을 던져 관리자 API 전체가 막힙니다",
+    sql: `
+      SELECT COUNT(*)::int AS n FROM "User" u
+       WHERE u.role = 'ADMIN'
+         AND NOT EXISTS (
+           SELECT 1 FROM "admin_profiles" ap WHERE ap.user_id = u.id
+         )
+    `,
+  },
+  {
+    name: "SUPER_ADMIN 정확히 1명",
+    why: "0명이면 관리자 계정 관리가 불가능하고, 2명 이상이면 부트스트랩 정책과 어긋납니다",
+    sql: `
+      SELECT ABS(COUNT(*)::int - 1) AS n FROM "admin_profiles"
+       WHERE admin_role = 'SUPER_ADMIN'
+    `,
+  },
+  {
+    name: "관리자 프로필의 User 역할",
+    why: "AdminProfile 은 User.role = ADMIN 계정에만 붙어야 합니다",
+    sql: `
+      SELECT COUNT(*)::int AS n FROM "admin_profiles" ap
+        JOIN "User" u ON u.id = ap.user_id
+       WHERE u.role <> 'ADMIN'
+    `,
+  },
+  {
     name: "정지 계정과 이력 일관성",
     why: "isActive=false 인 계정은 마지막 이력이 SUSPEND 여야 합니다",
     sql: `
@@ -392,6 +433,7 @@ export async function printSummary(prisma: PrismaClient): Promise<void> {
     SELECT '고객' AS label, COUNT(*) AS n FROM "User" WHERE role = 'CUSTOMER'
     UNION ALL SELECT '기사', COUNT(*) FROM "User" WHERE role = 'MOVER'
     UNION ALL SELECT '관리자', COUNT(*) FROM "User" WHERE role = 'ADMIN'
+    UNION ALL SELECT '  └ 슈퍼', COUNT(*) FROM "admin_profiles" WHERE admin_role = 'SUPER_ADMIN'
     UNION ALL SELECT '견적요청', COUNT(*) FROM "estimate_requests"
     UNION ALL SELECT '  └ 완료', COUNT(*) FROM "estimate_requests" WHERE status = 'COMPLETED'
     UNION ALL SELECT '견적', COUNT(*) FROM "estimates"

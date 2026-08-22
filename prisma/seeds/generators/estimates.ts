@@ -581,10 +581,25 @@ export function generateEstimateFlow(
         continue;
       }
 
+      /*
+       * 지정 견적.
+       *
+       * 지정 대상은 그 이사 유형을 실제로 제공하는 기사여야 한다.
+       * 서버(designateMover)가 DESIGNATION_SERVICE_TYPE_MISMATCH 로 막는 조건이라,
+       * 지키지 않으면 "앱으로는 만들 수 없는 데이터"가 시드에 들어간다.
+       * (지정 알림은 가는데 기사의 받은 요청 목록에는 안 보이는 상태)
+       *
+       * 최대 3명 (MAX_DESIGNATED_MOVERS).
+       */
       const isDesignatedRequest = chance(rng, DESIGNATED_REQUEST_RATE);
-      // 지정은 최대 3명 (서비스 정책)
+
       const designatedSet = new Set<string>(
-        isDesignatedRequest ? picked.slice(0, Math.min(3, picked.length)).map((m) => m.id) : [],
+        isDesignatedRequest
+          ? picked
+              .filter((m) => m.moveTypes.includes(moveType))
+              .slice(0, 3)
+              .map((m) => m.id)
+          : [],
       );
 
       for (const moverId of designatedSet) {
@@ -692,7 +707,10 @@ export function generateEstimateFlow(
         });
 
         if (isConfirmed) {
-          confirmedLinks.push({ requestId: currentRequestId, estimateId: currentEstimateId });
+          confirmedLinks.push({
+            requestId: currentRequestId,
+            estimateId: currentEstimateId,
+          });
           confirmedByMover.set(mover.id, (confirmedByMover.get(mover.id) ?? 0) + 1);
 
           /* ── 채팅방 (확정 견적당 1개) ───────────────────────────── */
