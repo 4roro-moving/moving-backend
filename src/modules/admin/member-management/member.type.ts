@@ -44,7 +44,6 @@ export type MemberInquiryHistoryItem = {
   lastMessageAt: Date | null;
   createdAt: Date;
   handledBy: {
-    id: string;
     name: string;
   } | null;
 };

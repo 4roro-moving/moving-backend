@@ -32,7 +32,6 @@ const inquiryHistorySelect = {
   createdAt: true,
   handler: {
     select: {
-      id: true,
       name: true,
     },
   },
