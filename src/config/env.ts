@@ -57,6 +57,10 @@ const envSchema = z.object({
       }),
     ),
 
+  GEMINI_API_KEY: z.string().min(1, {
+    error: "GEMINI_API_KEY is required",
+  }),
+
   LOG_LEVEL: z.enum(["error", "warn", "info", "http", "verbose", "debug", "silly"]).default("info"),
 
   GOOGLE_CLIENT_ID: z.string().min(1, {

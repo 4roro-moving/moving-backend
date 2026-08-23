@@ -57,6 +57,8 @@ async function registerModuleDocs(): Promise<void> {
   await import("../modules/chat/chat.docs");
   // 2026.08.18 김나연 - [추가] 나눔 API 문서 등록
   await import("../modules/giveaway/giveaway.docs");
+  // 2026.08.23 정슬기 - [추가] 가격 예측 API 문서 등록
+  await import("../modules/price-prediction/price-prediction.docs");
 }
 
 export async function generateOpenApiDocument(): Promise<OpenAPIObject> {
