@@ -55,3 +55,19 @@ export type PricePredictionResult = {
     isPeakSeason: boolean;
   };
 };
+
+export type RouteCoordinate = {
+  latitude: number;
+  longitude: number;
+};
+
+export type RouteDistanceInput = {
+  origin: RouteCoordinate;
+  destination: RouteCoordinate;
+};
+
+export type RouteDistanceResult = {
+  distanceKm: number;
+  distanceMeters: number;
+  durationSeconds: number;
+};

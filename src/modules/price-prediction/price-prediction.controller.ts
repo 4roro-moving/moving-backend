@@ -1,12 +1,23 @@
 import type { Request, Response } from "express";
+
+import { sendResponse } from "../../utils/response.util";
 import { pricePredictionService } from "./price-prediction.service";
-import type { PricePredictionInput } from "./price-prediction.type";
+import type { PricePredictionInput, RouteDistanceInput } from "./price-prediction.type";
 
 export const pricePredictionController = {
-  predictPrice: async (_req: Request, res: Response) => {
-    const input = res.locals.body as PricePredictionInput;
+  predictPrice: async (req: Request, res: Response) => {
+    const input = req.body as PricePredictionInput;
+
     const result = await pricePredictionService.predictPrice(input);
 
-    res.status(200).json({ success: true, data: result });
+    return sendResponse(res, 200, result);
+  },
+
+  calculateRouteDistance: async (req: Request, res: Response) => {
+    const input = req.body as RouteDistanceInput;
+
+    const result = await pricePredictionService.calculateRouteDistance(input);
+
+    return sendResponse(res, 200, result);
   },
 };

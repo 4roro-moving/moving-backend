@@ -35,3 +35,20 @@ export const predictPriceSchema = z.object({
   ladderTruck: z.boolean(),
   moveDate: z.string().date("이사 날짜는 YYYY-MM-DD 형식이어야 합니다."),
 });
+
+const coordinateSchema = z.object({
+  latitude: z
+    .number({ error: "위도는 숫자여야 합니다." })
+    .min(-90, "위도는 -90 이상이어야 합니다.")
+    .max(90, "위도는 90 이하여야 합니다."),
+
+  longitude: z
+    .number({ error: "경도는 숫자여야 합니다." })
+    .min(-180, "경도는 -180 이상이어야 합니다.")
+    .max(180, "경도는 180 이하여야 합니다."),
+});
+
+export const routeDistanceSchema = z.object({
+  origin: coordinateSchema,
+  destination: coordinateSchema,
+});

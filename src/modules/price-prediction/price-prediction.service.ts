@@ -9,7 +9,11 @@ import type {
   PreparedPredictionInput,
   PricePredictionInput,
   PricePredictionResult,
+  RouteDistanceInput,
+  RouteDistanceResult,
 } from "./price-prediction.type";
+
+import { getKakaoRouteDistance } from "./price-prediction.kakao";
 
 const PEAK_MONTHS = new Set([2, 3, 8, 9, 12]);
 
@@ -84,5 +88,8 @@ export const pricePredictionService = {
         isPeakSeason: prepared.isPeakSeason,
       },
     };
+  },
+  calculateRouteDistance: async (input: RouteDistanceInput): Promise<RouteDistanceResult> => {
+    return getKakaoRouteDistance(input);
   },
 };
