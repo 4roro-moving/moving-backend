@@ -19,6 +19,11 @@ import type {
 const authorSelect = {
   id: true,
   name: true,
+  customerProfile: {
+    select: {
+      imageUrl: true,
+    },
+  },
 } satisfies Prisma.UserSelect;
 
 const regionSelect = {

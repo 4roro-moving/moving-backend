@@ -53,7 +53,7 @@ function createRequest(overrides: Partial<GiveawayRequestRow> = {}): GiveawayReq
     message: "받고 싶습니다",
     createdAt: new Date("2026-08-18T00:00:00.000Z"),
     updatedAt: new Date("2026-08-18T00:00:00.000Z"),
-    requester: { id: "requester-1", name: "신청자" },
+    requester: { id: "requester-1", name: "신청자", customerProfile: null },
     ...overrides,
   };
 }
@@ -398,8 +398,16 @@ describe("assertRequestRejectable", () => {
     assert.throws(
       () =>
         assertRequestRejectable(
-          availableGiveaway,
+          inProgressGiveaway,
           createRequest({ status: GIVEAWAY_REQUEST_STATUS.SELECTED }),
+        ),
+      isAppError("GIVEAWAY_REQUEST_NOT_REJECTABLE"),
+    );
+    assert.throws(
+      () =>
+        assertRequestRejectable(
+          availableGiveaway,
+          createRequest({ status: GIVEAWAY_REQUEST_STATUS.REJECTED }),
         ),
       isAppError("GIVEAWAY_REQUEST_NOT_REJECTABLE"),
     );

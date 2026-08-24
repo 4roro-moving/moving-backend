@@ -11,6 +11,12 @@ type Viewer = {
   id: string;
 };
 
+type PublicAuthorSource = {
+  id: string;
+  name: string;
+  customerProfile: { imageUrl: string | null } | null;
+};
+
 function toImageUrl(imageKey: string): string {
   const imageUrl = getProfileImageUrl(imageKey);
 
@@ -21,9 +27,18 @@ function toImageUrl(imageKey: string): string {
   return imageUrl;
 }
 
+function toPublicAuthor(author: PublicAuthorSource) {
+  return {
+    id: author.id,
+    name: author.name,
+    imageUrl: getProfileImageUrl(author.customerProfile?.imageUrl ?? null),
+  };
+}
+
 function toPublicImages(images: GiveawayDetailRow["images"]) {
   return images.map((image) => ({
     id: image.id,
+    imageKey: image.imageKey,
     imageUrl: toImageUrl(image.imageKey),
     sortOrder: image.sortOrder,
   }));
@@ -46,7 +61,7 @@ export function toGiveawayListItem(giveaway: GiveawayListRow) {
     status: giveaway.status,
     createdAt: giveaway.createdAt,
     updatedAt: giveaway.updatedAt,
-    author: giveaway.author,
+    author: toPublicAuthor(giveaway.author),
     region: giveaway.region,
     thumbnailUrl: toThumbnailUrl(giveaway.images),
     activeRequestCount: giveaway._count.requests,
@@ -68,11 +83,16 @@ export function toGiveawayDetail(
     status: giveaway.status,
     createdAt: giveaway.createdAt,
     updatedAt: giveaway.updatedAt,
-    author: giveaway.author,
+    author: toPublicAuthor(giveaway.author),
     region: giveaway.region,
     images: toPublicImages(giveaway.images),
     activeRequestCount: giveaway._count.requests,
-    receiver: isAuthor || isReceiver ? giveaway.receiver : null,
+    receiver:
+      isAuthor || isReceiver
+        ? giveaway.receiver
+          ? toPublicAuthor(giveaway.receiver)
+          : null
+        : null,
     canRequest: canRequestGiveaway(giveaway, viewer.id, myRequest),
     myRequest: myRequest
       ? {
@@ -94,7 +114,7 @@ export function toGiveawayRequestItem(request: GiveawayRequestRow) {
     message: request.message,
     createdAt: request.createdAt,
     updatedAt: request.updatedAt,
-    requester: request.requester,
+    requester: toPublicAuthor(request.requester),
   };
 }
 
@@ -109,7 +129,7 @@ export function toMyGiveawayRequestItem(request: MyGiveawayRequestRow) {
       id: request.giveaway.id,
       title: request.giveaway.title,
       status: request.giveaway.status,
-      author: request.giveaway.author,
+      author: toPublicAuthor(request.giveaway.author),
       region: request.giveaway.region,
       thumbnailUrl: toThumbnailUrl(request.giveaway.images),
     },
