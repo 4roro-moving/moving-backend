@@ -40,6 +40,7 @@ import {
 } from "./modules/residence-review/residence-review.route";
 import reviewRouter from "./modules/review/review.route";
 import publicNoticeRouter from "./modules/notice/notice.route";
+import { pricePredictionRouter } from "./modules/price-prediction/price-prediction.route";
 
 import { adminFaqRouter, publicFaqRouter } from "./modules/admin/faq/faq.route";
 import { adminInquiryRouter, inquiryRouter } from "./modules/inquiry/inquiry.route";
@@ -194,6 +195,7 @@ app.use("/api/my-contents", myContentRouter);
 app.use("/api/residence-reviews", residenceReviewRouter);
 app.use("/api/residence-reviews", publicResidenceReviewRouter);
 app.use("/api/notices", publicNoticeRouter);
+app.use("/api/price-predictions", pricePredictionRouter);
 
 /*
  * 관리자 API

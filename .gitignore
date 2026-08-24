@@ -30,3 +30,5 @@ logs/
 *.log
 
 *.zip
+
+moving-price-synthetic-*.csv
