@@ -2,10 +2,11 @@ import type { LogTargetType } from "@prisma/client";
 import { LogAction } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
+import type { DbClient } from "../../utils/transaction";
 
 export const myContentRepository = {
-  findOwnedReview(reviewId: number, customerId: string) {
-    return prisma.review.findFirst({
+  findOwnedReview(reviewId: number, customerId: string, db: DbClient = prisma) {
+    return db.review.findFirst({
       where: {
         id: reviewId,
         customerId,
@@ -31,8 +32,8 @@ export const myContentRepository = {
     });
   },
 
-  findOwnedResidenceReview(residenceReviewId: number, authorId: string) {
-    return prisma.residenceReview.findFirst({
+  findOwnedResidenceReview(residenceReviewId: number, authorId: string, db: DbClient = prisma) {
+    return db.residenceReview.findFirst({
       where: {
         id: residenceReviewId,
         authorId,
@@ -54,8 +55,8 @@ export const myContentRepository = {
     });
   },
 
-  findOwnedGiveaway(giveawayId: number, authorId: string) {
-    return prisma.giveaway.findFirst({
+  findOwnedGiveaway(giveawayId: number, authorId: string, db: DbClient = prisma) {
+    return db.giveaway.findFirst({
       where: {
         id: giveawayId,
         authorId,
@@ -76,14 +77,14 @@ export const myContentRepository = {
     });
   },
 
-  findLatestModerationLog(targetType: LogTargetType, targetId: string) {
-    return prisma.activityLog.findFirst({
+  findLatestModerationLog(targetType: LogTargetType, targetId: string, db: DbClient = prisma) {
+    return db.activityLog.findFirst({
       where: {
         targetType,
         targetId,
         action: { in: [LogAction.HIDE, LogAction.UNHIDE] },
       },
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       select: {
         action: true,
         memo: true,
