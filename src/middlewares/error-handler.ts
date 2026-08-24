@@ -1,6 +1,7 @@
 import type { ErrorRequestHandler, Request, Response } from "express";
 import type { ErrorResponse } from "../types/response.type";
 
+import Sentry from "../config/sentry";
 import logger from "../config/logger";
 import { ERROR_CODES } from "../constants/error-code";
 import { AppError } from "../lib/app-error";
@@ -12,6 +13,11 @@ const errorHandler: ErrorRequestHandler = (
   res: Response<ErrorResponse>,
   _next,
 ) => {
+  if (!(error instanceof AppError)) {
+    Sentry.captureException(error);
+    Sentry.flush(2000);
+  }
+
   if (error instanceof AppError) {
     // AppError도 5xx는 message/stack을 남겨 원인 추적이 가능하도록 한다.
     logger.error(error.message, {
