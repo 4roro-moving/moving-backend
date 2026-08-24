@@ -30,7 +30,12 @@ import type {
 
 import { AppError } from "../../lib/app-error";
 
-import { createAccessToken, createRefreshToken, verifyRefreshToken } from "../../utils/jwt";
+import {
+  createAccessToken,
+  createRefreshToken,
+  createSuspensionAppealAccessToken,
+  verifyRefreshToken,
+} from "../../utils/jwt";
 
 import { runRefreshTokenSingleFlight } from "../../utils/refresh-token-single-flight";
 import {
@@ -226,15 +231,27 @@ const signUpMover = async (input: SignUpInput): Promise<AuthResponse> => {
 /**
  * 정지 사유(UserSuspension.reason)를 로그인 응답에 포함한다.
  */
-const throwAccountSuspended = async (userId: string): Promise<never> => {
+const getSuspendedLoginResponse = async (userId: string, role: UserRole): Promise<never> => {
   const suspension = await authRepository.findLatestSuspension(userId);
 
+  if (!suspension) throw new AppError("ACCOUNT_SUSPENDED");
+
+  return {
+    suspension: {
+      reason: suspension.reason,
+      appealAccessToken: createSuspensionAppealAccessToken({ userId, role }),
+    },
+  } as never;
+};
+
+/**
+ * Refresh Token 재발급 등 이미 인증된 세션의 정지 차단에 사용한다.
+ * 새 본인 인증이 아니므로 이의 제기 제한 세션은 발급하지 않는다.
+ */
+const throwAccountSuspended = async (userId: string): Promise<never> => {
+  const suspension = await authRepository.findLatestSuspension(userId);
   throw new AppError("ACCOUNT_SUSPENDED", {
-    ...(suspension && {
-      data: {
-        reason: suspension.reason,
-      },
-    }),
+    ...(suspension && { data: { reason: suspension.reason } }),
   });
 };
 
@@ -261,14 +278,6 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
     });
   }
 
-  /**
-   * 비활성화되었거나 탈퇴 처리된 사용자는
-   * 새로운 로그인 세션을 생성할 수 없다.
-   */
-  if (!user.isActive && user.deletedAt === null) {
-    await throwAccountSuspended(user.id);
-  }
-
   if (user.deletedAt !== null) {
     throw new AppError("FORBIDDEN", {
       message: "비활성화되었거나 탈퇴 처리된 계정입니다.",
@@ -293,6 +302,14 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
     throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
     });
+  }
+
+  /**
+   * 정지 계정은 비밀번호 본인 인증이 성공한 경우에만
+   * 이의 제기 전용 제한 토큰을 함께 반환한다.
+   */
+  if (!user.isActive) {
+    return getSuspendedLoginResponse(user.id, user.role);
   }
 
   /**
@@ -359,7 +376,7 @@ const createOAuthLoginResponse = async (
   requestedRole: SignUpRole,
 ): Promise<AuthResponse> => {
   if (!user.isActive && user.deletedAt === null) {
-    await throwAccountSuspended(user.id);
+    return getSuspendedLoginResponse(user.id, user.role);
   }
 
   if (user.deletedAt !== null) {

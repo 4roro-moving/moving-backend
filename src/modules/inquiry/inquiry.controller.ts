@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 
+import type { InquiryAccess } from "../../constants/inquiry-access";
 import { AppError } from "../../lib/app-error";
 import { adminInquiryService, inquiryService } from "./inquiry.service";
 import type {
@@ -18,6 +19,15 @@ function getUserId(req: Request): string {
   return req.user.id;
 }
 
+/** 문의 전용 인증 미들웨어가 설정한 접근 유형을 조회한다. */
+function getInquiryAccess(req: Request): InquiryAccess {
+  if (!req.inquiryAccess) {
+    throw new AppError("UNAUTHORIZED");
+  }
+
+  return req.inquiryAccess;
+}
+
 // ============================================================================
 // 사용자 컨트롤러
 // ============================================================================
@@ -28,6 +38,7 @@ export const inquiryController = {
     const inquiry = await inquiryService.createInquiry(
       getUserId(req),
       req.body as CreateInquiryInput,
+      getInquiryAccess(req),
     );
 
     res.status(201).json({ success: true, data: inquiry });
@@ -63,6 +74,7 @@ export const inquiryController = {
       inquiryId,
       getUserId(req),
       req.body as CreateMessageInput,
+      getInquiryAccess(req),
     );
 
     res.status(201).json({ success: true, data: inquiry });
@@ -72,7 +84,11 @@ export const inquiryController = {
   closeInquiry: async (req: Request, res: Response) => {
     const { inquiryId } = res.locals.params as InquiryIdParam;
 
-    const inquiry = await inquiryService.closeByUser(inquiryId, getUserId(req));
+    const inquiry = await inquiryService.closeByUser(
+      inquiryId,
+      getUserId(req),
+      getInquiryAccess(req),
+    );
 
     res.status(200).json({ success: true, data: inquiry });
   },

@@ -5,7 +5,8 @@ import { ADMIN_PERMISSIONS } from "../../lib/auth/admin-permissions";
 import { requireActiveAdmin } from "../../middlewares/admin";
 import { authorizeAdmin } from "../../middlewares/admin-auth";
 
-import { authenticate, authorize } from "../../middlewares/auth";
+import { authenticate, authenticateInquiryAccess, authorize } from "../../middlewares/auth";
+import { csrfProtection } from "../../middlewares/csrf.middleware";
 import { validate } from "../../middlewares/validate";
 import { asyncHandler } from "../../utils/async-handler.util";
 import { adminInquiryController, inquiryController } from "./inquiry.controller";
@@ -23,11 +24,20 @@ import {
  */
 const inquiryRouter = Router();
 
-inquiryRouter.use(authenticate, authorize("CUSTOMER", "MOVER"));
+// 정지 계정의 이의 제기 제한 세션을 문의 API에서만 허용한다.
+inquiryRouter.use(authenticateInquiryAccess, authorize("CUSTOMER", "MOVER"));
 
+/*
+ * 제한 세션은 HttpOnly Cookie로 전송되므로,
+ * 상태 변경 요청은 CSRF 보호를 적용한다.
+ */
 inquiryRouter
   .route("/")
-  .post(validate({ body: createInquirySchema }), asyncHandler(inquiryController.createInquiry))
+  .post(
+    csrfProtection,
+    validate({ body: createInquirySchema }),
+    asyncHandler(inquiryController.createInquiry),
+  )
   .get(
     validate({ query: listInquiryQuerySchema }),
     asyncHandler(inquiryController.getMyInquiryList),
@@ -41,12 +51,14 @@ inquiryRouter.get(
 
 inquiryRouter.post(
   "/:inquiryId/messages",
+  csrfProtection,
   validate({ params: inquiryIdParamSchema, body: createMessageSchema }),
   asyncHandler(inquiryController.addMessage),
 );
 
 inquiryRouter.patch(
   "/:inquiryId/close",
+  csrfProtection,
   validate({ params: inquiryIdParamSchema }),
   asyncHandler(inquiryController.closeInquiry),
 );

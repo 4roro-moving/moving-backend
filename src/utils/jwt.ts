@@ -8,6 +8,8 @@ import { AppError } from "../lib/app-error";
 export type TokenPayload = {
   userId: string;
   role: UserRole;
+  /** 정지 계정의 이의 제기 API에만 사용할 제한 토큰을 구분한다. */
+  purpose?: "SUSPENSION_APPEAL";
 };
 
 export type VerifiedTokenPayload = TokenPayload & JwtPayload;
@@ -66,13 +68,26 @@ const isTokenPayload = (payload: string | JwtPayload): payload is VerifiedTokenP
   return (
     typeof payload !== "string" &&
     typeof payload.userId === "string" &&
-    typeof payload.role === "string"
+    typeof payload.role === "string" &&
+    (payload.purpose === undefined || payload.purpose === "SUSPENSION_APPEAL")
   );
 };
 
 export const createAccessToken = (payload: TokenPayload): string => {
   return jwt.sign(payload, getJwtSecret(), {
     expiresIn: getAccessTokenExpiresIn(),
+  });
+};
+
+/**
+ * 일반 서비스에는 사용할 수 없는 정지 이의 제기 전용 Access Token (15분 만료).
+ * 제한 세션 JWT에 purpose: "SUSPENSION_APPEAL" 추가
+ */
+export const createSuspensionAppealAccessToken = (
+  payload: Omit<TokenPayload, "purpose">,
+): string => {
+  return jwt.sign({ ...payload, purpose: "SUSPENSION_APPEAL" }, getJwtSecret(), {
+    expiresIn: "15m",
   });
 };
 

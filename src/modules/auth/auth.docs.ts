@@ -75,8 +75,10 @@ registerRouterDocs(authRouter, {
         "- 로컬 회원가입으로 생성된 계정만 비밀번호 로그인을 사용할 수 있습니다.",
         "- 이메일 또는 비밀번호가 일치하지 않으면 로그인할 수 없습니다.",
         "- 비활성화된 계정은 로그인할 수 없습니다.",
+        "- 정지 계정이 비밀번호 본인 인증에 성공하면 403 `ACCOUNT_SUSPENDED`와 함께 정지 사유 및 `appealAvailable: true`를 반환하고, 15분 만료의 이의 제기 전용 제한 세션을 HttpOnly Cookie로 설정합니다. 이 세션은 문의 API에만 사용할 수 있고 Refresh Token은 발급하지 않습니다.",
         "- 로그인 성공 시 사용자 정보와 Access Token을 반환합니다.",
         "- Refresh Token은 HttpOnly Cookie로 저장됩니다.",
+        "- 정지 계정은 403 `ACCOUNT_SUSPENDED`와 함께 정지 사유 및 `appealAvailable: true`를 반환하고, 15분 만료의 이의 제기 전용 제한 세션을 HttpOnly Cookie로 설정합니다. 이 세션은 문의 API에만 사용할 수 있고 Refresh Token은 발급하지 않습니다.",
       ].join("\n"),
       responses: {
         200: "로그인 성공",
@@ -103,6 +105,7 @@ registerRouterDocs(authRouter, {
         "- Google 계정 이메일과 동일한 기존 계정이 있는 경우 계정 연결 정책에 따라 처리됩니다.",
         "- 로그인 성공 시 사용자 정보와 Access Token을 반환합니다.",
         "- Refresh Token은 HttpOnly Cookie로 저장됩니다.",
+        "- 정지 계정은 403 `ACCOUNT_SUSPENDED`와 함께 정지 사유 및 `appealAvailable: true`를 반환하고, 15분 만료의 이의 제기 전용 제한 세션을 HttpOnly Cookie로 설정합니다. 이 세션은 문의 API에만 사용할 수 있고 Refresh Token은 발급하지 않습니다.",
       ].join("\n"),
       responses: {
         200: "Google 로그인 성공",
@@ -131,6 +134,7 @@ registerRouterDocs(authRouter, {
         "- Kakao 계정 이메일과 동일한 기존 계정이 있는 경우 계정 연결 정책에 따라 처리됩니다.",
         "- 로그인 성공 시 사용자 정보와 Access Token을 반환합니다.",
         "- Refresh Token은 HttpOnly Cookie로 저장됩니다.",
+        "- 정지 계정은 403 `ACCOUNT_SUSPENDED`와 함께 정지 사유 및 `appealAvailable: true`를 반환하고, 15분 만료의 이의 제기 전용 제한 세션을 HttpOnly Cookie로 설정합니다. 이 세션은 문의 API에만 사용할 수 있고 Refresh Token은 발급하지 않습니다.",
       ].join("\n"),
       responses: {
         200: "Kakao 로그인 성공",

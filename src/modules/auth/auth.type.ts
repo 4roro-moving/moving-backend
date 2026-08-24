@@ -48,6 +48,16 @@ export interface AuthResponse {
   tokens: IssuedAuthTokens;
 }
 
+/**
+ * 정지 계정의 본인 인증 성공 시 Service가 Controller에 전달하는 결과.
+ *
+ * 제한 세션 토큰은 Controller에서 문의 API 전용 HttpOnly Cookie로 설정하며,
+ * 클라이언트 응답 본문에는 포함하지 않는다.
+ */
+export interface SuspendedAuthResponse {
+  suspension: { reason: string; appealAccessToken: string };
+}
+
 /*
  * Refresh Token 재발급 Service 결과
  *
