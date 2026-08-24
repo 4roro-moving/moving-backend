@@ -44,18 +44,6 @@ function assertUnauthorized(error: unknown): boolean {
   );
 }
 
-function assertAccountSuspended(error: unknown): boolean {
-  return (
-    error instanceof AppError &&
-    error.code === "ACCOUNT_SUSPENDED" &&
-    error.data !== undefined &&
-    typeof error.data === "object" &&
-    error.data !== null &&
-    "reason" in error.data &&
-    error.data.reason === "운영 정책 위반"
-  );
-}
-
 function assertDeletedUserForbidden(error: unknown): boolean {
   return (
     error instanceof AppError &&
@@ -186,38 +174,49 @@ describe("authService.login timing mitigation", () => {
     assert.equal(calls[0]?.hash, REAL_PASSWORD_HASH);
   });
 
-  it("keeps existing inactive or deleted user responses without bcrypt.compare", async () => {
-    const inactiveCases = [
-      {
-        user: createLocalUser({ isActive: false }),
-        assertError: assertAccountSuspended,
-      },
-      {
-        user: createLocalUser({
-          deletedAt: new Date("2026-08-01T00:00:00.000Z"),
+  it("issues a suspension appeal token only after a suspended LOCAL user password matches", async () => {
+    const { calls, compare } = createCompareStub({ resolve: () => true });
+    const user = createLocalUser({ isActive: false });
+
+    authRepository.findByEmail = async () => user;
+    authRepository.findLatestSuspension = async () => ({ reason: "운영 정책 위반" });
+    bcrypt.compare = compare as typeof bcrypt.compare;
+
+    const result = await authService.login({
+      email: user.email,
+      password: "verified-password",
+      role: UserRole.CUSTOMER,
+    });
+
+    const suspendedResult = result as unknown as {
+      suspension: { reason: string; appealAccessToken: string };
+    };
+    assert.equal(suspendedResult.suspension.reason, "운영 정책 위반");
+    assert.equal(typeof suspendedResult.suspension.appealAccessToken, "string");
+
+    assert.equal(calls.length, 1);
+    assert.equal(calls[0]?.hash, REAL_PASSWORD_HASH);
+  });
+
+  it("keeps deleted user responses without bcrypt.compare", async () => {
+    const { calls, compare } = createCompareStub();
+    const user = createLocalUser({
+      deletedAt: new Date("2026-08-01T00:00:00.000Z"),
+    });
+
+    authRepository.findByEmail = async () => user;
+    bcrypt.compare = compare as typeof bcrypt.compare;
+
+    await assert.rejects(
+      () =>
+        authService.login({
+          email: user.email,
+          password: "any-password",
+          role: UserRole.CUSTOMER,
         }),
-        assertError: assertDeletedUserForbidden,
-      },
-    ];
+      assertDeletedUserForbidden,
+    );
 
-    for (const { user, assertError } of inactiveCases) {
-      const { calls, compare } = createCompareStub();
-
-      authRepository.findByEmail = async () => user;
-      authRepository.findLatestSuspension = async () => ({ reason: "운영 정책 위반" });
-      bcrypt.compare = compare as typeof bcrypt.compare;
-
-      await assert.rejects(
-        () =>
-          authService.login({
-            email: user.email,
-            password: "any-password",
-            role: UserRole.CUSTOMER,
-          }),
-        assertError,
-      );
-
-      assert.equal(calls.length, 0);
-    }
+    assert.equal(calls.length, 0);
   });
 });

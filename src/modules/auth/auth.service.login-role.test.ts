@@ -298,6 +298,7 @@ describe("authService OAuth login role validation", () => {
   const originalGetGoogleOAuthProfile = googleOAuth.getGoogleOAuthProfile;
   const originalFindByProviderAndProviderId = authRepository.findByProviderAndProviderId;
   const originalFindByEmail = authRepository.findByEmail;
+  const originalFindLatestSuspension = authRepository.findLatestSuspension;
   const originalCreate = authRepository.create;
   const originalSaveRefreshToken = authRepository.saveRefreshToken;
   const originalTransaction = prisma.$transaction;
@@ -308,6 +309,7 @@ describe("authService OAuth login role validation", () => {
     googleOAuth.getGoogleOAuthProfile = originalGetGoogleOAuthProfile;
     authRepository.findByProviderAndProviderId = originalFindByProviderAndProviderId;
     authRepository.findByEmail = originalFindByEmail;
+    authRepository.findLatestSuspension = originalFindLatestSuspension;
     authRepository.create = originalCreate;
     authRepository.saveRefreshToken = originalSaveRefreshToken;
     prisma.$transaction = originalTransaction;
@@ -318,6 +320,28 @@ describe("authService OAuth login role validation", () => {
   function stubGoogleProfile(): void {
     googleOAuth.getGoogleOAuthProfile = async () => OAUTH_PROFILE;
   }
+
+  it("returns a suspension appeal session result for a suspended OAuth account", async () => {
+    stubGoogleProfile();
+
+    const refreshTokenStub = createSaveRefreshTokenStub();
+    authRepository.findByProviderAndProviderId = async () => createOAuthUser({ isActive: false });
+    authRepository.findLatestSuspension = async () => ({ reason: "운영 정책 위반" });
+    authRepository.saveRefreshToken = refreshTokenStub.saveRefreshToken;
+
+    const result = await authService.loginWithGoogle({
+      code: "google-auth-code",
+      role: UserRole.CUSTOMER,
+      intent: "login",
+    });
+
+    const suspendedResult = result as unknown as {
+      suspension: { reason: string; appealAccessToken: string };
+    };
+    assert.equal(suspendedResult.suspension.reason, "운영 정책 위반");
+    assert.equal(typeof suspendedResult.suspension.appealAccessToken, "string");
+    assert.equal(refreshTokenStub.callCount, 0);
+  });
 
   for (const role of [UserRole.CUSTOMER, UserRole.MOVER] as const) {
     it(`keeps successful OAuth login when DB role and requested role are both ${role}`, async () => {
