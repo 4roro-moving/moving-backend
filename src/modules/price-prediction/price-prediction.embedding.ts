@@ -124,11 +124,11 @@ export async function createPricePredictionEmbedding(content: string): Promise<n
   }
 
   if (!isValidEmbeddingResponse(result)) {
+    const embeddingValues = getEmbeddingValues(result);
+
     logger.error("[Price Prediction] Gemini embedding response validation failed.", {
       status: response.status,
-      dimension: Array.isArray(getEmbeddingValues(result))
-        ? getEmbeddingValues(result).length
-        : undefined,
+      dimension: Array.isArray(embeddingValues) ? embeddingValues.length : undefined,
     });
 
     throw new AppError("BAD_GATEWAY", {
