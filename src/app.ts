@@ -98,7 +98,8 @@ app.use(
 app.use(
   compression({
     filter: (req, res) => {
-      if (req.path.startsWith("/api/notifications/sse")) {
+      // compression 미들웨어의 마운트 경로 영향 없이 원본 URL로 SSE를 판별한다.
+      if (req.originalUrl.startsWith("/api/notifications/sse/")) {
         return false;
       }
 
