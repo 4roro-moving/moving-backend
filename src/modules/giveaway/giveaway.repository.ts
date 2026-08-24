@@ -100,6 +100,7 @@ const giveawayOwnershipSelect = {
   receiverId: true,
   status: true,
   isHidden: true,
+  title: true,
 } satisfies Prisma.GiveawaySelect;
 
 const requestSelect = {

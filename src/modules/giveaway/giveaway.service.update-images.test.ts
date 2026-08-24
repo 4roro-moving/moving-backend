@@ -38,6 +38,7 @@ function createOwnership(): GiveawayOwnershipRow {
     receiverId: null,
     status: GIVEAWAY_STATUS.AVAILABLE,
     isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
+    title: "나눔 글",
   };
 }
 

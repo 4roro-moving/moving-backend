@@ -106,7 +106,8 @@ registerRouterDocs(giveawayRouter, {
     },
     "POST /:giveawayId/complete": {
       summary: "나눔 완료",
-      description: "작성자만 IN_PROGRESS 나눔을 COMPLETED로 변경합니다. 숨김 글은 404입니다.",
+      description:
+        "작성자만 IN_PROGRESS 나눔을 COMPLETED로 변경합니다. 숨김 글은 404입니다. 수령자에게 GIVEAWAY_COMPLETED 알림을 보냅니다.",
       responses: {
         200: "완료 성공",
         403: "작성자가 아닙니다.",
@@ -133,6 +134,7 @@ registerRouterDocs(giveawayRouter, {
         "AVAILABLE 상태의 글에만 신청할 수 있습니다.",
         "작성자 본인은 신청할 수 없습니다.",
         "PENDING 또는 SELECTED 신청이 있으면 재신청할 수 없고, CANCELLED·REJECTED 이후에는 재신청할 수 있습니다.",
+        "신청 성공 시 작성자에게 GIVEAWAY_REQUEST_RECEIVED 알림을 보냅니다.",
       ].join("\n"),
       responses: {
         201: "신청 성공",
@@ -148,6 +150,7 @@ registerRouterDocs(giveawayRouter, {
         "같은 트랜잭션에서 신청을 SELECTED로, 글의 receiverId와 status를 IN_PROGRESS로 맞춥니다.",
         "다른 PENDING 신청은 그대로 둡니다.",
         "완료된 나눔은 변경할 수 없습니다.",
+        "선정된 신청자에게 GIVEAWAY_REQUEST_SELECTED 알림을 보냅니다.",
       ].join("\n"),
       responses: {
         200: "선정 성공",
@@ -159,7 +162,7 @@ registerRouterDocs(giveawayRouter, {
     "POST /:giveawayId/requests/:requestId/reject": {
       summary: "신청 거절",
       description:
-        "작성자가 PENDING 신청을 REJECTED로 변경합니다. 완료된 나눔은 거절할 수 없습니다.",
+        "작성자가 PENDING 신청을 REJECTED로 변경합니다. 완료된 나눔은 거절할 수 없습니다. 거절된 신청자에게 GIVEAWAY_REQUEST_REJECTED 알림을 보냅니다.",
       responses: {
         200: "거절 성공",
         403: "작성자가 아닙니다.",
@@ -205,6 +208,7 @@ registerRouterDocs(giveawayRequestRouter, {
         "PENDING은 CANCELLED로만 변경합니다.",
         "SELECTED 취소 시 같은 트랜잭션에서 receiverId를 비우고 글 상태를 AVAILABLE로 되돌립니다.",
         "완료되었거나 숨김된 나눔의 신청은 취소할 수 없습니다.",
+        "작성자에게 GIVEAWAY_REQUEST_CANCELED 알림을 보냅니다. 선정 취소와 대기 취소는 content로 구분합니다.",
       ].join("\n"),
       responses: {
         200: "취소 성공",

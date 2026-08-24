@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type NotificationType } from "@prisma/client";
 
 import type { ErrorCode } from "../../constants/error-code";
 import { AppError } from "../../lib/app-error";
@@ -7,6 +7,8 @@ import { lockGiveawayForUpdate } from "../../utils/giveaway-lock.util";
 import { escapeLikePattern } from "../../utils/search.util";
 import { runTransaction } from "../../utils/transaction";
 import type { DbClient } from "../../utils/transaction";
+import { notificationService } from "../notification/notification.service";
+import type { NotificationItem } from "../notification/notification.type";
 import { cleanupGiveawayImagesSafely } from "./giveaway-image.cleanup";
 import { giveawayImageService } from "./giveaway-image.service";
 import {
@@ -247,6 +249,47 @@ async function restoreGiveawayToAvailableOrThrow(
   }
 }
 
+function toGiveawayLinkUrl(giveawayId: number) {
+  return `/giveaways/${String(giveawayId)}`;
+}
+
+function toGiveawayRequestSourceId(requestId: number) {
+  return `giveaway-request:${String(requestId)}`;
+}
+
+async function createGiveawayNotification(
+  input: {
+    userId: string;
+    type: NotificationType;
+    title: string;
+    content: string;
+    giveawayId: number;
+    sourceId: string;
+  },
+  tx: DbClient,
+) {
+  return notificationService.createNotification(
+    {
+      userId: input.userId,
+      type: input.type,
+      title: input.title,
+      content: input.content,
+      linkUrl: toGiveawayLinkUrl(input.giveawayId),
+      sourceId: input.sourceId,
+      expiresAt: null,
+    },
+    tx,
+  );
+}
+
+function sendGiveawayNotification(userId: string, notification: NotificationItem | null) {
+  if (notification === null) {
+    return;
+  }
+
+  notificationService.sendNotification(userId, notification);
+}
+
 async function getGiveawayDetail(giveawayId: number, viewerId: string) {
   const giveaway = await findVisibleGiveawayOrThrow(giveawayId);
   const myRequest = await giveawayRepository.findRequestByGiveawayAndRequester({
@@ -461,7 +504,7 @@ async function deleteGiveaway(giveawayId: number, authorId: string) {
 }
 
 async function completeGiveaway(giveawayId: number, authorId: string) {
-  return runTransaction(async (tx) => {
+  const result = await runTransaction(async (tx) => {
     const owned = await findGiveawayOwnershipOrThrow(giveawayId, tx);
 
     assertGiveawayAuthor(owned, authorId);
@@ -479,8 +522,33 @@ async function completeGiveaway(giveawayId: number, authorId: string) {
       throw new AppError("GIVEAWAY_NOT_FOUND");
     }
 
-    return toGiveawayDetail(giveaway, { id: authorId }, null);
+    const notification =
+      giveaway.receiverId === null
+        ? null
+        : await createGiveawayNotification(
+            {
+              userId: giveaway.receiverId,
+              type: "GIVEAWAY_COMPLETED",
+              title: "나눔이 완료되었어요",
+              content: `「${giveaway.title}」 나눔이 완료되었습니다.`,
+              giveawayId,
+              sourceId: `giveaway:${String(giveawayId)}`,
+            },
+            tx,
+          );
+
+    return {
+      detail: toGiveawayDetail(giveaway, { id: authorId }, null),
+      receiverId: giveaway.receiverId,
+      notification,
+    };
   });
+
+  if (result.receiverId !== null) {
+    sendGiveawayNotification(result.receiverId, result.notification);
+  }
+
+  return result.detail;
 }
 
 async function listGiveawayRequests(
@@ -528,7 +596,7 @@ async function createGiveawayRequest(
   input: CreateGiveawayRequestInput,
 ) {
   try {
-    return await runTransaction(async (tx) => {
+    const result = await runTransaction(async (tx) => {
       const giveaway = await findGiveawayOwnershipOrThrow(giveawayId, tx);
 
       assertCanRequestGiveaway(giveaway, requesterId);
@@ -552,9 +620,27 @@ async function createGiveawayRequest(
       }
 
       const request = await giveawayRepository.createRequest(createData, tx);
+      const notification = await createGiveawayNotification(
+        {
+          userId: giveaway.authorId,
+          type: "GIVEAWAY_REQUEST_RECEIVED",
+          title: "나눔 신청이 도착했어요",
+          content: `「${giveaway.title}」에 새로운 신청이 있습니다.`,
+          giveawayId,
+          sourceId: toGiveawayRequestSourceId(request.id),
+        },
+        tx,
+      );
 
-      return toGiveawayRequestItem(request);
+      return {
+        request: toGiveawayRequestItem(request),
+        authorId: giveaway.authorId,
+        notification,
+      };
     });
+
+    sendGiveawayNotification(result.authorId, result.notification);
+    return result.request;
   } catch (error) {
     if (isDuplicateRequestError(error)) {
       throw new AppError("GIVEAWAY_REQUEST_ALREADY_EXISTS");
@@ -590,7 +676,7 @@ async function updateGiveawayRequest(
 }
 
 async function cancelGiveawayRequest(requestId: number, requesterId: string) {
-  return runTransaction(
+  const result = await runTransaction(
     async (tx) => {
       const request = await findRequestOrThrow(requestId, tx);
       const giveaway = await findGiveawayOwnershipOrThrow(request.giveawayId, tx);
@@ -598,7 +684,9 @@ async function cancelGiveawayRequest(requestId: number, requesterId: string) {
       assertRequestOwner(request, requesterId);
       assertRequestCancellable(request, giveaway);
 
-      if (request.status === GIVEAWAY_REQUEST_STATUS.SELECTED) {
+      const wasSelected = request.status === GIVEAWAY_REQUEST_STATUS.SELECTED;
+
+      if (wasSelected) {
         await changeRequestStatusOrThrow(
           {
             requestId,
@@ -630,17 +718,38 @@ async function cancelGiveawayRequest(requestId: number, requesterId: string) {
         );
       }
 
-      return toGiveawayRequestItem(await findRequestOrThrow(requestId, tx));
+      const notification = await createGiveawayNotification(
+        {
+          userId: giveaway.authorId,
+          type: "GIVEAWAY_REQUEST_CANCELED",
+          title: "나눔 신청이 취소되었어요",
+          content: wasSelected
+            ? `「${giveaway.title}」 수령자가 취소해 다시 신청받을 수 있습니다.`
+            : `「${giveaway.title}」 신청이 취소되었습니다.`,
+          giveawayId: request.giveawayId,
+          sourceId: toGiveawayRequestSourceId(requestId),
+        },
+        tx,
+      );
+
+      return {
+        request: toGiveawayRequestItem(await findRequestOrThrow(requestId, tx)),
+        authorId: giveaway.authorId,
+        notification,
+      };
     },
     {
       isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
     },
   );
+
+  sendGiveawayNotification(result.authorId, result.notification);
+  return result.request;
 }
 
 async function selectGiveawayRequest(giveawayId: number, requestId: number, authorId: string) {
   try {
-    return await runTransaction(
+    const result = await runTransaction(
       async (tx) => {
         const giveaway = await findGiveawayOwnershipOrThrow(giveawayId, tx);
 
@@ -680,12 +789,31 @@ async function selectGiveawayRequest(giveawayId: number, requestId: number, auth
           throw new AppError("GIVEAWAY_NOT_FOUND");
         }
 
-        return toGiveawayDetail(updatedGiveaway, { id: authorId }, null);
+        const notification = await createGiveawayNotification(
+          {
+            userId: request.requesterId,
+            type: "GIVEAWAY_REQUEST_SELECTED",
+            title: "나눔 수령자로 선정되었어요",
+            content: `「${giveaway.title}」의 수령자로 선정되었습니다.`,
+            giveawayId,
+            sourceId: toGiveawayRequestSourceId(requestId),
+          },
+          tx,
+        );
+
+        return {
+          detail: toGiveawayDetail(updatedGiveaway, { id: authorId }, null),
+          requesterId: request.requesterId,
+          notification,
+        };
       },
       {
         isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
       },
     );
+
+    sendGiveawayNotification(result.requesterId, result.notification);
+    return result.detail;
   } catch (error) {
     if (isDuplicateSelectedError(error)) {
       throw new AppError("GIVEAWAY_RECEIVER_ALREADY_SELECTED");
@@ -696,7 +824,7 @@ async function selectGiveawayRequest(giveawayId: number, requestId: number, auth
 }
 
 async function rejectGiveawayRequest(giveawayId: number, requestId: number, authorId: string) {
-  return runTransaction(async (tx) => {
+  const result = await runTransaction(async (tx) => {
     const giveaway = await findGiveawayOwnershipOrThrow(giveawayId, tx);
 
     assertGiveawayAuthor(giveaway, authorId);
@@ -716,8 +844,27 @@ async function rejectGiveawayRequest(giveawayId: number, requestId: number, auth
       tx,
     );
 
-    return toGiveawayRequestItem(await findRequestOrThrow(requestId, tx));
+    const notification = await createGiveawayNotification(
+      {
+        userId: request.requesterId,
+        type: "GIVEAWAY_REQUEST_REJECTED",
+        title: "나눔 신청이 거절되었어요",
+        content: `「${giveaway.title}」 신청이 거절되었습니다.`,
+        giveawayId,
+        sourceId: toGiveawayRequestSourceId(requestId),
+      },
+      tx,
+    );
+
+    return {
+      request: toGiveawayRequestItem(await findRequestOrThrow(requestId, tx)),
+      requesterId: request.requesterId,
+      notification,
+    };
   });
+
+  sendGiveawayNotification(result.requesterId, result.notification);
+  return result.request;
 }
 
 async function listMyGiveawayRequests(requesterId: string, query: ListMyGiveawayRequestQuery) {
