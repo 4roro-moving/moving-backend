@@ -45,7 +45,15 @@ function assertUnauthorized(error: unknown): boolean {
 }
 
 function assertAccountSuspended(error: unknown): boolean {
-  return error instanceof AppError && error.code === "ACCOUNT_SUSPENDED";
+  return (
+    error instanceof AppError &&
+    error.code === "ACCOUNT_SUSPENDED" &&
+    error.data !== undefined &&
+    typeof error.data === "object" &&
+    error.data !== null &&
+    "reason" in error.data &&
+    error.data.reason === "운영 정책 위반"
+  );
 }
 
 function assertDeletedUserForbidden(error: unknown): boolean {
@@ -79,10 +87,12 @@ function createLocalUser(overrides: Partial<AuthUser> = {}): AuthUser {
 
 describe("authService.login timing mitigation", () => {
   const originalFindByEmail = authRepository.findByEmail;
+  const originalFindLatestSuspension = authRepository.findLatestSuspension;
   const originalCompare = bcrypt.compare;
 
   afterEach(() => {
     authRepository.findByEmail = originalFindByEmail;
+    authRepository.findLatestSuspension = originalFindLatestSuspension;
     bcrypt.compare = originalCompare;
   });
 
@@ -194,6 +204,7 @@ describe("authService.login timing mitigation", () => {
       const { calls, compare } = createCompareStub();
 
       authRepository.findByEmail = async () => user;
+      authRepository.findLatestSuspension = async () => ({ reason: "운영 정책 위반" });
       bcrypt.compare = compare as typeof bcrypt.compare;
 
       await assert.rejects(

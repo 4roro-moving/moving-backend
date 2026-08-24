@@ -224,6 +224,21 @@ const signUpMover = async (input: SignUpInput): Promise<AuthResponse> => {
 };
 
 /**
+ * 정지 사유(UserSuspension.reason)를 로그인 응답에 포함한다.
+ */
+const throwAccountSuspended = async (userId: string): Promise<never> => {
+  const suspension = await authRepository.findLatestSuspension(userId);
+
+  throw new AppError("ACCOUNT_SUSPENDED", {
+    ...(suspension && {
+      data: {
+        reason: suspension.reason,
+      },
+    }),
+  });
+};
+
+/**
  * 로컬 로그인
  */
 const login = async (input: LoginInput): Promise<AuthResponse> => {
@@ -251,7 +266,7 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
    * 새로운 로그인 세션을 생성할 수 없다.
    */
   if (!user.isActive && user.deletedAt === null) {
-    throw new AppError("ACCOUNT_SUSPENDED");
+    await throwAccountSuspended(user.id);
   }
 
   if (user.deletedAt !== null) {
@@ -344,7 +359,7 @@ const createOAuthLoginResponse = async (
   requestedRole: SignUpRole,
 ): Promise<AuthResponse> => {
   if (!user.isActive && user.deletedAt === null) {
-    throw new AppError("ACCOUNT_SUSPENDED");
+    await throwAccountSuspended(user.id);
   }
 
   if (user.deletedAt !== null) {
@@ -714,7 +729,7 @@ const executeRefresh = async (
    * 기존 Refresh Token이 남아 있더라도 재발급할 수 없다.
    */
   if (!user.isActive && user.deletedAt === null) {
-    throw new AppError("ACCOUNT_SUSPENDED");
+    await throwAccountSuspended(user.id);
   }
 
   if (user.deletedAt !== null) {

@@ -54,6 +54,8 @@ registerRouterDocs(adminMoverRouter, {
         "관리자가 기사님(MOVER)의 계정 상태를 정지 또는 해제합니다.",
         "- `SUSPEND`: OPEN 견적 요청에 전송한 SENT 견적과 PENDING 수정 요청을 취소하고, 고객에게 알림을 보냅니다.",
         "- `RELEASE`: 계정만 활성화하며, 정지 때 취소된 견적 데이터는 복구하지 않습니다.",
+        "- `reason`: 처리 사유입니다. 정지(`SUSPEND`) 사유는 해당 사용자의 일반 로그인·OAuth 로그인·Refresh Token 재발급 차단 응답에만 노출되며, 해제(`RELEASE`) 사유는 관리자 이력용으로만 저장됩니다.",
+        "- `internalNote`: 관리자 전용 내부 메모이며 사용자 또는 정지로 영향을 받은 상대방에게 노출되지 않습니다.",
         "- 탈퇴 회원, Customer, 자기 자신은 상태 변경할 수 없습니다.",
       ].join("\n"),
       responses: {
