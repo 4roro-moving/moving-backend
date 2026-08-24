@@ -184,6 +184,9 @@ const header = [
 
 const lines = [header.join(",")];
 
+const today = new Date();
+const todayUtcMidnight = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+
 for (let i = 0; i < count; i++) {
   const r = Math.random();
   const moveType: MoveType = r < 0.55 ? "HOME" : r < 0.85 ? "SMALL" : "OFFICE";
@@ -228,14 +231,10 @@ for (let i = 0; i < count; i++) {
     ? Math.random() < 0.58
     : Math.random() < (Math.max(fromFloor, toFloor) >= 12 ? 0.12 : 0.04);
 
-  const moveDate = new Date(Date.now() + int(0, 364) * 86_400_000);
-  const isWeekend = moveDate.getDay() === 0 || moveDate.getDay() === 6;
-  const isPeakSeason = [2, 3, 8, 9, 12].includes(moveDate.getMonth() + 1);
-  const moveDateLabel = [
-    moveDate.getFullYear(),
-    String(moveDate.getMonth() + 1).padStart(2, "0"),
-    String(moveDate.getDate()).padStart(2, "0"),
-  ].join("-");
+  const moveDate = new Date(todayUtcMidnight + int(0, 364) * 86_400_000);
+  const isWeekend = moveDate.getUTCDay() === 0 || moveDate.getUTCDay() === 6;
+  const isPeakSeason = [2, 3, 8, 9, 12].includes(moveDate.getUTCMonth() + 1);
+  const moveDateLabel = moveDate.toISOString().slice(0, 10);
 
   let price = basePrice(moveType, houseSize);
   price *=
