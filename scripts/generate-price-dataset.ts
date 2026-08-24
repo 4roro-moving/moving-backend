@@ -14,7 +14,12 @@ type MoveType = "SMALL" | "HOME" | "OFFICE";
 type LoadAmount = "LOW" | "MEDIUM" | "HIGH";
 
 const countArg = process.argv.find((v) => v.startsWith("--count="));
-const count = Number(countArg?.split("=")[1] ?? 5000);
+const countValue = countArg?.split("=")[1] ?? "5000";
+const count = Number(countValue);
+
+if (!Number.isSafeInteger(count) || count <= 0) {
+  throw new Error("--count는 1 이상의 정수여야 합니다.");
+}
 
 const regions = [
   "서울",
@@ -226,6 +231,11 @@ for (let i = 0; i < count; i++) {
   const moveDate = new Date(Date.now() + int(0, 364) * 86_400_000);
   const isWeekend = moveDate.getDay() === 0 || moveDate.getDay() === 6;
   const isPeakSeason = [2, 3, 8, 9, 12].includes(moveDate.getMonth() + 1);
+  const moveDateLabel = [
+    moveDate.getFullYear(),
+    String(moveDate.getMonth() + 1).padStart(2, "0"),
+    String(moveDate.getDate()).padStart(2, "0"),
+  ].join("-");
 
   let price = basePrice(moveType, houseSize);
   price *=
@@ -264,7 +274,7 @@ for (let i = 0; i < count; i++) {
   lines.push(
     [
       moveType,
-      moveDate.toISOString().slice(0, 10),
+      moveDateLabel,
       fromRegion,
       toRegion,
       distance,

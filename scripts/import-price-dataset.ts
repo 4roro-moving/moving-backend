@@ -4,8 +4,15 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-const CSV_PATH = "moving-price-synthetic-5000.csv";
+const fileArg = process.argv.find((value) => value.startsWith("--file="));
+const filePath = fileArg?.slice("--file=".length);
 const BATCH_SIZE = 100;
+
+if (fileArg && !filePath) {
+  throw new Error("--file에는 CSV 파일 경로를 입력해야 합니다.");
+}
+
+const CSV_PATH = filePath ?? "moving-price-synthetic-5000.csv";
 
 type PriceRow = {
   moveType: string;
@@ -57,34 +64,119 @@ function parseCsvLine(line: string): string[] {
   return values;
 }
 
-function toBoolean(value: string): boolean {
-  return value.trim().toLowerCase() === "true";
+function createRowError(rowNumber: number, message: string): Error {
+  return new Error(`CSV ${rowNumber}행: ${message}`);
 }
 
-function parseRow(line: string): PriceRow {
+function parseRequiredString(value: string, fieldName: string, rowNumber: number): string {
+  const normalized = value.trim();
+
+  if (!normalized) {
+    throw createRowError(rowNumber, `${fieldName} 값이 비어 있습니다.`);
+  }
+
+  return normalized;
+}
+
+function parseEnum(
+  value: string,
+  fieldName: string,
+  allowedValues: readonly string[],
+  rowNumber: number,
+): string {
+  const normalized = parseRequiredString(value, fieldName, rowNumber);
+
+  if (!allowedValues.includes(normalized)) {
+    throw createRowError(
+      rowNumber,
+      `${fieldName} 값은 ${allowedValues.join(" | ")} 중 하나여야 합니다.`,
+    );
+  }
+
+  return normalized;
+}
+
+function parseFiniteNumber(value: string, fieldName: string, rowNumber: number): number {
+  const numberValue = Number(value);
+
+  if (!Number.isFinite(numberValue)) {
+    throw createRowError(rowNumber, `${fieldName} 값이 유한한 숫자가 아닙니다.`);
+  }
+
+  return numberValue;
+}
+
+function parsePositiveInteger(value: string, fieldName: string, rowNumber: number): number {
+  const numberValue = parseFiniteNumber(value, fieldName, rowNumber);
+
+  if (!Number.isInteger(numberValue) || numberValue <= 0) {
+    throw createRowError(rowNumber, `${fieldName} 값은 1 이상의 정수여야 합니다.`);
+  }
+
+  return numberValue;
+}
+
+function parsePositiveNumber(value: string, fieldName: string, rowNumber: number): number {
+  const numberValue = parseFiniteNumber(value, fieldName, rowNumber);
+
+  if (numberValue <= 0) {
+    throw createRowError(rowNumber, `${fieldName} 값은 0보다 커야 합니다.`);
+  }
+
+  return numberValue;
+}
+
+function parseBoolean(value: string, fieldName: string, rowNumber: number): boolean {
+  const normalized = value.trim().toLowerCase();
+
+  if (normalized === "true") return true;
+  if (normalized === "false") return false;
+
+  throw createRowError(rowNumber, `${fieldName} 값은 true 또는 false여야 합니다.`);
+}
+
+function parseDate(value: string, fieldName: string, rowNumber: number): string {
+  const normalized = value.trim();
+  const date = new Date(`${normalized}T00:00:00.000Z`);
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(normalized) ||
+    Number.isNaN(date.getTime()) ||
+    date.toISOString().slice(0, 10) !== normalized
+  ) {
+    throw createRowError(rowNumber, `${fieldName} 값이 YYYY-MM-DD 형식의 유효한 날짜가 아닙니다.`);
+  }
+
+  return normalized;
+}
+
+function parseRow(line: string, rowNumber: number): PriceRow {
   const values = parseCsvLine(line);
 
   if (values.length !== 16) {
-    throw new Error(`CSV 컬럼 수가 올바르지 않습니다. 예상 16개, 실제 ${values.length}개`);
+    throw createRowError(
+      rowNumber,
+      `컬럼 수가 올바르지 않습니다. 예상 16개, 실제 ${values.length}개입니다.`,
+    );
   }
 
   return {
-    moveType: values[0],
-    moveDate: values[1],
-    fromRegion: values[2],
-    toRegion: values[3],
-    distanceKm: Number(values[4]),
-    houseSize: Number(values[5]),
-    loadAmount: values[6],
-    fromFloor: Number(values[7]),
-    fromElevator: toBoolean(values[8]),
-    toFloor: Number(values[9]),
-    toElevator: toBoolean(values[10]),
-    ladderTruck: toBoolean(values[11]),
-    isWeekend: toBoolean(values[12]),
-    isPeakSeason: toBoolean(values[13]),
-    price: Number(values[14]),
-    content: values[15],
+    moveType: parseEnum(values[0]!, "move_type", ["SMALL", "HOME", "OFFICE"], rowNumber),
+    moveDate: parseDate(values[1]!, "move_date", rowNumber),
+    fromRegion: parseRequiredString(values[2]!, "from_region", rowNumber),
+    toRegion: parseRequiredString(values[3]!, "to_region", rowNumber),
+    distanceKm: parsePositiveNumber(values[4]!, "distance_km", rowNumber),
+    houseSize: parsePositiveInteger(values[5]!, "house_size", rowNumber),
+    loadAmount: parseEnum(values[6]!, "load_amount", ["LOW", "MEDIUM", "HIGH"], rowNumber),
+    fromFloor: parsePositiveInteger(values[7]!, "from_floor", rowNumber),
+    fromElevator: parseBoolean(values[8]!, "from_elevator", rowNumber),
+    toFloor: parsePositiveInteger(values[9]!, "to_floor", rowNumber),
+    toElevator: parseBoolean(values[10]!, "to_elevator", rowNumber),
+    ladderTruck: parseBoolean(values[11]!, "ladder_truck", rowNumber),
+    isWeekend: parseBoolean(values[12]!, "is_weekend", rowNumber),
+    isPeakSeason: parseBoolean(values[13]!, "is_peak_season", rowNumber),
+    price: parsePositiveNumber(values[14]!, "price", rowNumber),
+    content: parseRequiredString(values[15]!, "content", rowNumber),
   };
 }
 
@@ -171,7 +263,7 @@ async function main() {
     throw new Error("CSV에 데이터가 없습니다.");
   }
 
-  const rows = lines.slice(1).map(parseRow);
+  const rows = lines.slice(1).map((line, index) => parseRow(line, index + 2));
 
   console.log(`CSV 로드 완료: ${rows.length.toLocaleString()}건`);
 

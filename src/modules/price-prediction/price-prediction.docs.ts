@@ -24,7 +24,8 @@ registerRouterDocs(pricePredictionRouter, {
       responses: {
         200: "예상 견적 조회 성공",
         400: "요청 값이 올바르지 않거나 유사 견적 데이터가 충분하지 않음",
-        500: "예상 견적 계산 또는 외부 Embedding API 처리 중 서버 오류",
+        500: "예상 견적 계산 중 서버 오류",
+        502: "외부 Embedding API 처리 중 오류",
       },
     },
     "POST /distance": {
@@ -40,8 +41,9 @@ registerRouterDocs(pricePredictionRouter, {
       ].join("\n"),
       responses: {
         200: "이동 거리 조회 성공",
-        400: "출발지 또는 도착지 좌표가 올바르지 않음",
-        500: "카카오모빌리티 길찾기 API 처리 중 서버 오류",
+        400: "출발지 또는 도착지 좌표가 올바르지 않거나 차량 이동 경로를 찾을 수 없음",
+        500: "이동 거리 계산 중 서버 오류",
+        502: "카카오모빌리티 길찾기 API 처리 중 오류",
       },
     },
   },

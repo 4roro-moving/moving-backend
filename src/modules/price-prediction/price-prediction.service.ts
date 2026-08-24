@@ -21,8 +21,9 @@ function prepareInput(input: PricePredictionInput): PreparedPredictionInput {
   const moveDate = new Date(`${input.moveDate}T00:00:00+09:00`);
   return {
     ...input,
-    isWeekend: moveDate.getDay() === 0 || moveDate.getDay() === 6,
-    isPeakSeason: PEAK_MONTHS.has(moveDate.getMonth() + 1),
+    // KST 자정을 UTC로 해석한 뒤 UTC getter로 KST 달력 날짜를 일관되게 판정한다.
+    isWeekend: moveDate.getUTCDay() === 0 || moveDate.getUTCDay() === 6,
+    isPeakSeason: PEAK_MONTHS.has(moveDate.getUTCMonth() + 1),
   };
 }
 
