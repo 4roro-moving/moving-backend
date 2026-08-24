@@ -9,4 +9,5 @@ export const NOTIFICATION_SSE_EVENTS = {
   CONNECTED: "connected",
   NOTIFICATION: "notification",
   REFRESH: "notification-refresh",
+  ACCOUNT_SUSPENDED: "account-suspended",
 } as const;

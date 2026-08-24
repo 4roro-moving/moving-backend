@@ -40,6 +40,7 @@ import {
 } from "./modules/residence-review/residence-review.route";
 import reviewRouter from "./modules/review/review.route";
 import publicNoticeRouter from "./modules/notice/notice.route";
+import { pricePredictionRouter } from "./modules/price-prediction/price-prediction.route";
 
 import { adminFaqRouter, publicFaqRouter } from "./modules/admin/faq/faq.route";
 import { adminInquiryRouter, inquiryRouter } from "./modules/inquiry/inquiry.route";
@@ -99,7 +100,8 @@ app.use(
 app.use(
   compression({
     filter: (req, res) => {
-      if (req.path.startsWith("/api/notifications/sse")) {
+      // compression 미들웨어의 마운트 경로 영향 없이 원본 URL로 SSE를 판별한다.
+      if (req.originalUrl.startsWith("/api/notifications/sse/")) {
         return false;
       }
 
@@ -194,6 +196,7 @@ app.use("/api/my-contents", myContentRouter);
 app.use("/api/residence-reviews", residenceReviewRouter);
 app.use("/api/residence-reviews", publicResidenceReviewRouter);
 app.use("/api/notices", publicNoticeRouter);
+app.use("/api/price-predictions", pricePredictionRouter);
 
 /*
  * 관리자 API

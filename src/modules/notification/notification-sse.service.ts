@@ -227,6 +227,40 @@ const sendNotificationRefresh = (userIds: string[]): void => {
   });
 };
 
+/**
+ * 계정 정지 직후 연결된 모든 탭·기기에 세션 종료 신호를 전송한다.
+ *
+ * SSE가 연결되지 않은 경우에는 이벤트를 보낼 수 없으므로, 이후 인증 API가
+ * ACCOUNT_SUSPENDED를 반환하는 기존 차단 경로가 보완한다.
+ */
+const sendAccountSuspended = (userId: string): void => {
+  const userConnections = connections.get(userId);
+
+  if (!userConnections) {
+    return;
+  }
+
+  const suspendedAt = new Date().toISOString();
+
+  userConnections.forEach((response) => {
+    if (response.writableEnded || response.destroyed) {
+      removeConnection(userId, response);
+      return;
+    }
+
+    try {
+      writeEvent(response, NOTIFICATION_SSE_EVENTS.ACCOUNT_SUSPENDED, { suspendedAt });
+    } catch (error) {
+      logger.warn("SSE 계정 정지 이벤트 전송에 실패했습니다.", {
+        userId,
+        error,
+      });
+
+      removeConnection(userId, response);
+    }
+  });
+};
+
 /*
  * 서버 종료 시 현재 연결된 모든 SSE 응답을 종료한다.
  *
@@ -257,5 +291,6 @@ export const notificationSseService = {
   removeConnection,
   sendNotification,
   sendNotificationRefresh,
+  sendAccountSuspended,
   closeAllConnections,
 };
