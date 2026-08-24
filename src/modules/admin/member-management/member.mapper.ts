@@ -1,6 +1,7 @@
 import { resolveMemberStatus } from "./member.policy";
 import type {
   MemberDetailAccount,
+  MemberInquiryHistoryItem,
   MemberListBase,
   MemberSuspensionHistoryItem,
 } from "./member.type";
@@ -15,6 +16,7 @@ export function toMemberListBase(member: {
   isProfileCompleted: boolean;
   receivedReportCount: number;
   pendingReceivedReportCount: number;
+  openInquiryCount: number;
   deletedAt: Date | null;
   createdAt: Date;
 }): MemberListBase {
@@ -27,6 +29,7 @@ export function toMemberListBase(member: {
     isProfileCompleted: member.isProfileCompleted,
     receivedReportCount: member.receivedReportCount,
     pendingReceivedReportCount: member.pendingReceivedReportCount,
+    openInquiryCount: member.openInquiryCount,
     createdAt: member.createdAt,
   };
 }
@@ -73,5 +76,26 @@ export function toMemberSuspensionHistoryItem(item: {
     internalNote: item.internalNote,
     createdAt: item.createdAt,
     admin: item.admin,
+  };
+}
+
+/** 회원이 작성한 1:1 문의 이력 항목을 관리자 상세 응답 형태로 변환합니다. */
+export function toMemberInquiryHistoryItem(item: {
+  id: number;
+  category: MemberInquiryHistoryItem["category"];
+  title: string;
+  status: MemberInquiryHistoryItem["status"];
+  lastMessageAt: Date | null;
+  createdAt: Date;
+  handler: MemberInquiryHistoryItem["handledBy"];
+}): MemberInquiryHistoryItem {
+  return {
+    id: item.id,
+    category: item.category,
+    title: item.title,
+    status: item.status,
+    lastMessageAt: item.lastMessageAt,
+    createdAt: item.createdAt,
+    handledBy: item.handler,
   };
 }

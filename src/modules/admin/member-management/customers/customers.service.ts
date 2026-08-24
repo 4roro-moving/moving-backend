@@ -63,14 +63,21 @@ export const customersService = {
       throw new AppError("USER_NOT_FOUND");
     }
 
-    const [estimateHistory, reviewHistory, filedReports, receivedReports, suspensionHistory] =
-      await Promise.all([
-        customersRepository.findEstimateHistory({ customerId }),
-        customersRepository.findReviewHistory({ customerId }),
-        customersRepository.findFiledReportHistory({ customerId }),
-        customersRepository.findReceivedReportHistory({ customerId }),
-        memberRepository.findSuspensionHistory({ memberId: customerId }),
-      ]);
+    const [
+      estimateHistory,
+      reviewHistory,
+      filedReports,
+      receivedReports,
+      suspensionHistory,
+      inquiryHistory,
+    ] = await Promise.all([
+      customersRepository.findEstimateHistory({ customerId }),
+      customersRepository.findReviewHistory({ customerId }),
+      customersRepository.findFiledReportHistory({ customerId }),
+      customersRepository.findReceivedReportHistory({ customerId }),
+      memberRepository.findSuspensionHistory({ memberId: customerId }),
+      memberRepository.findInquiryHistory({ memberId: customerId }),
+    ]);
 
     return toCustomerDetail(customer, {
       estimateHistory,
@@ -78,6 +85,7 @@ export const customersService = {
       filedReports,
       receivedReports,
       suspensionHistory,
+      inquiryHistory,
     });
   },
 
