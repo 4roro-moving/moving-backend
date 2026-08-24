@@ -26,6 +26,7 @@ const availableGiveaway: GiveawayOwnershipRow = {
   receiverId: null,
   status: GIVEAWAY_STATUS.AVAILABLE,
   isHidden: GIVEAWAY_VISIBILITY.VISIBLE,
+  title: "테스트 나눔",
 };
 
 const hiddenGiveaway: GiveawayOwnershipRow = {

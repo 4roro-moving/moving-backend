@@ -143,6 +143,11 @@ enum NotificationType {
   ESTIMATE_CANCELED_BY_ACCOUNT_SUSPENSION // (고객) 기사 계정이 정지되어 견적 취소됨
   ESTIMATE_CANCELED_BY_ADMIN // (고객/기사) 관리자가 확정 견적을 취소함
   REPORT_RESULT // 신고 처리 결과 안내
+  GIVEAWAY_REQUEST_RECEIVED // (작성자) 새 나눔 신청이 도착함
+  GIVEAWAY_REQUEST_SELECTED // (신청자) 내가 수령자로 선정됨
+  GIVEAWAY_REQUEST_REJECTED // (신청자) 내 신청이 거절됨
+  GIVEAWAY_REQUEST_CANCELED // (작성자) 신청자가 신청을 취소함
+  GIVEAWAY_COMPLETED // (수령자) 작성자가 나눔을 완료함
 }
 
 /// 채팅 메시지 유형

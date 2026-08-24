@@ -100,6 +100,7 @@ const giveawayOwnershipSelect = {
   receiverId: true,
   status: true,
   isHidden: true,
+  title: true,
 } satisfies Prisma.GiveawaySelect;
 
 const requestSelect = {
@@ -388,17 +389,20 @@ async function restoreGiveawayToAvailable(
   return count > 0;
 }
 
-function findRequestById(requestId: number, db: DbClient = prisma) {
+async function findRequestById(
+  requestId: number,
+  db: DbClient = prisma,
+): Promise<GiveawayRequestRow | null> {
   return db.giveawayRequest.findUnique({
     where: { id: requestId },
     select: requestSelect,
   });
 }
 
-function findActiveRequestByGiveawayAndRequester(
+async function findActiveRequestByGiveawayAndRequester(
   params: { giveawayId: number; requesterId: string },
   db: DbClient = prisma,
-) {
+): Promise<GiveawayRequestRow | null> {
   return db.giveawayRequest.findFirst({
     where: {
       giveawayId: params.giveawayId,
@@ -466,14 +470,14 @@ async function findMyRequestsByCursorWithCount(
   return { requests, totalCount };
 }
 
-function createRequest(
+async function createRequest(
   params: {
     giveawayId: number;
     requesterId: string;
     message?: string;
   },
   db: DbClient = prisma,
-) {
+): Promise<GiveawayRequestRow> {
   const data: Prisma.GiveawayRequestUncheckedCreateInput = {
     giveawayId: params.giveawayId,
     requesterId: params.requesterId,

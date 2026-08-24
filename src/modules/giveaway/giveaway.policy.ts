@@ -171,8 +171,10 @@ export function assertRequestRejectable(
   }
 }
 
-export function assertGiveawayCompletable(giveaway: GiveawayOwnershipRow) {
-  if (giveaway.status !== GIVEAWAY_STATUS.IN_PROGRESS || !giveaway.receiverId) {
+export function assertGiveawayCompletable(
+  giveaway: GiveawayOwnershipRow,
+): asserts giveaway is GiveawayOwnershipRow & { receiverId: string } {
+  if (giveaway.status !== GIVEAWAY_STATUS.IN_PROGRESS || giveaway.receiverId === null) {
     throw new AppError("GIVEAWAY_NOT_COMPLETABLE");
   }
 }
