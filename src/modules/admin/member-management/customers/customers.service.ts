@@ -13,6 +13,7 @@ import { AppError } from "../../../../lib/app-error";
 import { authRepository } from "../../../auth/auth.repository";
 import { notificationService } from "../../../notification/notification.service";
 import { disconnectUserSockets, emitSystemChatMessages } from "../../../../socket";
+import { notificationSseService } from "../../../notification/notification-sse.service";
 import { buildPagination } from "../../../../utils/pagination.util";
 import { runTransaction } from "../../../../utils/transaction";
 
@@ -266,6 +267,7 @@ export const customersService = {
 
     // 트랜잭션 커밋이 끝난 뒤에 기존 실시간 소켓 연결 종료
     if (input.action === SuspensionAction.SUSPEND) {
+      notificationSseService.sendAccountSuspended(customerId);
       disconnectUserSockets(customerId);
     }
 
