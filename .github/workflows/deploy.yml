@@ -51,6 +51,7 @@ jobs:
             src \
             dist \
             node_modules \
+            prisma \
             package.json \
             package-lock.json
 
