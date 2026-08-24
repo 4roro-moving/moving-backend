@@ -4,6 +4,7 @@ import type {
   RefreshTokenRevokedReason,
   RefreshTokenSessionType,
 } from "@prisma/client";
+import { SuspensionAction } from "@prisma/client";
 
 import { prisma } from "../../lib/prisma";
 import type { DbClient } from "../../utils/transaction";
@@ -20,6 +21,20 @@ const findById = async (id: string, db: DbClient = prisma) => {
   return db.user.findUnique({
     where: {
       id,
+    },
+  });
+};
+
+/** 정지된 계정에 로그인 차단 사유로 노출할 최신 정지 이력을 조회한다. */
+const findLatestSuspension = async (userId: string, db: DbClient = prisma) => {
+  return db.userSuspension.findFirst({
+    where: {
+      userId,
+      action: SuspensionAction.SUSPEND,
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    select: {
+      reason: true,
     },
   });
 };
@@ -206,6 +221,7 @@ const revokeRefreshTokenFamily = async (
 export const authRepository = {
   findByEmail,
   findById,
+  findLatestSuspension,
   findByProviderAndProviderId,
   create,
   update,
