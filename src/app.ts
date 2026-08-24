@@ -31,6 +31,7 @@ import { moverCalendarRouter } from "./modules/mover-calendar/mover-calendar.rou
 import { notificationRouter } from "./modules/notification/notification.route";
 import notificationSseRouter from "./modules/notification/notification-sse.route";
 import { giveawayRequestRouter, giveawayRouter } from "./modules/giveaway/giveaway.route";
+import { myContentRouter } from "./modules/my-content/my-content.route";
 import { profileRouter } from "./modules/profile/profile.route";
 import reportRouter from "./modules/report/report.route";
 import {
@@ -189,6 +190,7 @@ app.use("/api/notifications/sse", notificationSseRouter);
 app.use("/api/terms", publicTermsRouter);
 app.use("/api/giveaways", giveawayRouter);
 app.use("/api/giveaway-requests", giveawayRequestRouter);
+app.use("/api/my-contents", myContentRouter);
 app.use("/api/residence-reviews", residenceReviewRouter);
 app.use("/api/residence-reviews", publicResidenceReviewRouter);
 app.use("/api/notices", publicNoticeRouter);

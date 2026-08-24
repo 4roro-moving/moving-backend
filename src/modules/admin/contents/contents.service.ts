@@ -100,7 +100,7 @@ function toAdminReviewListItem(
 
 function getMoverNotificationSubject(review: AdminReviewRow): string {
   const moverName = review.mover.moverProfile?.nickname ?? review.mover.name;
-  return `${moverName} 기사님`;
+  return `${moverName} 기사님에 대한 리뷰`;
 }
 
 async function attachListMeta(reviews: AdminReviewRow[]): Promise<AdminReviewListItem[]> {
@@ -156,6 +156,14 @@ const VISIBILITY_TOGGLE_CONFIG: Record<
   },
 };
 
+/** 숨김: 사유 확인 화면 / 복구: 내가 작성한 리뷰 목록 */
+function getReviewNotificationLinkUrl(action: VisibilityToggleAction, reviewId: number): string {
+  if (action === "HIDE") {
+    return `/my-contents/review/${String(reviewId)}`;
+  }
+  return `/reviews/me`;
+}
+
 async function toggleReviewVisibility(params: {
   adminId: string;
   reviewId: number;
@@ -199,8 +207,7 @@ async function toggleReviewVisibility(params: {
         type: config.notificationType,
         title: config.notificationTitle,
         content: getMoverNotificationSubject(review),
-        //내가 작성한 리뷰 페이지로 연결
-        linkUrl: `/reviews/me`,
+        linkUrl: getReviewNotificationLinkUrl(action, reviewId),
         expiresAt: null,
       },
       tx,

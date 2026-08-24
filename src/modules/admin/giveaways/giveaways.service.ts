@@ -44,6 +44,17 @@ const VISIBILITY_TOGGLE_CONFIG: Record<
   },
 };
 
+/** 숨김: 사유 확인 화면 / 복구: 나눔글 상세 */
+function getGiveawayNotificationLinkUrl(
+  action: VisibilityToggleAction,
+  giveawayId: number,
+): string {
+  if (action === "HIDE") {
+    return `/my-contents/giveaway/${String(giveawayId)}`;
+  }
+  return `/giveaways/${String(giveawayId)}`;
+}
+
 function buildListFilters(query: ListAdminGiveawaysQuery) {
   const filters: { isHidden?: boolean; keyword?: string } = {};
 
@@ -136,7 +147,7 @@ async function attachListMeta(giveaways: AdminGiveawayRow[]): Promise<AdminGivea
 }
 
 function getGiveawayNotificationContent(giveaway: AdminGiveawayRow): string {
-  return `「${giveaway.title}」`;
+  return `「${giveaway.title}」에 대한 나눔게시물`;
 }
 
 async function toggleGiveawayVisibility(params: {
@@ -182,7 +193,7 @@ async function toggleGiveawayVisibility(params: {
         type: config.notificationType,
         title: config.notificationTitle,
         content: getGiveawayNotificationContent(giveaway),
-        linkUrl: null,
+        linkUrl: getGiveawayNotificationLinkUrl(action, giveawayId),
         expiresAt: null,
       },
       tx,
