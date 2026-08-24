@@ -16,6 +16,8 @@ export const registry = new OpenAPIRegistry();
  * 새 모듈을 추가할 때 여기에 한 줄만 추가하면 됩니다.
  */
 async function registerModuleDocs(): Promise<void> {
+  await import("../modules/mover/mover.docs");
+  await import("../modules/favorite/favorite.docs");
   await import("../modules/estimate-request/estimateRequest.docs");
   await import("../modules/mover-calendar/mover-calendar.docs");
   // 2026.07.24 정슬기 - [추가] 받은 견적·확정 API 문서를 OpenAPI에 등록
@@ -59,6 +61,12 @@ async function registerModuleDocs(): Promise<void> {
   await import("../modules/giveaway/giveaway.docs");
   // 2026.08.23 정슬기 - [추가] 가격 예측 API 문서 등록
   await import("../modules/price-prediction/price-prediction.docs");
+  // 2026.08.22 심현수 - [추가] 관리자 대시보드 API 문서 등록
+  await import("../modules/admin/dashboard/dashboard.docs");
+  // 2026.08.22 심현수 - [추가] 사용자 공지 API 문서 등록
+  await import("../modules/notice/notice.docs");
+  // 2026.08.22 심현수 - [추가] 약관 API 문서 등록
+  await import("../modules/terms/terms.docs");
 }
 
 export async function generateOpenApiDocument(): Promise<OpenAPIObject> {
