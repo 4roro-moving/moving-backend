@@ -103,7 +103,7 @@ function createRequest(overrides: Partial<GiveawayRequestRow> = {}): GiveawayReq
 }
 
 function expectedLinkUrl() {
-  return `/community/giveaways/${String(GIVEAWAY_ID)}`;
+  return `/community/giveaway/${String(GIVEAWAY_ID)}`;
 }
 
 function expectedRequestSourceId() {
