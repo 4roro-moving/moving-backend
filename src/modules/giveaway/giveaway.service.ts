@@ -250,7 +250,7 @@ async function restoreGiveawayToAvailableOrThrow(
 }
 
 function toGiveawayLinkUrl(giveawayId: number) {
-  return `/giveaways/${String(giveawayId)}`;
+  return `/community/giveaways/${String(giveawayId)}`;
 }
 
 function toGiveawayRequestSourceId(requestId: number) {
@@ -282,11 +282,7 @@ async function createGiveawayNotification(
   );
 }
 
-function sendGiveawayNotification(userId: string, notification: NotificationItem | null) {
-  if (notification === null) {
-    return;
-  }
-
+function sendGiveawayNotification(userId: string, notification: NotificationItem) {
   notificationService.sendNotification(userId, notification);
 }
 
@@ -522,31 +518,26 @@ async function completeGiveaway(giveawayId: number, authorId: string) {
       throw new AppError("GIVEAWAY_NOT_FOUND");
     }
 
-    const notification =
-      giveaway.receiverId === null
-        ? null
-        : await createGiveawayNotification(
-            {
-              userId: giveaway.receiverId,
-              type: "GIVEAWAY_COMPLETED",
-              title: "나눔이 완료되었어요",
-              content: `「${giveaway.title}」 나눔이 완료되었습니다.`,
-              giveawayId,
-              sourceId: `giveaway:${String(giveawayId)}`,
-            },
-            tx,
-          );
+    const notification = await createGiveawayNotification(
+      {
+        userId: owned.receiverId,
+        type: "GIVEAWAY_COMPLETED",
+        title: "나눔이 완료되었어요",
+        content: `「${giveaway.title}」 나눔이 완료되었습니다.`,
+        giveawayId,
+        sourceId: `giveaway:${String(giveawayId)}`,
+      },
+      tx,
+    );
 
     return {
       detail: toGiveawayDetail(giveaway, { id: authorId }, null),
-      receiverId: giveaway.receiverId,
+      receiverId: owned.receiverId,
       notification,
     };
   });
 
-  if (result.receiverId !== null) {
-    sendGiveawayNotification(result.receiverId, result.notification);
-  }
+  sendGiveawayNotification(result.receiverId, result.notification);
 
   return result.detail;
 }
