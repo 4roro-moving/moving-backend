@@ -7,7 +7,7 @@ const KAKAO_DIRECTIONS_URL = "https://apis-navi.kakaomobility.com/v1/directions"
 const KAKAO_FETCH_TIMEOUT_MS = 10_000;
 
 type KakaoDirectionsResponse = {
-  routes?: Array<{
+  routes: Array<{
     result_code: number;
     result_msg: string;
     summary?: {
