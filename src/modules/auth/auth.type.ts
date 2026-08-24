@@ -58,6 +58,9 @@ export interface SuspendedAuthResponse {
   suspension: { reason: string; appealAccessToken: string };
 }
 
+/** 일반 로그인 성공 또는 정지 계정의 제한 세션 발급 결과. */
+export type LoginResponse = AuthResponse | SuspendedAuthResponse;
+
 /*
  * Refresh Token 재발급 Service 결과
  *

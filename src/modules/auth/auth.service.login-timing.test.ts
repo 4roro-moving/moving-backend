@@ -188,11 +188,11 @@ describe("authService.login timing mitigation", () => {
       role: UserRole.CUSTOMER,
     });
 
-    const suspendedResult = result as unknown as {
-      suspension: { reason: string; appealAccessToken: string };
-    };
-    assert.equal(suspendedResult.suspension.reason, "운영 정책 위반");
-    assert.equal(typeof suspendedResult.suspension.appealAccessToken, "string");
+    assert.equal("suspension" in result, true);
+    if ("suspension" in result) {
+      assert.equal(result.suspension.reason, "운영 정책 위반");
+      assert.equal(typeof result.suspension.appealAccessToken, "string");
+    }
 
     assert.equal(calls.length, 1);
     assert.equal(calls[0]?.hash, REAL_PASSWORD_HASH);

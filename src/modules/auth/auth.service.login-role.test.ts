@@ -12,13 +12,21 @@ import { verifyAccessToken } from "../../utils/jwt";
 import { termsService } from "../terms/terms.service";
 import { authRepository } from "./auth.repository";
 import { authService } from "./auth.service";
-import type { OAuthProfile } from "./auth.type";
+import type { AuthResponse, LoginResponse, OAuthProfile } from "./auth.type";
 import { googleOAuth } from "./oauth/google.oauth";
 import { termsRepository } from "../terms/terms.repository";
 
 const REAL_PASSWORD_HASH = "$2b$10$real-user-password-hash-for-login-role-test";
 const CORRECT_PASSWORD = "correct-password";
 const WRONG_PASSWORD = "wrong-password";
+
+function assertAuthResponse(result: LoginResponse): AuthResponse {
+  if ("suspension" in result) {
+    throw new Error("정지 계정 로그인 결과가 반환되었습니다.");
+  }
+
+  return result;
+}
 
 const OAUTH_PROFILE: OAuthProfile = {
   provider: AuthProvider.GOOGLE,
@@ -176,11 +184,13 @@ describe("authService.login role validation", () => {
       authRepository.saveRefreshToken = refreshTokenStub.saveRefreshToken;
       bcrypt.compare = compare as typeof bcrypt.compare;
 
-      const result = await authService.login({
-        email: user.email,
-        password: CORRECT_PASSWORD,
-        role,
-      });
+      const result = assertAuthResponse(
+        await authService.login({
+          email: user.email,
+          password: CORRECT_PASSWORD,
+          role,
+        }),
+      );
 
       assert.equal(result.user.role, role);
       assert.equal(calls.length, 1);
@@ -279,11 +289,13 @@ describe("authService.login role validation", () => {
     authRepository.saveRefreshToken = refreshTokenStub.saveRefreshToken;
     bcrypt.compare = compare as typeof bcrypt.compare;
 
-    const result = await authService.login({
-      email: user.email,
-      password: CORRECT_PASSWORD,
-      role: UserRole.MOVER,
-    });
+    const result = assertAuthResponse(
+      await authService.login({
+        email: user.email,
+        password: CORRECT_PASSWORD,
+        role: UserRole.MOVER,
+      }),
+    );
 
     assert.equal(result.user.role, UserRole.MOVER);
 
@@ -335,11 +347,11 @@ describe("authService OAuth login role validation", () => {
       intent: "login",
     });
 
-    const suspendedResult = result as unknown as {
-      suspension: { reason: string; appealAccessToken: string };
-    };
-    assert.equal(suspendedResult.suspension.reason, "운영 정책 위반");
-    assert.equal(typeof suspendedResult.suspension.appealAccessToken, "string");
+    assert.equal("suspension" in result, true);
+    if ("suspension" in result) {
+      assert.equal(result.suspension.reason, "운영 정책 위반");
+      assert.equal(typeof result.suspension.appealAccessToken, "string");
+    }
     assert.equal(refreshTokenStub.callCount, 0);
   });
 
@@ -353,11 +365,13 @@ describe("authService OAuth login role validation", () => {
       authRepository.findByProviderAndProviderId = async () => user;
       authRepository.saveRefreshToken = refreshTokenStub.saveRefreshToken;
 
-      const result = await authService.loginWithGoogle({
-        code: "google-auth-code",
-        role,
-        intent: "login",
-      });
+      const result = assertAuthResponse(
+        await authService.loginWithGoogle({
+          code: "google-auth-code",
+          role,
+          intent: "login",
+        }),
+      );
 
       assert.equal(result.user.role, role);
       assert.equal(refreshTokenStub.callCount, 1);
@@ -421,11 +435,13 @@ describe("authService OAuth login role validation", () => {
       createOAuthUser({ role: UserRole.CUSTOMER });
     authRepository.saveRefreshToken = refreshTokenStub.saveRefreshToken;
 
-    const result = await authService.loginWithGoogle({
-      code: "google-auth-code",
-      role: UserRole.CUSTOMER,
-      intent: "signup",
-    });
+    const result = assertAuthResponse(
+      await authService.loginWithGoogle({
+        code: "google-auth-code",
+        role: UserRole.CUSTOMER,
+        intent: "signup",
+      }),
+    );
 
     assert.equal(result.user.role, UserRole.CUSTOMER);
     assert.equal(refreshTokenStub.callCount, 1);
@@ -495,11 +511,13 @@ describe("authService OAuth login role validation", () => {
     prisma.$transaction = (async (callback: (tx: never) => Promise<unknown>) =>
       callback({} as never)) as unknown as typeof prisma.$transaction;
 
-    const result = await authService.loginWithGoogle({
-      code: "google-auth-code",
-      role: UserRole.MOVER,
-      intent: "signup",
-    });
+    const result = assertAuthResponse(
+      await authService.loginWithGoogle({
+        code: "google-auth-code",
+        role: UserRole.MOVER,
+        intent: "signup",
+      }),
+    );
 
     assert.equal(createdRole, UserRole.MOVER);
     assert.equal(result.user.role, UserRole.MOVER);
@@ -527,11 +545,13 @@ describe("authService OAuth login role validation", () => {
       throw createP2002Error();
     }) as unknown as typeof prisma.$transaction;
 
-    const result = await authService.loginWithGoogle({
-      code: "google-auth-code",
-      role: UserRole.CUSTOMER,
-      intent: "signup",
-    });
+    const result = assertAuthResponse(
+      await authService.loginWithGoogle({
+        code: "google-auth-code",
+        role: UserRole.CUSTOMER,
+        intent: "signup",
+      }),
+    );
 
     assert.equal(findByProviderCallCount, 2);
     assert.equal(result.user.role, UserRole.CUSTOMER);

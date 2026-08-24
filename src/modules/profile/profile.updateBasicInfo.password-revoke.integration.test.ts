@@ -511,6 +511,10 @@ const runDbIntegration = process.env.RUN_DB_INTEGRATION_TESTS === "1";
             role: fixture.loginRole,
           });
 
+          if ("suspension" in loginResult) {
+            assert.fail("정지 계정 로그인 결과가 반환되었습니다.");
+          }
+
           assert.equal(typeof loginResult.tokens.refreshToken, "string");
 
           const storedToken = await authRepository.findRefreshTokenByHash(

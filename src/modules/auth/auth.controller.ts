@@ -181,6 +181,7 @@ const login = async (
 
   if (isSuspendedAuthResponse(result)) {
     throwSuspendedLoginResponse(res, result);
+    return;
   }
 
   sendAuthResponse(res, 200, result);
@@ -200,6 +201,7 @@ const loginWithGoogle = async (
 
   if (isSuspendedAuthResponse(result)) {
     throwSuspendedLoginResponse(res, result);
+    return;
   }
 
   sendAuthResponse(res, 200, result, "Google 로그인에 성공했습니다.");
@@ -219,6 +221,7 @@ const loginWithKakao = async (
 
   if (isSuspendedAuthResponse(result)) {
     throwSuspendedLoginResponse(res, result);
+    return;
   }
 
   sendAuthResponse(res, 200, result, "Kakao 로그인에 성공했습니다.");
@@ -276,6 +279,7 @@ const loginWithNaver = async (
 
   if (isSuspendedAuthResponse(result)) {
     throwSuspendedLoginResponse(res, result);
+    return;
   }
 
   sendAuthResponse(res, 200, result, "Naver 로그인에 성공했습니다.");
