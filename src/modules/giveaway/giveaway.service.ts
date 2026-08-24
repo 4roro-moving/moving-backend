@@ -250,7 +250,7 @@ async function restoreGiveawayToAvailableOrThrow(
 }
 
 function toGiveawayLinkUrl(giveawayId: number) {
-  return `/community/giveaways/${String(giveawayId)}`;
+  return `/community/giveaway/${String(giveawayId)}`;
 }
 
 function toGiveawayRequestSourceId(requestId: number) {
