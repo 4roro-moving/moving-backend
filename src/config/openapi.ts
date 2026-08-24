@@ -16,6 +16,8 @@ export const registry = new OpenAPIRegistry();
  * 새 모듈을 추가할 때 여기에 한 줄만 추가하면 됩니다.
  */
 async function registerModuleDocs(): Promise<void> {
+  await import("../modules/mover/mover.docs");
+  await import("../modules/favorite/favorite.docs");
   await import("../modules/estimate-request/estimateRequest.docs");
   await import("../modules/mover-calendar/mover-calendar.docs");
   // 2026.07.24 정슬기 - [추가] 받은 견적·확정 API 문서를 OpenAPI에 등록
