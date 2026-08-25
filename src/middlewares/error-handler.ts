@@ -5,6 +5,7 @@ import Sentry from "../config/sentry";
 import logger from "../config/logger";
 import { ERROR_CODES } from "../constants/error-code";
 import { AppError } from "../lib/app-error";
+import { sendAppErrorResponse } from "../utils/send-app-error-response";
 
 // 전역 에러 처리
 const errorHandler: ErrorRequestHandler = (
@@ -27,19 +28,7 @@ const errorHandler: ErrorRequestHandler = (
       method: req.method,
     });
 
-    res.status(error.status).json({
-      success: false,
-      error: {
-        code: error.code,
-        message: error.message,
-        ...(error.data !== undefined && {
-          data: error.data,
-        }),
-      },
-      path: req.originalUrl,
-      method: req.method,
-      timestamp: new Date().toISOString(),
-    });
+    sendAppErrorResponse(req, res, error);
 
     return;
   }

@@ -9,6 +9,7 @@ import {
 } from "./auth.cookie";
 import { AppError } from "../../lib/app-error";
 import { createOAuthState, validateOAuthState } from "../../utils/oauth-state";
+import { sendAppErrorResponse } from "../../utils/send-app-error-response";
 import { verifyRefreshToken } from "../../utils/jwt";
 
 import type { AuthResponse, SuspendedAuthResponse } from "./auth.type";
@@ -123,18 +124,26 @@ const isSuspendedAuthResponse = (
 ): result is SuspendedAuthResponse => "suspension" in result;
 
 /**
- * 정지 계정의 제한 세션을 문의 API 전용 HttpOnly Cookie로 설정하고,
+ * 정지 계정의 제한 토큰을 문의 API 전용 HttpOnly Cookie로 설정하고,
  * 토큰 원문 없이 정지 사유·이의 제기 가능 여부를 403 응답으로 반환한다.
  */
-const throwSuspendedLoginResponse = (res: Response, result: SuspendedAuthResponse): never => {
+const sendSuspendedLoginResponse = (
+  req: Request,
+  res: Response,
+  result: SuspendedAuthResponse,
+): void => {
   res.cookie(SUSPENSION_APPEAL_TOKEN_COOKIE, result.suspension.appealAccessToken, {
     ...suspensionAppealTokenCookieOptions,
     maxAge: SUSPENSION_APPEAL_TOKEN_MAX_AGE,
   });
 
-  throw new AppError("ACCOUNT_SUSPENDED", {
-    data: { reason: result.suspension.reason, appealAvailable: true },
-  });
+  sendAppErrorResponse(
+    req,
+    res,
+    new AppError("ACCOUNT_SUSPENDED", {
+      data: { reason: result.suspension.reason, appealAvailable: true },
+    }),
+  );
 };
 
 /*
@@ -180,7 +189,7 @@ const login = async (
   const result = await authService.login(req.body);
 
   if (isSuspendedAuthResponse(result)) {
-    throwSuspendedLoginResponse(res, result);
+    sendSuspendedLoginResponse(req, res, result);
     return;
   }
 
@@ -200,7 +209,7 @@ const loginWithGoogle = async (
   const result = await authService.loginWithGoogle(req.body);
 
   if (isSuspendedAuthResponse(result)) {
-    throwSuspendedLoginResponse(res, result);
+    sendSuspendedLoginResponse(req, res, result);
     return;
   }
 
@@ -220,7 +229,7 @@ const loginWithKakao = async (
   const result = await authService.loginWithKakao(req.body);
 
   if (isSuspendedAuthResponse(result)) {
-    throwSuspendedLoginResponse(res, result);
+    sendSuspendedLoginResponse(req, res, result);
     return;
   }
 
@@ -278,7 +287,7 @@ const loginWithNaver = async (
   const result = await authService.loginWithNaver(req.body);
 
   if (isSuspendedAuthResponse(result)) {
-    throwSuspendedLoginResponse(res, result);
+    sendSuspendedLoginResponse(req, res, result);
     return;
   }
 
