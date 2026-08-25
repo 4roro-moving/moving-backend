@@ -80,14 +80,14 @@ export const createAccessToken = (payload: TokenPayload): string => {
 };
 
 /**
- * 일반 서비스에는 사용할 수 없는 정지 이의 제기 전용 Access Token (15분 만료).
+ * 일반 서비스에는 사용할 수 없는 정지 이의 제기 전용 Access Token (30분 만료).
  * 제한 세션 JWT에 purpose: "SUSPENSION_APPEAL" 추가
  */
 export const createSuspensionAppealAccessToken = (
   payload: Omit<TokenPayload, "purpose">,
 ): string => {
   return jwt.sign({ ...payload, purpose: "SUSPENSION_APPEAL" }, getJwtSecret(), {
-    expiresIn: "15m",
+    expiresIn: "30m",
   });
 };
 
