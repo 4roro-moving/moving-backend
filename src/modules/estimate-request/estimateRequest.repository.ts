@@ -73,6 +73,21 @@ export type EstimateRequestDetail = Prisma.EstimateRequestGetPayload<{
   select: typeof estimateRequestDetailSelect;
 }>;
 
+/**
+ * 목록 전용 select.
+ *
+ * 상세용 select 를 그대로 쓰면 _count 가 반환 행마다 estimates 상관 서브쿼리를
+ * 유발해 10행 조회에 3.3초가 걸린다(_count 만 제거 시 17ms).
+ * estimates 를 이미 전량 조회하므로 개수는 mapper 에서 길이로 복원한다.
+ *
+ * 구조분해로 파생시켜, 상세 select 가 바뀌면 목록도 자동으로 따라가게 한다.
+ */
+const { _count: _unusedCount, ...estimateRequestListSelect } = estimateRequestDetailSelect;
+
+export type EstimateRequestListItem = Prisma.EstimateRequestGetPayload<{
+  select: typeof estimateRequestListSelect;
+}>;
+
 /** 목록·count에 동일하게 쓰는 where (status는 선택) */
 export function buildFindManyByCustomerWhere(params: {
   customerId: string;
@@ -219,7 +234,7 @@ export const estimateRequestRepository = {
     const [items, totalCount] = await Promise.all([
       db.estimateRequest.findMany({
         where,
-        select: estimateRequestDetailSelect,
+        select: estimateRequestListSelect,
         // createdAt 동일 시 id로 안정 정렬
         orderBy: [{ createdAt: "desc" }, { id: "desc" }],
         skip: params.skip,
