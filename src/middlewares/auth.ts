@@ -126,6 +126,13 @@ export const authenticateInquiryAccess: RequestHandler = async (req, res, next) 
 
     const payload = verifyAccessToken(token);
 
+    // 이의 제기 전용 토큰은 문의 API 전용 HttpOnly Cookie로만 사용할 수 있다.
+    if (payload.purpose === "SUSPENSION_APPEAL" && !hasSuspensionAppealCookie) {
+      throw new AppError("UNAUTHORIZED", {
+        message: "이의 제기 전용 토큰은 Cookie로만 사용할 수 있습니다.",
+      });
+    }
+
     // 제한 세션 Cookie에는 이의 제기 전용 토큰만 허용한다.
     if (hasSuspensionAppealCookie && payload.purpose !== "SUSPENSION_APPEAL") {
       throw new AppError("UNAUTHORIZED", {
