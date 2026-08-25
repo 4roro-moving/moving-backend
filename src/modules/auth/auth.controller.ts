@@ -2,10 +2,17 @@ import type { CookieOptions, Request, Response } from "express";
 import type { ParamsDictionary } from "express-serve-static-core";
 
 import { authService } from "./auth.service";
+import {
+  SUSPENSION_APPEAL_TOKEN_COOKIE,
+  SUSPENSION_APPEAL_TOKEN_MAX_AGE,
+  suspensionAppealTokenCookieOptions,
+} from "./auth.cookie";
 import { AppError } from "../../lib/app-error";
 import { createOAuthState, validateOAuthState } from "../../utils/oauth-state";
+import { sendAppErrorResponse } from "../../utils/send-app-error-response";
 import { verifyRefreshToken } from "../../utils/jwt";
 
+import type { AuthResponse, SuspendedAuthResponse } from "./auth.type";
 import type {
   GoogleOAuthInput,
   KakaoOAuthInput,
@@ -87,7 +94,7 @@ const getNaverOAuthStateFromCookie = (req: Request): string | undefined => {
 const sendAuthResponse = (
   res: Response,
   statusCode: number,
-  result: Awaited<ReturnType<typeof authService.login>>,
+  result: AuthResponse,
   message?: string,
 ): void => {
   const {
@@ -95,6 +102,8 @@ const sendAuthResponse = (
     tokens: { accessToken, refreshToken },
   } = result;
 
+  // 다른 계정으로 정상 로그인 시 이전 정지 계정의 제한 세션을 함께 폐기한다.
+  res.clearCookie(SUSPENSION_APPEAL_TOKEN_COOKIE, suspensionAppealTokenCookieOptions);
   setRefreshTokenCookie(res, refreshToken);
 
   res.status(statusCode).json({
@@ -107,6 +116,34 @@ const sendAuthResponse = (
       },
     },
   });
+};
+
+/** Service가 반환한 결과가 정지 계정의 제한 세션 발급 대상인지 판별한다. */
+const isSuspendedAuthResponse = (
+  result: AuthResponse | SuspendedAuthResponse,
+): result is SuspendedAuthResponse => "suspension" in result;
+
+/**
+ * 정지 계정의 제한 토큰을 문의 API 전용 HttpOnly Cookie로 설정하고,
+ * 토큰 원문 없이 정지 사유·이의 제기 가능 여부를 403 응답으로 반환한다.
+ */
+const sendSuspendedLoginResponse = (
+  req: Request,
+  res: Response,
+  result: SuspendedAuthResponse,
+): void => {
+  res.cookie(SUSPENSION_APPEAL_TOKEN_COOKIE, result.suspension.appealAccessToken, {
+    ...suspensionAppealTokenCookieOptions,
+    maxAge: SUSPENSION_APPEAL_TOKEN_MAX_AGE,
+  });
+
+  sendAppErrorResponse(
+    req,
+    res,
+    new AppError("ACCOUNT_SUSPENDED", {
+      data: { reason: result.suspension.reason, appealAvailable: true },
+    }),
+  );
 };
 
 /*
@@ -151,6 +188,11 @@ const login = async (
 ): Promise<void> => {
   const result = await authService.login(req.body);
 
+  if (isSuspendedAuthResponse(result)) {
+    sendSuspendedLoginResponse(req, res, result);
+    return;
+  }
+
   sendAuthResponse(res, 200, result);
 };
 
@@ -166,6 +208,11 @@ const loginWithGoogle = async (
 ): Promise<void> => {
   const result = await authService.loginWithGoogle(req.body);
 
+  if (isSuspendedAuthResponse(result)) {
+    sendSuspendedLoginResponse(req, res, result);
+    return;
+  }
+
   sendAuthResponse(res, 200, result, "Google 로그인에 성공했습니다.");
 };
 
@@ -180,6 +227,11 @@ const loginWithKakao = async (
   res: Response,
 ): Promise<void> => {
   const result = await authService.loginWithKakao(req.body);
+
+  if (isSuspendedAuthResponse(result)) {
+    sendSuspendedLoginResponse(req, res, result);
+    return;
+  }
 
   sendAuthResponse(res, 200, result, "Kakao 로그인에 성공했습니다.");
 };
@@ -234,6 +286,11 @@ const loginWithNaver = async (
 
   const result = await authService.loginWithNaver(req.body);
 
+  if (isSuspendedAuthResponse(result)) {
+    sendSuspendedLoginResponse(req, res, result);
+    return;
+  }
+
   sendAuthResponse(res, 200, result, "Naver 로그인에 성공했습니다.");
 };
 
@@ -287,6 +344,8 @@ const logout = async (req: Request, res: Response): Promise<void> => {
    * 로그아웃의 멱등성을 보장한다.
    */
   res.clearCookie(REFRESH_TOKEN_COOKIE, refreshTokenCookieOptions);
+  // 로그아웃 시 정지 의의 제기 쿠키도 함께 삭제
+  res.clearCookie(SUSPENSION_APPEAL_TOKEN_COOKIE, suspensionAppealTokenCookieOptions);
 
   res.status(200).json({
     success: true,

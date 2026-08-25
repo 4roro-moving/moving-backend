@@ -22,6 +22,13 @@ export const socketAuthenticate = async (
 
     const payload = verifyAccessToken(token);
 
+    // 정지 이의 제기 제한 세션은 Socket.IO 연결에 사용할 수 없다.
+    if (payload.purpose !== undefined) {
+      throw new AppError("UNAUTHORIZED", {
+        message: "Socket.IO 연결에 사용할 수 없는 Access Token입니다.",
+      });
+    }
+
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
       select: { isActive: true, deletedAt: true },

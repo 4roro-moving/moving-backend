@@ -1,5 +1,6 @@
-import type { Prisma } from "@prisma/client";
+import { InquiryCategory, type Prisma } from "@prisma/client";
 
+import { INQUIRY_ACCESS, type InquiryAccess } from "../../constants/inquiry-access";
 import { AppError } from "../../lib/app-error";
 import { buildPagination } from "../../utils/pagination.util";
 import { escapeLikePattern } from "../../utils/search.util";
@@ -22,6 +23,7 @@ import type {
 type Ownership = {
   id: number;
   authorId: string;
+  category: InquiryCategory;
   status: "OPEN" | "ANSWERED" | "CLOSED";
   handledBy: string | null;
 };
@@ -60,16 +62,28 @@ async function findInquiryOrThrow(inquiryId: number, db?: DbClient): Promise<Own
 // 사용자 기능
 // ============================================================================
 
+/**
+ * 정지 이의 제기 제한 세션 정책
+ *
+ * - 새 문의는 SUSPENSION_APPEAL 분류로만 생성한다.
+ * - 기존 일반 문의는 조회와 답변 확인만 허용한다.
+ * - SUSPENSION_APPEAL 문의에만 추가 메시지를 허용한다.
+ * - 문의 종료는 허용하지 않는다.
+ */
 export const inquiryService = {
   /** 문의 생성 (제목+카테고리+첫 메시지, 트랜잭션) */
-  async createInquiry(authorId: string, input: CreateInquiryInput) {
+  async createInquiry(authorId: string, input: CreateInquiryInput, access: InquiryAccess) {
     const now = new Date();
 
     const inquiryId = await runTransaction((tx) =>
       inquiryRepository.createWithFirstMessage(
         {
           authorId,
-          category: input.category,
+          // 제한 세션에서는 클라이언트 입력과 무관하게 이의 제기 문의로 생성한다.
+          category:
+            access === INQUIRY_ACCESS.SUSPENSION_APPEAL
+              ? InquiryCategory.SUSPENSION_APPEAL
+              : input.category,
           title: input.title,
           content: input.content,
           now,
@@ -112,12 +126,27 @@ export const inquiryService = {
   },
 
   /** 사용자 메시지 추가 (열린 문의에만, 추가 시 status=OPEN) */
-  async addUserMessage(inquiryId: number, userId: string, input: CreateMessageInput) {
+  async addUserMessage(
+    inquiryId: number,
+    userId: string,
+    input: CreateMessageInput,
+    access: InquiryAccess,
+  ) {
     const now = new Date();
 
     await runTransaction(async (tx) => {
       // 소유권/존재 확인 (없으면 404, 남의 것이면 403)
-      await findOwnedInquiryOrThrow(inquiryId, userId, tx);
+      const inquiry = await findOwnedInquiryOrThrow(inquiryId, userId, tx);
+
+      if (
+        access === INQUIRY_ACCESS.SUSPENSION_APPEAL &&
+        inquiry.category !== InquiryCategory.SUSPENSION_APPEAL
+      ) {
+        // 제한 세션의 기존 일반 문의는 읽기 전용으로 유지한다.
+        throw new AppError("FORBIDDEN", {
+          message: "정지 계정은 일반 문의에 메시지를 추가할 수 없습니다.",
+        });
+      }
       const ok = await inquiryRepository.addMessage(
         {
           inquiryId,
@@ -139,7 +168,14 @@ export const inquiryService = {
   },
 
   /** 사용자 문의 종료 */
-  async closeByUser(inquiryId: number, userId: string) {
+  async closeByUser(inquiryId: number, userId: string, access: InquiryAccess) {
+    if (access === INQUIRY_ACCESS.SUSPENSION_APPEAL) {
+      // 이의 제기 진행 중인 제한 세션에서는 문의 종료를 허용하지 않는다.
+      throw new AppError("FORBIDDEN", {
+        message: "정지 계정은 기존 문의를 종료할 수 없습니다.",
+      });
+    }
+
     const now = new Date();
 
     return runTransaction(async (tx) => {

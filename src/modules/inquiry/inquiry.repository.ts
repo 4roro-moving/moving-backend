@@ -61,7 +61,7 @@ export const inquiryRepository = {
   findOwnership(inquiryId: number, db: DbClient = prisma) {
     return db.inquiry.findUnique({
       where: { id: inquiryId },
-      select: { id: true, authorId: true, status: true, handledBy: true },
+      select: { id: true, authorId: true, category: true, status: true, handledBy: true },
     });
   },
 

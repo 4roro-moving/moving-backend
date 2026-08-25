@@ -15,7 +15,14 @@ import { googleOAuth } from "./oauth/google.oauth";
 import { kakaoOAuth } from "./oauth/kakao.oauth";
 import { naverOAuth } from "./oauth/naver.oauth";
 
-import type { AuthResponse, IssuedAuthTokens, OAuthProfile, RefreshResponse } from "./auth.type";
+import type {
+  AuthResponse,
+  IssuedAuthTokens,
+  LoginResponse,
+  OAuthProfile,
+  RefreshResponse,
+  SuspendedAuthResponse,
+} from "./auth.type";
 
 import { isUniqueConstraintError } from "../../utils/prisma-error";
 
@@ -30,7 +37,12 @@ import type {
 
 import { AppError } from "../../lib/app-error";
 
-import { createAccessToken, createRefreshToken, verifyRefreshToken } from "../../utils/jwt";
+import {
+  createAccessToken,
+  createRefreshToken,
+  createSuspensionAppealAccessToken,
+  verifyRefreshToken,
+} from "../../utils/jwt";
 
 import { runRefreshTokenSingleFlight } from "../../utils/refresh-token-single-flight";
 import {
@@ -226,22 +238,37 @@ const signUpMover = async (input: SignUpInput): Promise<AuthResponse> => {
 /**
  * 정지 사유(UserSuspension.reason)를 로그인 응답에 포함한다.
  */
-const throwAccountSuspended = async (userId: string): Promise<never> => {
+const getSuspendedLoginResponse = async (
+  userId: string,
+  role: UserRole,
+): Promise<SuspendedAuthResponse> => {
   const suspension = await authRepository.findLatestSuspension(userId);
 
+  if (!suspension) throw new AppError("ACCOUNT_SUSPENDED");
+
+  return {
+    suspension: {
+      reason: suspension.reason,
+      appealAccessToken: createSuspensionAppealAccessToken({ userId, role }),
+    },
+  };
+};
+
+/**
+ * Refresh Token 재발급 등 이미 인증된 세션의 정지 차단에 사용한다.
+ * 새 본인 인증이 아니므로 이의 제기 제한 세션은 발급하지 않는다.
+ */
+const throwAccountSuspended = async (userId: string): Promise<never> => {
+  const suspension = await authRepository.findLatestSuspension(userId);
   throw new AppError("ACCOUNT_SUSPENDED", {
-    ...(suspension && {
-      data: {
-        reason: suspension.reason,
-      },
-    }),
+    ...(suspension && { data: { reason: suspension.reason } }),
   });
 };
 
 /**
  * 로컬 로그인
  */
-const login = async (input: LoginInput): Promise<AuthResponse> => {
+const login = async (input: LoginInput): Promise<LoginResponse> => {
   /**
    * 회원가입과 동일한 방식으로 이메일을 정규화한다.
    */
@@ -259,14 +286,6 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
     throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
     });
-  }
-
-  /**
-   * 비활성화되었거나 탈퇴 처리된 사용자는
-   * 새로운 로그인 세션을 생성할 수 없다.
-   */
-  if (!user.isActive && user.deletedAt === null) {
-    await throwAccountSuspended(user.id);
   }
 
   if (user.deletedAt !== null) {
@@ -293,6 +312,14 @@ const login = async (input: LoginInput): Promise<AuthResponse> => {
     throw new AppError("UNAUTHORIZED", {
       message: "이메일 또는 비밀번호가 올바르지 않습니다.",
     });
+  }
+
+  /**
+   * 정지 계정은 비밀번호 본인 인증이 성공한 경우에만
+   * 이의 제기 전용 제한 토큰을 함께 반환한다.
+   */
+  if (!user.isActive) {
+    return getSuspendedLoginResponse(user.id, user.role);
   }
 
   /**
@@ -357,9 +384,9 @@ type OAuthUser = NonNullable<
 const createOAuthLoginResponse = async (
   user: OAuthUser,
   requestedRole: SignUpRole,
-): Promise<AuthResponse> => {
+): Promise<LoginResponse> => {
   if (!user.isActive && user.deletedAt === null) {
-    await throwAccountSuspended(user.id);
+    return getSuspendedLoginResponse(user.id, user.role);
   }
 
   if (user.deletedAt !== null) {
@@ -420,7 +447,7 @@ const loginWithOAuth = async (
   requestedRole: SignUpRole,
   agreements: TermsAgreementInput[] = [],
   intent: OAuthIntent,
-): Promise<AuthResponse> => {
+): Promise<LoginResponse> => {
   const existingOAuthUser = await authRepository.findByProviderAndProviderId(
     profile.provider,
     profile.providerUserId,
@@ -548,7 +575,7 @@ const loginWithOAuth = async (
  * Authorization Code를 Google 프로필로 변환한 뒤
  * 공통 OAuth 로그인 로직을 실행한다.
  */
-const loginWithGoogle = async (input: GoogleOAuthInput): Promise<AuthResponse> => {
+const loginWithGoogle = async (input: GoogleOAuthInput): Promise<LoginResponse> => {
   const profile = await googleOAuth.getGoogleOAuthProfile(input.code);
 
   return loginWithOAuth(profile, input.role, input.agreements ?? [], input.intent);
@@ -560,7 +587,7 @@ const loginWithGoogle = async (input: GoogleOAuthInput): Promise<AuthResponse> =
  * Authorization Code를 Kakao 프로필로 변환한 뒤
  * 공통 OAuth 로그인 로직을 실행한다.
  */
-const loginWithKakao = async (input: KakaoOAuthInput): Promise<AuthResponse> => {
+const loginWithKakao = async (input: KakaoOAuthInput): Promise<LoginResponse> => {
   const profile = await kakaoOAuth.getKakaoOAuthProfile(input.code);
 
   return loginWithOAuth(profile, input.role, input.agreements ?? [], input.intent);
@@ -572,7 +599,7 @@ const loginWithKakao = async (input: KakaoOAuthInput): Promise<AuthResponse> => 
  * Authorization Code와 state를 Naver 프로필로 변환한 뒤
  * 공통 OAuth 로그인 로직을 실행한다.
  */
-const loginWithNaver = async (input: NaverOAuthInput): Promise<AuthResponse> => {
+const loginWithNaver = async (input: NaverOAuthInput): Promise<LoginResponse> => {
   const profile = await naverOAuth.getNaverOAuthProfile(input.code, input.state);
 
   return loginWithOAuth(profile, input.role, input.agreements ?? [], input.intent);
