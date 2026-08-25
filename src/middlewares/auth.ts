@@ -96,12 +96,17 @@ export function authorize(...roles: UserRole[]): RequestHandler {
  * 활성 계정은 일반 로그인 세션으로, 정지 계정은 이의 제기 제한 세션으로 접근한다.
  */
 export const authenticateInquiryAccess: RequestHandler = async (req, res, next) => {
+  const cookieToken: unknown = req.cookies?.[SUSPENSION_APPEAL_TOKEN_COOKIE];
+  const hasSuspensionAppealCookie = typeof cookieToken === "string";
+
   try {
     const authorization = req.header("authorization");
-    const cookieToken: unknown = req.cookies?.[SUSPENSION_APPEAL_TOKEN_COOKIE];
     let token: string | undefined;
 
-    if (authorization) {
+    // 제한 세션 Cookie가 있으면 기존 Authorization 헤더보다 우선해 처리한다.
+    if (hasSuspensionAppealCookie) {
+      token = cookieToken;
+    } else if (authorization) {
       const [scheme, bearerToken, ...rest] = authorization.trim().split(/\s+/);
       if (scheme?.toLowerCase() !== "bearer" || !bearerToken || rest.length > 0) {
         throw new AppError("UNAUTHORIZED", {
@@ -109,8 +114,6 @@ export const authenticateInquiryAccess: RequestHandler = async (req, res, next) 
         });
       }
       token = bearerToken;
-    } else if (typeof cookieToken === "string") {
-      token = cookieToken;
     }
 
     if (!token) {
@@ -118,6 +121,15 @@ export const authenticateInquiryAccess: RequestHandler = async (req, res, next) 
     }
 
     const payload = verifyAccessToken(token);
+
+    // 제한 세션 Cookie에는 이의 제기 전용 토큰만 허용한다.
+    if (hasSuspensionAppealCookie && payload.purpose !== "SUSPENSION_APPEAL") {
+      throw new AppError("UNAUTHORIZED", {
+        message: "유효하지 않은 이의 제기 세션입니다.",
+      });
+    }
+
+    // 제한 세션의 정지 해제·탈퇴 여부를 즉시 반영하기 위해 현재 계정 상태를 조회한다.
     const user = await prisma.user.findUnique({
       where: { id: payload.userId },
       select: { isActive: true, deletedAt: true },
@@ -153,7 +165,7 @@ export const authenticateInquiryAccess: RequestHandler = async (req, res, next) 
 
     next();
   } catch (error) {
-    if (!req.header("authorization")) {
+    if (hasSuspensionAppealCookie) {
       res.clearCookie(SUSPENSION_APPEAL_TOKEN_COOKIE, suspensionAppealTokenCookieOptions);
     }
     next(error);
