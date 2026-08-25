@@ -90,6 +90,10 @@ export function authorize(...roles: UserRole[]): RequestHandler {
   };
 }
 
+/** 제한 토큰 자체가 무효한 경우에만 Cookie를 제거한다. 일시적인 DB·서버 오류에서는 재시도를 위해 유지한다. */
+const shouldClearSuspensionAppealCookie = (error: unknown): boolean =>
+  error instanceof AppError && (error.code === "UNAUTHORIZED" || error.code === "FORBIDDEN");
+
 /**
  * 문의 API 인증.
  *
@@ -165,7 +169,7 @@ export const authenticateInquiryAccess: RequestHandler = async (req, res, next) 
 
     next();
   } catch (error) {
-    if (hasSuspensionAppealCookie) {
+    if (hasSuspensionAppealCookie && shouldClearSuspensionAppealCookie(error)) {
       res.clearCookie(SUSPENSION_APPEAL_TOKEN_COOKIE, suspensionAppealTokenCookieOptions);
     }
     next(error);
