@@ -915,7 +915,7 @@ model EstimateRequest {
   completedAt DateTime?
 
   /// 고객별 요청 목록 조회 최적화.
-  @@index([customerId])
+  @@index([customerId, createdAt(sort: Desc), id(sort: Desc)])
   /// 상태별 조회 최적화.
   @@index([status])
   /// 이사 유형 필터 최적화.
