@@ -127,12 +127,14 @@ const CHECKS: Check[] = [
   },
   {
     name: "기사 리뷰 통계 캐시",
-    why: "MoverProfile.reviewCount / averageRating 이 실제 집계와 달라집니다",
+    why: "MoverProfile.reviewCount / averageRating 이 공개 리뷰 집계와 달라집니다",
     sql: `
       SELECT COUNT(*)::int AS n FROM "mover_profiles" mp
         LEFT JOIN (
           SELECT mover_id, COUNT(*)::int c, ROUND(AVG(rating), 1) a
-          FROM "reviews" GROUP BY mover_id
+          FROM "reviews"
+          WHERE is_hidden = false
+          GROUP BY mover_id
         ) s ON s.mover_id = mp."userId"
        WHERE mp."reviewCount" <> COALESCE(s.c, 0)
           OR mp."averageRating" <> COALESCE(s.a, 0)
