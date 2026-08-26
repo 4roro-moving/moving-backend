@@ -61,6 +61,7 @@ registerRouterDocs(reportRouter, {
         "CUSTOMER와 MOVER가 신고를 생성할 수 있습니다.",
         "",
         "- 지원 대상은 `CUSTOMER`, `MOVER`, `REVIEW`, `RESIDENCE_REVIEW`, `GIVEAWAY`입니다.",
+        "- MOVER는 본인에게 작성된 리뷰만 신고할 수 있으며, 나눔글·거주후기는 신고할 수 없습니다.",
         "- `targetId`는 API에서 문자열로 받습니다.",
         "- `CUSTOMER`, `MOVER`는 대상 사용자의 `User.id` UUID 문자열이어야 합니다.",
         "- `REVIEW`, `RESIDENCE_REVIEW`, `GIVEAWAY`는 양의 정수 문자열이어야 하며 내부적으로 정규화해 조회합니다.",
