@@ -1,7 +1,10 @@
-import type { UserRole } from "@prisma/client";
+import type { AdminRole, UserRole } from "@prisma/client";
 
 /**
  * 관리자 인증 응답에 포함되는 관리자 정보
+ *
+ * role은 User.role(ADMIN)이고,
+ * adminRole은 AdminProfile.adminRole을 평탄화한 값.
  */
 export interface AdminAuthUser {
   id: string;
@@ -9,6 +12,7 @@ export interface AdminAuthUser {
   name: string;
   role: UserRole;
   isActive: boolean;
+  adminRole: AdminRole | null;
 }
 
 /**
@@ -48,4 +52,5 @@ export interface CurrentAdmin {
   role: UserRole;
   isActive: boolean;
   createdAt: Date;
+  adminRole: AdminRole | null;
 }

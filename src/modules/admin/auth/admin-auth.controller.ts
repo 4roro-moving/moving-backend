@@ -154,7 +154,10 @@ const getCurrentAdmin: RequestHandler = async (req, res) => {
     success: true,
     message: "관리자 정보를 조회했습니다.",
     data: {
-      admin: req.admin,
+      admin: {
+        ...req.admin,
+        adminRole: req.adminProfile?.adminRole ?? null,
+      },
     },
   });
 };
