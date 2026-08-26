@@ -196,6 +196,7 @@ export const reviewRepository = {
     return db.review.findMany({
       where: {
         moverId,
+        isHidden: false,
       },
       select: moverReviewSelect,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -209,6 +210,7 @@ export const reviewRepository = {
     return db.review.count({
       where: {
         moverId,
+        isHidden: false,
       },
     });
   },
@@ -271,11 +273,12 @@ export const reviewRepository = {
     });
   },
 
-  // 기사님의 전체 리뷰 평균과 개수 조회
+  // 기사님에게 공개되는 리뷰의 평균과 개수 조회
   aggregateMoverReviewStats(moverId: string, db: DbClient = prisma) {
     return db.review.aggregate({
       where: {
         moverId,
+        isHidden: false,
       },
       _avg: {
         rating: true,

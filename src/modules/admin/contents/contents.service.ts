@@ -191,6 +191,22 @@ async function toggleReviewVisibility(params: {
       throw new AppError(config.conflictError);
     }
 
+    // 숨김 상태 변경 후, 공개 기사 통계가 숨김 리뷰를 제외하도록 다시 계산한다.
+    const reviewStats = await contentsRepository.aggregateVisibleMoverReviewStats(
+      review.moverId,
+      tx,
+    );
+    const averageRating = reviewStats._avg.rating ?? 0;
+
+    await contentsRepository.updateMoverReviewStats(
+      {
+        moverId: review.moverId,
+        averageRating: Math.round(Number(averageRating) * 10) / 10,
+        reviewCount: reviewStats._count._all,
+      },
+      tx,
+    );
+
     await contentsRepository.createActivityLog(
       {
         actorId: adminId,
