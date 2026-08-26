@@ -463,6 +463,16 @@ export const moversRepository = {
     return { items, totalCount };
   },
 
+  /** 관리자 상세에 표시할 전체·공개·숨김 리뷰 통계를 원본 리뷰에서 집계합니다. */
+  countReviewStatisticsByMoverId(moverId: string, db: DbClient = prisma) {
+    return db.review.groupBy({
+      by: ["isHidden"],
+      where: { moverId },
+      _count: { _all: true },
+      _avg: { rating: true },
+    });
+  },
+
   /** 기사를 직접 대상으로 접수된 신고의 최신 일부와 전체 건수를 조회합니다. */
   async findReceivedReportHistory(
     { moverId, take = MOVER_HISTORY_LIMIT }: HistoryParams,
