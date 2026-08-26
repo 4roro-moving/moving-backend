@@ -34,6 +34,7 @@ import { giveawayRequestRouter, giveawayRouter } from "./modules/giveaway/giveaw
 import { myContentRouter } from "./modules/my-content/my-content.route";
 import { profileRouter } from "./modules/profile/profile.route";
 import reportRouter from "./modules/report/report.route";
+import { translationRouter } from "./modules/translation/translation.route";
 import {
   publicResidenceReviewRouter,
   residenceReviewRouter,
@@ -197,6 +198,7 @@ app.use("/api/residence-reviews", residenceReviewRouter);
 app.use("/api/residence-reviews", publicResidenceReviewRouter);
 app.use("/api/notices", publicNoticeRouter);
 app.use("/api/price-predictions", pricePredictionRouter);
+app.use("/api/translations", translationRouter);
 
 /*
  * 관리자 API
