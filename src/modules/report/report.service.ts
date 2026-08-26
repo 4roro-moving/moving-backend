@@ -195,13 +195,24 @@ export function createReportService(
 
     async createReport(params: {
       reporterId: string;
+      reporterRole: UserRole;
       input: CreateReportInput;
     }): Promise<ReportItem> {
-      const { reporterId, input } = params;
+      const { reporterId, reporterRole, input } = params;
 
       const normalizedTargetId = normalizeTargetId(input.targetType, input.targetId);
 
       const detail = input.description && input.description.length > 0 ? input.description : null;
+
+      // MOVER는 서비스에서 제공하지 않는 나눔·거주후기를 신고할 수 없다.
+      if (
+        reporterRole === UserRole.MOVER &&
+        (input.targetType === "GIVEAWAY" || input.targetType === "RESIDENCE_REVIEW")
+      ) {
+        throw new AppError("FORBIDDEN", {
+          message: "해당 요청을 수행할 권한이 없습니다.",
+        });
+      }
 
       if (input.targetType === "REVIEW") {
         const reviewId = toNumericTargetIdNumber(normalizedTargetId);
@@ -214,6 +225,13 @@ export function createReportService(
 
         if (review.customerId === reporterId) {
           throw new AppError("REPORT_SELF_NOT_ALLOWED");
+        }
+
+        // MOVER는 본인에게 작성된 리뷰만 신고할 수 있다.
+        if (reporterRole === UserRole.MOVER && review.moverId !== reporterId) {
+          throw new AppError("FORBIDDEN", {
+            message: "해당 요청을 수행할 권한이 없습니다.",
+          });
         }
       }
 
