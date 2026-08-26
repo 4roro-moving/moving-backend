@@ -62,6 +62,9 @@ function createAdminUser(overrides: Record<string, unknown> = {}) {
     password: REAL_PASSWORD_HASH,
     isActive: true,
     deletedAt: null,
+    adminProfile: {
+      adminRole: "ADMIN" as const,
+    },
     ...overrides,
   };
 }

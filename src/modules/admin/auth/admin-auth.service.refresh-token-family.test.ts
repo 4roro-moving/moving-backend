@@ -70,6 +70,9 @@ function createAdminLoginUser(overrides: Partial<AdminLoginUser> = {}): AdminLog
     password: REAL_PASSWORD_HASH,
     isActive: true,
     deletedAt: null,
+    adminProfile: {
+      adminRole: "ADMIN",
+    },
     ...overrides,
   };
 }

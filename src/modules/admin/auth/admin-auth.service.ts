@@ -187,6 +187,7 @@ const login = async (input: AdminLoginInput): Promise<AdminAuthResponse> => {
       name: user.name,
       role: user.role,
       isActive: user.isActive,
+      adminRole: user.adminProfile?.adminRole ?? null,
     },
     tokens: {
       accessToken,

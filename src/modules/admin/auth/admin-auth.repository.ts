@@ -21,6 +21,11 @@ const findByEmailForLogin = async (email: string, db: DbClient = prisma) => {
       authProvider: true,
       isActive: true,
       deletedAt: true,
+      adminProfile: {
+        select: {
+          adminRole: true,
+        },
+      },
     },
   });
 };
