@@ -159,6 +159,23 @@ type CustomerListRawRow = {
   totalCount: bigint;
 };
 
+/** 기본 정렬(가입일) 목록의 페이지 선조회 결과입니다. 집계값은 별도 쿼리에서 페이지 대상만 계산합니다. */
+type CustomerListPageRow = Omit<
+  CustomerListRawRow,
+  "receivedReportCount" | "pendingReceivedReportCount" | "openInquiryCount" | "totalCount"
+>;
+
+type OpenInquiryCountRow = {
+  customerId: string;
+  openInquiryCount: number;
+};
+
+type ReceivedReportCountRow = {
+  customerId: string;
+  receivedReportCount: number;
+  pendingReceivedReportCount: number;
+};
+
 /**
  * `sorts` 파라미터로 받은 정렬 기준들을 순서대로 SQL ORDER BY 절로 변환합니다.
  *
@@ -183,6 +200,22 @@ function buildCustomerReportOrderBy(sorts: string[]): Prisma.Sql {
   orderBy.push(Prisma.sql`u.id ASC`);
 
   return Prisma.join(orderBy, ", ");
+}
+
+/**
+ * 신고·문의 집계값이 아닌 가입일로만 정렬하는지 확인합니다.
+ * 가입일 정렬에서는 먼저 현재 페이지의 고객을 정한 뒤, 그 고객들에 한해서만 집계합니다.
+ */
+function isCreatedAtOnlySort(sorts: string[]): boolean {
+  return sorts.every((sort) => sort === "CREATED_AT_DESC" || sort === "CREATED_AT_ASC");
+}
+
+function buildCustomerCreatedAtOrderBy(sorts: string[]): Prisma.Sql {
+  const sort = sorts.find((value) => value === "CREATED_AT_DESC" || value === "CREATED_AT_ASC");
+
+  return sort === "CREATED_AT_ASC"
+    ? Prisma.sql`u."createdAt" ASC, u.id ASC`
+    : Prisma.sql`u."createdAt" DESC, u.id ASC`;
 }
 
 /** 고객 목록의 요청받은 필터를 raw SQL WHERE 절로 만듭니다. */
@@ -231,8 +264,13 @@ export const customersRepository = {
   async findManyWithCount({ skip, take, sorts, filters }: ListParams, db: DbClient = prisma) {
     const whereSql = buildCustomerListWhereSql(filters);
 
+    if (isCreatedAtOnlySort(sorts)) {
+      return this.findManyWithPageScopedCounts({ skip, take, sorts, whereSql }, db);
+    }
+
     /**
-     * 필터·리뷰 기반 신고 집계·미처리 문의 집계·다중 정렬을 적용한 전체 결과에서 LIMIT/OFFSET을 적용해 현재 페이지 행만 조회합니다.
+     * 필터·리뷰 기반 신고 집계·미처리 문의 집계·다중 정렬을 적용한 전체 결과에서
+     * LIMIT/OFFSET을 적용해 현재 페이지 행만 조회합니다.
      */
     const rows = await db.$queryRaw<CustomerListRawRow[]>(Prisma.sql`
         SELECT
@@ -291,6 +329,102 @@ export const customersRepository = {
     return {
       customers: rows.map(({ totalCount: _totalCount, ...customer }) => customer),
       totalCount,
+    };
+  },
+
+  /**
+   * 가입일 정렬은 결과 페이지를 먼저 확정할 수 있으므로,
+   * 문의·신고 건수도 현재 페이지 고객으로 범위를 제한해 집계합니다.
+   * 미처리 신고 수 또는 OPEN 문의 수로 정렬할 때는 전체 후보의 순위를 계산해야 하므로
+   * 기존 조회 경로를 사용합니다.
+   */
+  async findManyWithPageScopedCounts(
+    {
+      skip,
+      take,
+      sorts,
+      whereSql,
+    }: Pick<ListParams, "skip" | "take" | "sorts"> & { whereSql: Prisma.Sql },
+    db: DbClient = prisma,
+  ) {
+    // 페이지 항목과 전체 건수는 서로 의존하지 않으므로 동시에 조회한다.
+    const [pageRows, countRows] = await Promise.all([
+      db.$queryRaw<CustomerListPageRow[]>(Prisma.sql`
+        SELECT
+          u.id,
+          u.email,
+          u.name,
+          u.phone,
+          u."authProvider",
+          u."isActive",
+          u."isProfileCompleted",
+          u."deletedAt",
+          u."createdAt"
+        FROM "User" AS u
+        WHERE ${whereSql}
+        ORDER BY ${buildCustomerCreatedAtOrderBy(sorts)}
+        LIMIT ${take} OFFSET ${skip}
+      `),
+      db.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
+        SELECT COUNT(*)::bigint AS count
+        FROM "User" AS u
+        WHERE ${whereSql}
+      `),
+    ]);
+
+    // 페이지가 비어 있으면 후속 IN (...) 집계를 생략한다.
+    if (pageRows.length === 0) {
+      return { customers: [] as CustomerListRow[], totalCount: Number(countRows[0]?.count ?? 0) };
+    }
+
+    const customerIds = pageRows.map((customer) => customer.id);
+    const customerIdSql = Prisma.join(
+      customerIds.map((customerId) => Prisma.sql`${customerId}::uuid`),
+    );
+
+    // 현재 페이지 고객에 대해서만 문의·신고 건수를 동시에 집계한다.
+    const [openInquiryCounts, receivedReportCounts] = await Promise.all([
+      db.$queryRaw<OpenInquiryCountRow[]>(Prisma.sql`
+        SELECT i.author_id AS "customerId", COUNT(*)::int AS "openInquiryCount"
+        FROM inquiries AS i
+        WHERE i.status = ${InquiryStatus.OPEN}::"InquiryStatus"
+          AND i.author_id IN (${customerIdSql})
+        GROUP BY i.author_id
+      `),
+      db.$queryRaw<ReceivedReportCountRow[]>(Prisma.sql`
+        SELECT
+          rv.customer_id AS "customerId",
+          COUNT(rp.id)::int AS "receivedReportCount",
+          COUNT(rp.id) FILTER (WHERE rp.status = ${"PENDING"}::"ReportStatus")::int
+            AS "pendingReceivedReportCount"
+        FROM reviews AS rv
+        LEFT JOIN reports AS rp
+          ON rp.target_type = ${ReportTargetType.REVIEW}::"ReportTargetType"
+          AND rp.target_id = rv.id::text
+        WHERE rv.customer_id IN (${customerIdSql})
+        GROUP BY rv.customer_id
+      `),
+    ]);
+
+    const openInquiryCountByCustomerId = new Map(
+      openInquiryCounts.map((row) => [row.customerId, row.openInquiryCount]),
+    );
+    const receivedReportCountByCustomerId = new Map(
+      receivedReportCounts.map((row) => [row.customerId, row]),
+    );
+
+    return {
+      customers: pageRows.map((customer) => {
+        const reportCounts = receivedReportCountByCustomerId.get(customer.id);
+
+        return {
+          ...customer,
+          receivedReportCount: reportCounts?.receivedReportCount ?? 0,
+          pendingReceivedReportCount: reportCounts?.pendingReceivedReportCount ?? 0,
+          openInquiryCount: openInquiryCountByCustomerId.get(customer.id) ?? 0,
+        } satisfies CustomerListRow;
+      }),
+      totalCount: Number(countRows[0]?.count ?? 0),
     };
   },
 
