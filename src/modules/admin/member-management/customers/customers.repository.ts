@@ -1,10 +1,11 @@
-import { InquiryStatus, Prisma, ReportTargetType, UserRole } from "@prisma/client";
+import { InquiryStatus, Prisma, ReportStatus, ReportTargetType, UserRole } from "@prisma/client";
 import type { AuthProvider } from "@prisma/client";
 
 import { prisma } from "../../../../lib/prisma";
 import { kstDayEnd, kstDayStart, parseDateMarker } from "../../../../utils/kst";
 import type { DbClient } from "../../../../utils/transaction";
 import type { MemberReceivedReportCounts } from "../member.type";
+import { MEMBER_STATUS } from "../member-status.constants";
 import type { ListCustomerQuery } from "./customers.type";
 
 /** 고객 상세 응답에서 각 이력 항목별로 제공하는 기본 최신 건수입니다. */
@@ -176,6 +177,58 @@ type ReceivedReportCountRow = {
   pendingReceivedReportCount: number;
 };
 
+type ReceivedReportHistorySummaryRow = {
+  totalCount: bigint;
+  reportIds: number[];
+};
+
+type CustomerReportTargetScope = {
+  uuidIds: Prisma.Sql;
+  textIds: Prisma.Sql;
+};
+
+/**
+ * 고객 본인과 고객이 작성한 콘텐츠에 접수된 신고를 고객 ID별 행으로 반환합니다.
+ *
+ * 목록 집계(전체/페이지 범위)와 상세 이력이 같은 피신고 대상 기준을 사용하도록 공통으로 관리합니다.
+ * 범위를 지정하지 않으면 전체 고객을, 지정하면 해당 고객만 대상으로 조회합니다.
+ */
+function buildCustomerReceivedReportTargetsSql(scope?: CustomerReportTargetScope): Prisma.Sql {
+  return Prisma.sql`
+    SELECT rp.id AS "reportId", rp.created_at AS "createdAt", rp.target_id AS "customerId", rp.status
+    FROM reports AS rp
+    WHERE rp.target_type = ${ReportTargetType.CUSTOMER}::"ReportTargetType"
+      ${scope ? Prisma.sql`AND rp.target_id IN (${scope.textIds})` : Prisma.empty}
+
+    UNION ALL
+
+    SELECT rp.id AS "reportId", rp.created_at AS "createdAt", rv.customer_id::text AS "customerId", rp.status
+    FROM reviews AS rv
+    INNER JOIN reports AS rp
+      ON rp.target_type = ${ReportTargetType.REVIEW}::"ReportTargetType"
+      AND rp.target_id = rv.id::text
+    ${scope ? Prisma.sql`WHERE rv.customer_id IN (${scope.uuidIds})` : Prisma.empty}
+
+    UNION ALL
+
+    SELECT rp.id AS "reportId", rp.created_at AS "createdAt", rr.author_id::text AS "customerId", rp.status
+    FROM residence_reviews AS rr
+    INNER JOIN reports AS rp
+      ON rp.target_type = ${ReportTargetType.RESIDENCE_REVIEW}::"ReportTargetType"
+      AND rp.target_id = rr.id::text
+    ${scope ? Prisma.sql`WHERE rr.author_id IN (${scope.uuidIds})` : Prisma.empty}
+
+    UNION ALL
+
+    SELECT rp.id AS "reportId", rp.created_at AS "createdAt", g.author_id::text AS "customerId", rp.status
+    FROM giveaways AS g
+    INNER JOIN reports AS rp
+      ON rp.target_type = ${ReportTargetType.GIVEAWAY}::"ReportTargetType"
+      AND rp.target_id = g.id::text
+    ${scope ? Prisma.sql`WHERE g.author_id IN (${scope.uuidIds})` : Prisma.empty}
+  `;
+}
+
 /**
  * `sorts` 파라미터로 받은 정렬 기준들을 순서대로 SQL ORDER BY 절로 변환합니다.
  *
@@ -222,11 +275,11 @@ function buildCustomerCreatedAtOrderBy(sorts: string[]): Prisma.Sql {
 function buildCustomerListWhereSql(filters: ListCustomerQuery): Prisma.Sql {
   const conditions: Prisma.Sql[] = [Prisma.sql`u.role = ${UserRole.CUSTOMER}::"UserRole"`];
 
-  if (filters.status === "ACTIVE") {
+  if (filters.status === MEMBER_STATUS.ACTIVE) {
     conditions.push(Prisma.sql`u."deletedAt" IS NULL AND u."isActive" = TRUE`);
-  } else if (filters.status === "SUSPENDED") {
+  } else if (filters.status === MEMBER_STATUS.SUSPENDED) {
     conditions.push(Prisma.sql`u."deletedAt" IS NULL AND u."isActive" = FALSE`);
-  } else if (filters.status === "WITHDRAWN") {
+  } else if (filters.status === MEMBER_STATUS.WITHDRAWN) {
     conditions.push(Prisma.sql`u."deletedAt" IS NOT NULL`);
   } else {
     conditions.push(Prisma.sql`u."deletedAt" IS NULL`);
@@ -295,37 +348,9 @@ export const customersRepository = {
           SELECT
             report_targets."customerId",
             COUNT(*)::int AS "receivedReportCount",
-            COUNT(*) FILTER (WHERE report_targets.status = ${"PENDING"}::"ReportStatus")::int
+            COUNT(*) FILTER (WHERE report_targets.status = ${ReportStatus.PENDING}::"ReportStatus")::int
               AS "pendingReceivedReportCount"
-          FROM (
-            SELECT rp.target_id AS "customerId", rp.status
-            FROM reports AS rp
-            WHERE rp.target_type = ${ReportTargetType.CUSTOMER}::"ReportTargetType"
-
-            UNION ALL
-
-            SELECT rv.customer_id::text AS "customerId", rp.status
-            FROM reviews AS rv
-            INNER JOIN reports AS rp
-              ON rp.target_type = ${ReportTargetType.REVIEW}::"ReportTargetType"
-              AND rp.target_id = rv.id::text
-
-            UNION ALL
-
-            SELECT rr.author_id::text AS "customerId", rp.status
-            FROM residence_reviews AS rr
-            INNER JOIN reports AS rp
-              ON rp.target_type = ${ReportTargetType.RESIDENCE_REVIEW}::"ReportTargetType"
-              AND rp.target_id = rr.id::text
-
-            UNION ALL
-
-            SELECT g.author_id::text AS "customerId", rp.status
-            FROM giveaways AS g
-            INNER JOIN reports AS rp
-              ON rp.target_type = ${ReportTargetType.GIVEAWAY}::"ReportTargetType"
-              AND rp.target_id = g.id::text
-          ) AS report_targets
+          FROM (${buildCustomerReceivedReportTargetsSql()}) AS report_targets
           GROUP BY report_targets."customerId"
         ) AS rc ON rc."customerId" = u.id::text
         WHERE ${whereSql}
@@ -416,41 +441,12 @@ export const customersRepository = {
         SELECT
           report_targets."customerId",
           COUNT(*)::int AS "receivedReportCount",
-          COUNT(*) FILTER (WHERE report_targets.status = ${"PENDING"}::"ReportStatus")::int
+          COUNT(*) FILTER (WHERE report_targets.status = ${ReportStatus.PENDING}::"ReportStatus")::int
             AS "pendingReceivedReportCount"
-        FROM (
-          SELECT rp.target_id AS "customerId", rp.status
-          FROM reports AS rp
-          WHERE rp.target_type = ${ReportTargetType.CUSTOMER}::"ReportTargetType"
-            AND rp.target_id IN (${customerIdTextSql})
-
-          UNION ALL
-
-          SELECT rv.customer_id::text AS "customerId", rp.status
-          FROM reviews AS rv
-          INNER JOIN reports AS rp
-            ON rp.target_type = ${ReportTargetType.REVIEW}::"ReportTargetType"
-            AND rp.target_id = rv.id::text
-          WHERE rv.customer_id IN (${customerIdUuidSql})
-
-          UNION ALL
-
-          SELECT rr.author_id::text AS "customerId", rp.status
-          FROM residence_reviews AS rr
-          INNER JOIN reports AS rp
-            ON rp.target_type = ${ReportTargetType.RESIDENCE_REVIEW}::"ReportTargetType"
-            AND rp.target_id = rr.id::text
-          WHERE rr.author_id IN (${customerIdUuidSql})
-
-          UNION ALL
-
-          SELECT g.author_id::text AS "customerId", rp.status
-          FROM giveaways AS g
-          INNER JOIN reports AS rp
-            ON rp.target_type = ${ReportTargetType.GIVEAWAY}::"ReportTargetType"
-            AND rp.target_id = g.id::text
-          WHERE g.author_id IN (${customerIdUuidSql})
-        ) AS report_targets
+        FROM (${buildCustomerReceivedReportTargetsSql({
+          uuidIds: customerIdUuidSql,
+          textIds: customerIdTextSql,
+        })}) AS report_targets
         GROUP BY report_targets."customerId"
       `),
     ]);
@@ -566,40 +562,38 @@ export const customersRepository = {
     { customerId, take = CUSTOMER_HISTORY_LIMIT }: HistoryParams,
     db: DbClient = prisma,
   ) {
-    const [reviewIds, residenceReviewIds, giveawayIds] = await Promise.all([
-      db.review.findMany({ where: { customerId }, select: { id: true } }),
-      db.residenceReview.findMany({ where: { authorId: customerId }, select: { id: true } }),
-      db.giveaway.findMany({ where: { authorId: customerId }, select: { id: true } }),
-    ]);
+    const customerIdUuidSql = Prisma.sql`${customerId}::uuid`;
+    const customerIdTextSql = Prisma.sql`${customerId}`;
+    const [summary] = await db.$queryRaw<ReceivedReportHistorySummaryRow[]>(Prisma.sql`
+      WITH report_targets AS (
+        ${buildCustomerReceivedReportTargetsSql({
+          uuidIds: customerIdUuidSql,
+          textIds: customerIdTextSql,
+        })}
+      ), ranked_report_targets AS (
+        SELECT
+          "reportId",
+          ROW_NUMBER() OVER (ORDER BY "createdAt" DESC, "reportId" ASC) AS row_number
+        FROM report_targets
+      )
+      SELECT
+        COUNT(*)::bigint AS "totalCount",
+        COALESCE(
+          array_agg("reportId" ORDER BY row_number) FILTER (WHERE row_number <= ${take}),
+          ARRAY[]::integer[]
+        ) AS "reportIds"
+      FROM ranked_report_targets
+    `);
 
-    const where: Prisma.ReportWhereInput = {
-      OR: [
-        { targetType: ReportTargetType.CUSTOMER, targetId: customerId },
-        {
-          targetType: ReportTargetType.REVIEW,
-          targetId: { in: reviewIds.map((review) => String(review.id)) },
-        },
-        {
-          targetType: ReportTargetType.RESIDENCE_REVIEW,
-          targetId: { in: residenceReviewIds.map((review) => String(review.id)) },
-        },
-        {
-          targetType: ReportTargetType.GIVEAWAY,
-          targetId: { in: giveawayIds.map((giveaway) => String(giveaway.id)) },
-        },
-      ],
-    };
+    const reportIds = summary?.reportIds ?? [];
+    const items = reportIds.length
+      ? await db.report.findMany({
+          where: { id: { in: reportIds } },
+          select: reportHistorySelect,
+          orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+        })
+      : [];
 
-    const [items, totalCount] = await Promise.all([
-      db.report.findMany({
-        where,
-        select: reportHistorySelect,
-        orderBy: [{ createdAt: "desc" }, { id: "asc" }],
-        take,
-      }),
-      db.report.count({ where }),
-    ]);
-
-    return { items, totalCount };
+    return { items, totalCount: Number(summary?.totalCount ?? 0) };
   },
 };
