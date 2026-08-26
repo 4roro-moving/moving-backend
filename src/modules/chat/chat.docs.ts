@@ -27,7 +27,7 @@ registerRouterDocs(chatRouter, {
         "",
         "- 하나의 견적에는 하나의 채팅방만 생성됩니다.",
         "- 해당 견적의 고객 또는 견적을 보낸 기사님만 접근할 수 있습니다.",
-        "- 응답의 `canSendMessage`, `messageDisabledReason`으로 종료된 거래의 읽기 전용 채팅방 여부를 확인할 수 있습니다.",
+        "- 취소, 만료, 완료된 견적 또는 견적 요청에는 새 채팅방을 생성할 수 없습니다.",
       ].join("\n"),
       responses: {
         200: "채팅방 조회 성공",
@@ -36,7 +36,7 @@ registerRouterDocs(chatRouter, {
     "GET /rooms/:roomId": {
       summary: "채팅방 상세 조회",
       description:
-        "로그인한 사용자가 참여 중인 채팅방 상세 정보를 조회합니다. 종료된 거래도 과거 메시지 확인을 위해 조회할 수 있으며, 응답의 `canSendMessage`로 입력창을 비활성화할 수 있습니다.",
+        "로그인한 사용자가 참여 중인 채팅방 상세 정보를 조회합니다. 메시지 송수신 가능 여부는 소켓 입장과 메시지 전송 이벤트에서 검증합니다.",
       responses: {
         200: "채팅방 상세 조회 성공",
       },
@@ -62,6 +62,7 @@ registerRouterDocs(chatRouter, {
         "",
         "- 로그인한 사용자가 참여 중인 채팅방에만 발급할 수 있습니다.",
         "- 지원 형식은 image/jpeg, image/png, image/webp입니다.",
+        "- 최대 업로드 크기는 25MB입니다.",
         "- 반환된 key는 업로드용 staging key이며 이미지 메시지 전송 시 `chat:image:send` 이벤트의 `imageKey`로 사용합니다.",
         "- 서버는 검증 후 staging 객체를 불변 final key로 복사하고 final key만 메시지에 저장합니다.",
       ].join("\n"),
