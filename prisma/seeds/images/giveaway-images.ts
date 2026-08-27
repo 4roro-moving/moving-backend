@@ -17,6 +17,7 @@ import {
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
+  S3ServiceException,
 } from "@aws-sdk/client-s3";
 
 import {
@@ -44,6 +45,18 @@ const ITEM_COLORS = [
   "#ea580c",
 ] as const;
 
+function isS3ObjectNotFoundError(error: unknown): boolean {
+  if (!(error instanceof S3ServiceException)) {
+    return false;
+  }
+
+  return (
+    error.name === "NotFound" ||
+    error.name === "NoSuchKey" ||
+    error.$metadata.httpStatusCode === 404
+  );
+}
+
 export async function ensureGiveawaySourceImages(s3: S3Client, bucket: string): Promise<void> {
   console.log("🖼️  나눔 원본 이미지를 확인합니다");
 
@@ -58,8 +71,10 @@ export async function ensureGiveawaySourceImages(s3: S3Client, bucket: string): 
       try {
         await s3.send(new HeadObjectCommand({ Bucket: bucket, Key: key }));
         continue;
-      } catch {
-        // 없으면 플레이스홀더 생성
+      } catch (error) {
+        if (!isS3ObjectNotFoundError(error)) {
+          throw error;
+        }
       }
 
       const color = ITEM_COLORS[slugs.indexOf(slug) % ITEM_COLORS.length]!;

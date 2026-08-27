@@ -9,12 +9,15 @@
  *  실행
  *    SEED_PRESET=full npm run seed:giveaways   # AWS full (나눔 2만)
  *    npm run seed:giveaways                    # dev (나눔 60)
+ *
+ *  순서: 메모리 생성 → S3 복사 → TRUNCATE+적재를 한 트랜잭션으로 처리.
+ *  S3 가 실패하면 기존 나눔 DB 를 유지한다.
  * ============================================================================
  */
 
 import "dotenv/config";
 
-import { PrismaClient } from "@prisma/client";
+import { Prisma, PrismaClient } from "@prisma/client";
 
 import { MASTER_SEED, resolveConfig } from "./config.js";
 import { generateGiveaways } from "./generators/community.js";
@@ -25,6 +28,9 @@ import {
 } from "./images/giveaway-images.js";
 import { analyze, loadMany, syncSequences } from "./lib/loader.js";
 import { deriveRng } from "./lib/rng.js";
+
+const GIVEAWAY_RESEED_TX_TIMEOUT_MS = 300_000;
+const GIVEAWAY_RESEED_TX_MAX_WAIT_MS = 20_000;
 
 const prisma = new PrismaClient({ log: ["warn", "error"] });
 
@@ -42,6 +48,7 @@ async function main(): Promise<void> {
     prisma.user.findMany({
       where: { role: "CUSTOMER" },
       select: { id: true, createdAt: true },
+      orderBy: { id: "asc" },
     }),
     prisma.region.findMany({
       select: { id: true, name: true },
@@ -57,29 +64,35 @@ async function main(): Promise<void> {
   console.log(
     `  기존 나눔 ${existingGiveaways.toLocaleString("ko-KR")}건 → ${config.giveaways.toLocaleString("ko-KR")}건으로 교체`,
   );
-  console.log("  TRUNCATE: giveaways, giveaway_images, giveaway_requests");
   console.log("  고객·견적·리뷰·채팅은 그대로 둡니다");
   console.log("════════════════════════════════════════════════════");
-
-  const { s3, bucket } = makeS3Client();
-
-  await ensureGiveawaySourceImages(s3, bucket);
-
-  await prisma.$executeRawUnsafe(`
-    TRUNCATE TABLE "giveaway_requests", "giveaway_images", "giveaways"
-    RESTART IDENTITY CASCADE
-  `);
-  console.log("  ✅ 나눔 테이블 비움");
 
   const rng = deriveRng(MASTER_SEED, "giveaways");
   const generated = generateGiveaways(rng, config, regions, customers, now);
 
-  await loadMany("giveaways", prisma.giveaway, generated.giveaways as never[]);
-  await loadMany("giveaway_images", prisma.giveawayImage, generated.images as never[]);
-  await loadMany("giveaway_requests", prisma.giveawayRequest, generated.requests as never[]);
+  const { s3, bucket } = makeS3Client();
 
-  await syncSequences(prisma);
+  await ensureGiveawaySourceImages(s3, bucket);
   await copyGiveawayImages(s3, bucket, generated.imageCopies);
+
+  async function replaceGiveawayRows(tx: Prisma.TransactionClient): Promise<void> {
+    await tx.$executeRawUnsafe(`
+      TRUNCATE TABLE "giveaway_requests", "giveaway_images", "giveaways"
+      RESTART IDENTITY CASCADE
+    `);
+    console.log("  ✅ 나눔 테이블 비움");
+
+    await loadMany("giveaways", tx.giveaway, generated.giveaways as never[]);
+    await loadMany("giveaway_images", tx.giveawayImage, generated.images as never[]);
+    await loadMany("giveaway_requests", tx.giveawayRequest, generated.requests as never[]);
+    await syncSequences(tx);
+  }
+
+  await prisma.$transaction(replaceGiveawayRows, {
+    timeout: GIVEAWAY_RESEED_TX_TIMEOUT_MS,
+    maxWait: GIVEAWAY_RESEED_TX_MAX_WAIT_MS,
+  });
+
   await analyze(prisma);
 
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
