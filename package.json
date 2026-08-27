@@ -18,7 +18,8 @@
     "prisma:seed": "tsx --tsconfig prisma/tsconfig.json --max-old-space-size=12288 prisma/seed.ts",
     "stats:sync-public-mover-reviews": "tsx scripts/sync-public-mover-review-stats.ts",
     "seed:audit": "tsx --max-old-space-size=12288 scripts/seed-audit/dryrun.ts && tsx --max-old-space-size=12288 scripts/seed-audit/date-audit.ts && tsx --max-old-space-size=12288 scripts/seed-audit/date-audit2.ts && tsx --max-old-space-size=12288 scripts/seed-audit/date-audit3.ts",
-    "seed:images": "tsx --tsconfig prisma/tsconfig.json prisma/seeds/images/sync-images.ts"
+    "seed:images": "tsx --tsconfig prisma/tsconfig.json prisma/seeds/images/sync-images.ts",
+    "seed:giveaways": "tsx --tsconfig prisma/tsconfig.json --max-old-space-size=4096 prisma/seeds/reseed-giveaways.ts"
   },
   "prisma": {
     "seed": "tsx --tsconfig prisma/tsconfig.json --max-old-space-size=12288 prisma/seed.ts"

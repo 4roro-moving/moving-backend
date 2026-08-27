@@ -11,6 +11,10 @@
 
 import { Prisma, type PrismaClient } from "@prisma/client";
 
+type SequenceClient = {
+  $executeRawUnsafe: PrismaClient["$executeRawUnsafe"];
+};
+
 /** createMany 한 번에 보낼 행 수. Postgres 파라미터 한도를 고려한 값. */
 export const CHUNK_SIZE = 5_000;
 
@@ -126,7 +130,7 @@ export async function truncateAll(prisma: PrismaClient): Promise<void> {
  *
  * 대상도 DMMF 에서 뽑는다 — 목록을 손으로 관리하면 모델 추가 시 또 어긋난다.
  */
-export async function syncSequences(prisma: PrismaClient): Promise<void> {
+export async function syncSequences(prisma: SequenceClient): Promise<void> {
   const targets = Prisma.dmmf.datamodel.models.filter((model) =>
     model.fields.some(
       (field) =>

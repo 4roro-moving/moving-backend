@@ -59,6 +59,34 @@ export function makeUuidV7(rng: Rng, timestampMs: number): string {
 }
 
 /**
+ * UUIDv4 생성 (결정적).
+ *
+ * 나눔 이미지 최종 키는 실서비스 Zod 가
+ * giveaways/{userId}/{uuid}.{ext} 이고, uuid 버전 니블이 1~5 여야 한다.
+ * v7 을 넣으면 수정 API 가 거절하므로 이미지 파일명만 v4 를 쓴다.
+ */
+export function makeUuidV4(rng: Rng): string {
+  const bytes = new Uint8Array(16);
+
+  for (let i = 0; i < 16; i += 1) {
+    bytes[i] = Math.floor(rng() * 256);
+  }
+
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+
+  const hex: string[] = [];
+
+  for (let i = 0; i < 16; i += 1) {
+    hex.push(bytes[i]!.toString(16).padStart(2, "0"));
+  }
+
+  const s = hex.join("");
+
+  return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`;
+}
+
+/**
  * Int PK 순번 발급기.
  *
  * 테이블마다 하나씩 만들어 쓰고, 적재가 끝나면 currentValue() 로

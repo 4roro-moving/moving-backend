@@ -449,30 +449,36 @@ export function makeResidenceReview(
 
 /* ── 나눔 ─────────────────────────────────────────────────────────────── */
 
-const GIVEAWAY_ITEMS = [
-  "책상",
-  "의자",
-  "3인용 소파",
-  "1인 소파",
-  "책장",
-  "행거",
-  "서랍장",
-  "화장대",
-  "전자레인지",
-  "밥솥",
-  "선풍기",
-  "공기청정기",
-  "청소기",
-  "빨래건조대",
-  "식탁",
-  "협탁",
-  "스탠드 조명",
-  "러그",
-  "커튼",
-  "화분",
-  "수납박스",
-  "자전거",
-] as const;
+export const GIVEAWAY_ITEM_SLUGS = {
+  책상: "desk",
+  의자: "chair",
+  "3인용 소파": "sofa-3",
+  "1인 소파": "sofa-1",
+  책장: "bookshelf",
+  행거: "hanger",
+  서랍장: "dresser",
+  화장대: "vanity",
+  전자레인지: "microwave",
+  밥솥: "rice-cooker",
+  선풍기: "fan",
+  공기청정기: "air-purifier",
+  청소기: "vacuum",
+  빨래건조대: "drying-rack",
+  식탁: "dining-table",
+  협탁: "side-table",
+  "스탠드 조명": "lamp",
+  러그: "rug",
+  커튼: "curtain",
+  화분: "plant",
+  수납박스: "storage-box",
+  자전거: "bicycle",
+} as const;
+
+export type GiveawayItemName = keyof typeof GIVEAWAY_ITEM_SLUGS;
+
+export const GIVEAWAY_ITEMS = Object.keys(GIVEAWAY_ITEM_SLUGS) as GiveawayItemName[];
+
+export const GIVEAWAY_IMAGE_VARIANT_COUNT = 3;
 
 const GIVEAWAY_CONDITIONS = [
   "사용감 있지만 기능은 멀쩡합니다",
@@ -483,11 +489,20 @@ const GIVEAWAY_CONDITIONS = [
   "깨끗하게 사용했습니다",
 ] as const;
 
-export function makeGiveaway(rng: Rng, regionName: string): { title: string; description: string } {
+export function giveawaySourceKey(slug: string, variant: number): string {
+  return `seed-src/giveaways/${slug}-${String(variant).padStart(2, "0")}.webp`;
+}
+
+export function makeGiveaway(
+  rng: Rng,
+  regionName: string,
+): { item: GiveawayItemName; slug: string; title: string; description: string } {
   const item = pick(rng, GIVEAWAY_ITEMS);
   const condition = pick(rng, GIVEAWAY_CONDITIONS);
 
   return {
+    item,
+    slug: GIVEAWAY_ITEM_SLUGS[item],
     title: `${item} 무료 나눔합니다`,
     description: `${regionName}에서 ${item} 나눔합니다. ${condition}. 직접 가지러 오실 수 있는 분께 드리고 싶어요. 편하신 시간 말씀해 주시면 조율하겠습니다.`,
   };
