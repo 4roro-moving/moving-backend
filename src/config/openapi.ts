@@ -56,6 +56,8 @@ async function registerModuleDocs(): Promise<void> {
   // 2026.07.30 장민주 - [추가] 프로필 API 문서 등록
   await import("../modules/report/report.docs");
   await import("../modules/profile/profile.docs");
+  // 2026.08.26 김성현 - [추가] 리뷰 API 문서 등록
+  await import("../modules/review/review.docs");
   await import("../modules/chat/chat.docs");
   // 2026.08.18 김나연 - [추가] 나눔 API 문서 등록
   await import("../modules/giveaway/giveaway.docs");

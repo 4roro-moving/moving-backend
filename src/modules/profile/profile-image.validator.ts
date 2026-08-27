@@ -4,12 +4,26 @@ import { PROFILE_IMAGE_CONTENT_TYPES } from "./profile-image.type";
 
 const PROFILE_IMAGE_MAX_SIZE = 2 * 1024 * 1024;
 
-const uuidPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+/**
+ * User ID는 RFC 4122 UUID 형식을 따른다.
+ *
+ * runtime 가입 계정은 UUIDv4, seed/일부 기존 계정은 UUIDv7을 사용할 수 있으므로
+ * version nibble은 제한하지 않는다. 실제 소유권은 Service에서 검증한다.
+ */
+const userIdPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
+
+/**
+ * 프로필 이미지 ID는 randomUUID()로 생성하므로 UUIDv4를 사용한다.
+ */
+const imageIdPattern = "[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}";
 
 /**
  * 프로필 이미지 임시 S3 Key 형식을 검증한다.
  *
  * temp/profiles/{userId}/{imageId}.{extension}
+ *
+ * - userId: RFC 4122 UUID (version 제한 없음)
+ * - imageId: UUIDv4
  *
  * 프로필 생성/수정 요청에서는 Presigned URL 발급 시 생성된
  * 임시 이미지 Key만 전달받는다.
@@ -20,7 +34,7 @@ const uuidPattern = "[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-
 export const profileImageKeySchema = z
   .string()
   .trim()
-  .regex(new RegExp(`^temp/profiles/${uuidPattern}/${uuidPattern}\\.(jpg|png|webp)$`, "i"), {
+  .regex(new RegExp(`^temp/profiles/${userIdPattern}/${imageIdPattern}\\.(jpg|png|webp)$`, "i"), {
     error: "올바른 프로필 이미지 Key 형식이 아닙니다.",
   });
 

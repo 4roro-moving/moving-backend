@@ -97,6 +97,7 @@ describe("reportService.createReport", () => {
 
     const result = await service.createReport({
       reporterId: "customer-1",
+      reporterRole: UserRole.CUSTOMER,
       input: {
         targetType: "REVIEW",
         targetId: "00123",
@@ -124,6 +125,7 @@ describe("reportService.createReport", () => {
 
     const result = await service.createReport({
       reporterId: "customer-1",
+      reporterRole: UserRole.CUSTOMER,
       input: {
         targetType: "MOVER",
         targetId: VALID_MOVER_ID_UPPERCASE,
@@ -143,6 +145,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: "customer-1",
+          reporterRole: UserRole.CUSTOMER,
           input: {
             targetType: "REVIEW",
             targetId: "123",
@@ -160,6 +163,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: "customer-1",
+          reporterRole: UserRole.CUSTOMER,
           input: {
             targetType: "MOVER",
             targetId: VALID_MOVER_ID,
@@ -177,6 +181,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: VALID_MOVER_ID,
+          reporterRole: UserRole.MOVER,
           input: {
             targetType: "MOVER",
             targetId: VALID_MOVER_ID_UPPERCASE,
@@ -200,6 +205,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: "customer-1",
+          reporterRole: UserRole.CUSTOMER,
           input: {
             targetType: "REVIEW",
             targetId: "123",
@@ -221,6 +227,7 @@ describe("reportService.createReport", () => {
 
     const result = await service.createReport({
       reporterId: "mover-1",
+      reporterRole: UserRole.MOVER,
       input: {
         targetType: "REVIEW",
         targetId: "123",
@@ -231,6 +238,76 @@ describe("reportService.createReport", () => {
 
     assert.equal(result.targetType, "REVIEW");
     assert.equal(result.reason, "FALSE_INFO");
+  });
+
+  it("throws FORBIDDEN when a mover reports another mover's review", async () => {
+    const service = createService({
+      findReviewTargetById: async (reviewId) => ({
+        id: reviewId,
+        customerId: "customer-1",
+        moverId: "mover-other",
+      }),
+    });
+
+    await assert.rejects(
+      () =>
+        service.createReport({
+          reporterId: "mover-1",
+          reporterRole: UserRole.MOVER,
+          input: {
+            targetType: "REVIEW",
+            targetId: "123",
+            reason: "FALSE_INFO",
+          },
+        }),
+      (error: unknown) => error instanceof AppError && error.code === "FORBIDDEN",
+    );
+  });
+
+  it("throws FORBIDDEN when a mover reports a giveaway", async () => {
+    const service = createService({
+      findGiveawayTargetById: async (giveawayId) => ({
+        id: giveawayId,
+        authorId: "customer-1",
+      }),
+    });
+
+    await assert.rejects(
+      () =>
+        service.createReport({
+          reporterId: "mover-1",
+          reporterRole: UserRole.MOVER,
+          input: {
+            targetType: "GIVEAWAY",
+            targetId: "10",
+            reason: "SPAM",
+          },
+        }),
+      (error: unknown) => error instanceof AppError && error.code === "FORBIDDEN",
+    );
+  });
+
+  it("throws FORBIDDEN when a mover reports a residence review", async () => {
+    const service = createService({
+      findResidenceReviewTargetById: async (residenceReviewId) => ({
+        id: residenceReviewId,
+        authorId: "customer-1",
+      }),
+    });
+
+    await assert.rejects(
+      () =>
+        service.createReport({
+          reporterId: "mover-1",
+          reporterRole: UserRole.MOVER,
+          input: {
+            targetType: "RESIDENCE_REVIEW",
+            targetId: "10",
+            reason: "ABUSE",
+          },
+        }),
+      (error: unknown) => error instanceof AppError && error.code === "FORBIDDEN",
+    );
   });
 
   it("throws REPORT_ALREADY_EXISTS when a duplicate report is found before create", async () => {
@@ -247,6 +324,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: "customer-1",
+          reporterRole: UserRole.CUSTOMER,
           input: {
             targetType: "REVIEW",
             targetId: "123",
@@ -270,6 +348,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: "customer-1",
+          reporterRole: UserRole.CUSTOMER,
           input: {
             targetType: "MOVER",
             targetId: VALID_MOVER_ID,
@@ -299,6 +378,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: "customer-1",
+          reporterRole: UserRole.CUSTOMER,
           input: {
             targetType: "MOVER",
             targetId: VALID_MOVER_ID,
@@ -327,6 +407,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: "customer-1",
+          reporterRole: UserRole.CUSTOMER,
           input: {
             targetType: "MOVER",
             targetId: VALID_MOVER_ID,
@@ -355,6 +436,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: "customer-1",
+          reporterRole: UserRole.CUSTOMER,
           input: {
             targetType: "MOVER",
             targetId: VALID_MOVER_ID,
@@ -384,6 +466,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: "customer-1",
+          reporterRole: UserRole.CUSTOMER,
           input: {
             targetType: "MOVER",
             targetId: VALID_MOVER_ID,
@@ -413,6 +496,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: "customer-1",
+          reporterRole: UserRole.CUSTOMER,
           input: {
             targetType: "MOVER",
             targetId: VALID_MOVER_ID,
@@ -482,6 +566,7 @@ describe("reportService.createReport", () => {
 
     const result = await service.createReport({
       reporterId: "customer-1",
+      reporterRole: UserRole.CUSTOMER,
       input: {
         targetType: "MOVER",
         targetId: VALID_MOVER_ID,
@@ -536,6 +621,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: "customer-1",
+          reporterRole: UserRole.CUSTOMER,
           input: {
             targetType: "MOVER",
             targetId: VALID_MOVER_ID,
@@ -587,6 +673,7 @@ describe("reportService.createReport", () => {
       () =>
         service.createReport({
           reporterId: "customer-1",
+          reporterRole: UserRole.CUSTOMER,
           input: {
             targetType: "MOVER",
             targetId: VALID_MOVER_ID,
@@ -632,7 +719,7 @@ describe("reportService.getMyReports", () => {
               createdAt,
             },
           ],
-          totalCount: 1,
+          totalCount: 21,
         };
       },
     });
@@ -659,6 +746,7 @@ describe("reportService.getMyReports", () => {
         reason: "SPAM",
         status: "RESOLVED",
         description: "광고성 응답을 반복합니다.",
+        images: [],
         handledAt,
         createdAt,
       },

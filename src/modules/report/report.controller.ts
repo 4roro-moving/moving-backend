@@ -37,8 +37,13 @@ export const reportController = {
 
   // POST /api/reports
   createReport: async (req: Request, res: Response) => {
+    if (!req.user) {
+      throw new AppError("UNAUTHORIZED");
+    }
+
     const report = await reportService.createReport({
-      reporterId: getReporterId(req),
+      reporterId: req.user.id,
+      reporterRole: req.user.role,
       input: req.body as CreateReportInput,
     });
 
