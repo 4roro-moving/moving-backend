@@ -36,7 +36,7 @@ export function mapMoverReview(review: MoverReviewRow) {
   };
 }
 
-export function mapMyReview(review: MyReviewRow) {
+export function mapMyReview(review: MyReviewRow, hiddenReason: string | null = null) {
   const moverProfile = review.mover.moverProfile;
   const estimateRequest = review.estimate.estimateRequest;
 
@@ -46,6 +46,9 @@ export function mapMyReview(review: MyReviewRow) {
     rating: review.rating,
     content: review.content,
     createdAt: review.createdAt,
+    isHidden: review.isHidden,
+    /** 현재 숨김일 때만 최신 HIDE ActivityLog.memo. 공개 상태면 null */
+    hiddenReason: review.isHidden ? hiddenReason : null,
     price: review.estimate.price,
     estimateRequest: {
       id: estimateRequest.id,

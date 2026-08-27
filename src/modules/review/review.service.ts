@@ -81,8 +81,13 @@ export const reviewService = {
       reviewRepository.countMyReviewsByCustomerId(customerId),
     ]);
 
+    const hiddenReviewIds = reviews.filter((review) => review.isHidden).map((review) => review.id);
+    const hideReasons = await reviewRepository.findLatestHideReasonsByReviewIds(hiddenReviewIds);
+
     return {
-      reviews: reviews.map(mapMyReview),
+      reviews: reviews.map((review) =>
+        mapMyReview(review, review.isHidden ? (hideReasons.get(review.id) ?? null) : null),
+      ),
       pagination: buildPagination(totalCount, page, limit),
     };
   },

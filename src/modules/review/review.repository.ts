@@ -79,6 +79,7 @@ const myReviewSelect = {
   rating: true,
   content: true,
   createdAt: true,
+  isHidden: true,
   estimate: {
     select: {
       price: true,
@@ -311,5 +312,42 @@ export const reviewRepository = {
         reviewCount,
       },
     });
+  },
+
+  /**
+   * 숨김 리뷰의 최신 HIDE ActivityLog.memo(사유)를 reviewId → memo 로 반환한다.
+   * Review 모델에 사유 컬럼이 없어 ActivityLog 를 조회한다.
+   */
+  async findLatestHideReasonsByReviewIds(reviewIds: number[], db: DbClient = prisma) {
+    const reasons = new Map<number, string | null>();
+
+    if (reviewIds.length === 0) {
+      return reasons;
+    }
+
+    const logs = await db.activityLog.findMany({
+      where: {
+        targetType: "REVIEW",
+        action: "HIDE",
+        targetId: { in: reviewIds.map(String) },
+      },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      select: {
+        targetId: true,
+        memo: true,
+      },
+    });
+
+    for (const log of logs) {
+      const reviewId = Number(log.targetId);
+
+      if (!Number.isInteger(reviewId) || reasons.has(reviewId)) {
+        continue;
+      }
+
+      reasons.set(reviewId, log.memo);
+    }
+
+    return reasons;
   },
 };
