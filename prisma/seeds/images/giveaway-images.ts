@@ -14,6 +14,7 @@
 
 import {
   CopyObjectCommand,
+  DeleteObjectCommand,
   HeadObjectCommand,
   PutObjectCommand,
   S3Client,
@@ -55,6 +56,20 @@ function isS3ObjectNotFoundError(error: unknown): boolean {
     error.name === "NoSuchKey" ||
     error.$metadata.httpStatusCode === 404
   );
+}
+
+export function unusedGiveawayImageKeys(keys: string[], keep: Set<string>): string[] {
+  return keys.filter((key) => {
+    if (keep.has(key)) {
+      return false;
+    }
+
+    if (key.startsWith("http://") || key.startsWith("https://")) {
+      return false;
+    }
+
+    return key.startsWith("giveaways/");
+  });
 }
 
 export async function ensureGiveawaySourceImages(s3: S3Client, bucket: string): Promise<void> {
@@ -113,6 +128,7 @@ export async function copyGiveawayImages(
   s3: S3Client,
   bucket: string,
   copies: GiveawayImageCopy[],
+  copiedKeys: string[],
   concurrency = 50,
 ): Promise<void> {
   if (copies.length === 0) {
@@ -146,6 +162,7 @@ export async function copyGiveawayImages(
         }),
       );
 
+      copiedKeys.push(job.destKey);
       done += 1;
       const now = Date.now();
 
@@ -162,6 +179,43 @@ export async function copyGiveawayImages(
 
   const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
   console.log(`  ✅ ${done.toLocaleString("ko-KR")}건 복사 완료 (${elapsed}s)`);
+}
+
+export async function deleteGiveawayImageKeys(
+  s3: S3Client,
+  bucket: string,
+  keys: string[],
+  concurrency = 50,
+): Promise<void> {
+  const uniqueKeys = [...new Set(keys)];
+
+  if (uniqueKeys.length === 0) {
+    return;
+  }
+
+  console.log(`🧹 나눔 이미지 ${uniqueKeys.length.toLocaleString("ko-KR")}건을 정리합니다`);
+
+  const queue = [...uniqueKeys];
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const key = queue.pop();
+
+      if (!key) {
+        return;
+      }
+
+      try {
+        await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key: key }));
+      } catch (error) {
+        if (!isS3ObjectNotFoundError(error)) {
+          throw error;
+        }
+      }
+    }
+  }
+
+  await Promise.all(Array.from({ length: concurrency }, () => worker()));
 }
 
 export { makeS3Client };
