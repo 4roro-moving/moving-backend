@@ -47,7 +47,7 @@ export async function linkConfirmedEstimates(
 }
 
 /**
- * MoverProfile 의 비정규화 캐시를 실제 집계와 맞춘다.
+ * MoverProfile 의 공개 리뷰 기준 비정규화 캐시를 실제 집계와 맞춘다.
  *
  * averageRating 반올림 규칙은 review.service.ts 와 반드시 동일해야 한다.
  *   Math.round(avg * 10) / 10  ==  ROUND(avg::numeric, 1)
@@ -56,20 +56,31 @@ export async function linkConfirmedEstimates(
  * 정렬 옵션(sort=confirmedCount)으로 노출되므로 시드가 맞춰두지 않으면
  * 정렬 결과 자체가 거짓이 된다.
  */
-export async function syncMoverStats(prisma: PrismaClient): Promise<void> {
-  console.log("📈 기사 프로필 통계를 실제 집계와 맞춥니다");
+export async function syncPublicMoverReviewStats(prisma: PrismaClient): Promise<void> {
+  console.log("📈 공개 리뷰 기준 기사 프로필 통계를 실제 집계와 맞춥니다");
 
   await prisma.$executeRawUnsafe(`
     UPDATE "mover_profiles" mp
     SET "reviewCount"   = COALESCE(s.cnt, 0),
         "averageRating" = COALESCE(ROUND(s.avg, 1), 0)
     FROM (
-      SELECT mover_id, COUNT(*)::int AS cnt, AVG(rating)::numeric AS avg
-      FROM "reviews"
-      GROUP BY mover_id
+      SELECT mp2."userId" AS mover_id,
+             COUNT(r.id)::int AS cnt,
+             AVG(r.rating)::numeric AS avg
+      FROM "mover_profiles" mp2
+      LEFT JOIN "reviews" r
+        ON r.mover_id = mp2."userId"
+       AND r.is_hidden = false
+      GROUP BY mp2."userId"
     ) s
     WHERE mp."userId" = s.mover_id
   `);
+}
+
+export async function syncMoverStats(prisma: PrismaClient): Promise<void> {
+  console.log("📈 기사 프로필 통계를 실제 집계와 맞춥니다");
+
+  await syncPublicMoverReviewStats(prisma);
 
   await prisma.$executeRawUnsafe(`
     UPDATE "mover_profiles" mp

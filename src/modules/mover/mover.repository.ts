@@ -48,6 +48,7 @@ export const moverRepository = {
       by: ["rating"],
       where: {
         moverId,
+        isHidden: false,
       },
       _count: {
         _all: true,

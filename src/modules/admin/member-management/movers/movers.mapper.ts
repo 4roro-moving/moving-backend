@@ -17,7 +17,7 @@ import type {
   RecentEstimateRow,
   moversRepository,
 } from "./movers.repository";
-import type { MoverDetail, MoverListItem } from "./movers.type";
+import type { MoverDetail, MoverListItem, MoverReviewStatistics } from "./movers.type";
 
 export function toMoverListItem(mover: MoverListRow): MoverListItem {
   return {
@@ -108,11 +108,28 @@ type MoverDetailHistories = {
   >;
   recentEstimateHistory: Awaited<ReturnType<typeof moversRepository.findRecentEstimateHistory>>;
   reviewHistory: Awaited<ReturnType<typeof moversRepository.findReviewHistory>>;
+  reviewStatistics: Awaited<ReturnType<typeof moversRepository.countReviewStatisticsByMoverId>>;
   filedReports: Awaited<ReturnType<typeof moversRepository.findFiledReportHistory>>;
   receivedReports: Awaited<ReturnType<typeof moversRepository.findReceivedReportHistory>>;
   suspensionHistory: Awaited<ReturnType<typeof memberRepository.findSuspensionHistory>>;
   inquiryHistory: Awaited<ReturnType<typeof memberRepository.findInquiryHistory>>;
 };
+
+function toReviewStatistics(
+  groups: MoverDetailHistories["reviewStatistics"],
+): MoverReviewStatistics {
+  const visible = groups.find((group) => group.isHidden === false);
+  const hidden = groups.find((group) => group.isHidden === true);
+  const visibleCount = visible?._count._all ?? 0;
+  const hiddenCount = hidden?._count._all ?? 0;
+
+  return {
+    totalCount: visibleCount + hiddenCount,
+    visibleCount,
+    hiddenCount,
+    visibleAverageRating: Math.round(Number(visible?._avg.rating ?? 0) * 10) / 10,
+  };
+}
 
 export function toMoverDetail(mover: MoverDetailRow, histories: MoverDetailHistories): MoverDetail {
   const profile = mover.moverProfile;
@@ -145,6 +162,7 @@ export function toMoverDetail(mover: MoverDetailRow, histories: MoverDetailHisto
       totalCount: histories.reviewHistory.totalCount,
       items: histories.reviewHistory.items.map(toReviewHistoryItem),
     },
+    reviewStatistics: toReviewStatistics(histories.reviewStatistics),
     reportHistory: {
       filed: {
         totalCount: histories.filedReports.totalCount,

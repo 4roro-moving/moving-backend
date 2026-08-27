@@ -1,4 +1,4 @@
-import { LogAction, type NotificationType } from "@prisma/client";
+import { LogAction, Prisma, type NotificationType } from "@prisma/client";
 
 import { AppError } from "../../../lib/app-error";
 import { notificationService } from "../../notification/notification.service";
@@ -173,48 +173,70 @@ async function toggleReviewVisibility(params: {
   const { adminId, reviewId, action, reason } = params;
   const config = VISIBILITY_TOGGLE_CONFIG[action];
 
-  const result = await runTransaction(async (tx) => {
-    const review = await contentsRepository.findReviewById(reviewId, tx);
+  const result = await runTransaction(
+    async (tx) => {
+      const review = await contentsRepository.findReviewById(reviewId, tx);
 
-    if (!review) {
-      throw new AppError("CONTENT_NOT_FOUND");
-    }
+      if (!review) {
+        throw new AppError("CONTENT_NOT_FOUND");
+      }
 
-    const updated = await contentsRepository.updateReviewHiddenIf(
-      reviewId,
-      config.expectedHidden,
-      config.nextHidden,
-      tx,
-    );
+      const updated = await contentsRepository.updateReviewHiddenIf(
+        reviewId,
+        config.expectedHidden,
+        config.nextHidden,
+        tx,
+      );
 
-    if (!updated) {
-      throw new AppError(config.conflictError);
-    }
+      if (!updated) {
+        throw new AppError(config.conflictError);
+      }
 
-    await contentsRepository.createActivityLog(
-      {
-        actorId: adminId,
-        action: config.logAction,
-        targetId: String(reviewId),
-        memo: reason,
-      },
-      tx,
-    );
+      // 숨김 상태 변경 후, 공개 기사 통계가 숨김 리뷰를 제외하도록 다시 계산한다.
+      const reviewStats = await contentsRepository.aggregateVisibleMoverReviewStats(
+        review.moverId,
+        tx,
+      );
+      const averageRating = reviewStats._avg.rating ?? 0;
 
-    const notification = await notificationService.createNotification(
-      {
-        userId: review.customerId,
-        type: config.notificationType,
-        title: config.notificationTitle,
-        content: getMoverNotificationSubject(review),
-        linkUrl: getReviewNotificationLinkUrl(action, reviewId),
-        expiresAt: null,
-      },
-      tx,
-    );
+      await contentsRepository.updateMoverReviewStats(
+        {
+          moverId: review.moverId,
+          averageRating: Math.round(Number(averageRating) * 10) / 10,
+          reviewCount: reviewStats._count._all,
+        },
+        tx,
+      );
 
-    return { updated, notification, authorId: review.customerId };
-  });
+      await contentsRepository.createActivityLog(
+        {
+          actorId: adminId,
+          action: config.logAction,
+          targetId: String(reviewId),
+          memo: reason,
+        },
+        tx,
+      );
+
+      const notification = await notificationService.createNotification(
+        {
+          userId: review.customerId,
+          type: config.notificationType,
+          title: config.notificationTitle,
+          content: getMoverNotificationSubject(review),
+          linkUrl: getReviewNotificationLinkUrl(action, reviewId),
+          expiresAt: null,
+        },
+        tx,
+      );
+
+      return { updated, notification, authorId: review.customerId };
+    },
+    {
+      // 같은 기사의 리뷰가 동시에 숨김·복원되어도 공개 통계가 일관되게 저장되도록 한다.
+      isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+    },
+  );
 
   notificationService.sendNotification(result.authorId, result.notification);
 

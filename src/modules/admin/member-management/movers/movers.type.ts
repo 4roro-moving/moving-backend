@@ -104,6 +104,14 @@ export type MoverReviewHistoryItem = {
   createdAt: Date;
 };
 
+/** 관리자용 원본 리뷰 통계. 숨김 여부와 무관하게 리뷰 테이블에서 집계합니다. */
+export type MoverReviewStatistics = {
+  totalCount: number;
+  visibleCount: number;
+  hiddenCount: number;
+  visibleAverageRating: number;
+};
+
 export type MoverReceivedReportHistoryItem = {
   id: number;
   reason: ReportReason;
@@ -128,6 +136,7 @@ export type MoverDetail = {
     recent: HistorySummary<MoverRecentEstimateItem>;
   };
   reviewHistory: HistorySummary<MoverReviewHistoryItem>;
+  reviewStatistics: MoverReviewStatistics;
   reportHistory: {
     filed: HistorySummary<MoverFiledReportHistoryItem>;
     received: HistorySummary<MoverReceivedReportHistoryItem>;

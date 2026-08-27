@@ -311,6 +311,35 @@ export const contentsRepository = {
     });
   },
 
+  /** 공개 상태인 리뷰만으로 기사 평점 통계를 계산합니다. */
+  aggregateVisibleMoverReviewStats(moverId: string, db: DbClient = prisma) {
+    return db.review.aggregate({
+      where: {
+        moverId,
+        isHidden: false,
+      },
+      _avg: {
+        rating: true,
+      },
+      _count: {
+        _all: true,
+      },
+    });
+  },
+
+  updateMoverReviewStats(
+    params: { moverId: string; averageRating: number; reviewCount: number },
+    db: DbClient = prisma,
+  ) {
+    return db.moverProfile.update({
+      where: { userId: params.moverId },
+      data: {
+        averageRating: new Prisma.Decimal(params.averageRating),
+        reviewCount: params.reviewCount,
+      },
+    });
+  },
+
   countReportsByTargetIds(targetIds: string[], db: DbClient = prisma) {
     if (targetIds.length === 0) {
       return Promise.resolve([] as Array<{ targetId: string; _count: { _all: number } }>);
