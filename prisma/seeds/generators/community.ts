@@ -14,14 +14,22 @@
  */
 
 import { REGION_WEIGHTS, type SeedConfig } from "../config.js";
+import type { GiveawayImageCopy } from "../images/giveaway-images.js";
 import {
   paretoCount,
   pickRating,
   pickSeasonalPastDate,
   weightedPick,
 } from "../lib/distributions.js";
+import { makeUuidV4 } from "../lib/ids.js";
 import { chance, deriveRng, randInt, sampleIndices, type Rng } from "../lib/rng.js";
-import { makeGiveaway, makeGiveawayRequestMessage, makeResidenceReview } from "../lib/text.js";
+import {
+  GIVEAWAY_IMAGE_VARIANT_COUNT,
+  giveawaySourceKey,
+  makeGiveaway,
+  makeGiveawayRequestMessage,
+  makeResidenceReview,
+} from "../lib/text.js";
 import type { RegionRow } from "./regions.js";
 import type { SeedCustomer, SeedMover } from "./users.js";
 
@@ -36,9 +44,16 @@ export interface CommunityResult {
   };
 }
 
-/** 나눔 이미지도 프로필과 같은 규약으로 S3 키를 저장한다 (완성 URL 금지) */
-function giveawayImageKey(giveawayId: number, order: number): string {
-  return `giveaways/${giveawayId}/seed-${order}.webp`;
+export interface GiveawaySeedAuthor {
+  id: string;
+  createdAt: Date;
+}
+
+export interface GiveawaySeedResult {
+  giveaways: unknown[];
+  images: unknown[];
+  requests: unknown[];
+  imageCopies: GiveawayImageCopy[];
 }
 
 function generateFavorites(
@@ -183,16 +198,17 @@ function generateResidenceReviews(
   return { reviews, statistics };
 }
 
-function generateGiveaways(
+export function generateGiveaways(
   rng: Rng,
   config: SeedConfig,
   regions: RegionRow[],
-  customers: SeedCustomer[],
+  customers: GiveawaySeedAuthor[],
   now: Date,
-): { giveaways: unknown[]; images: unknown[]; requests: unknown[] } {
+): GiveawaySeedResult {
   const giveaways: unknown[] = [];
   const images: unknown[] = [];
   const requests: unknown[] = [];
+  const imageCopies: GiveawayImageCopy[] = [];
 
   const regionByName = new Map(regions.map((r) => [r.name, r.id]));
   const regionNameById = new Map(regions.map((r) => [r.id, r.name]));
@@ -206,7 +222,7 @@ function generateGiveaways(
     const regionId = regionByName.get(weightedPick<string>(rng, REGION_WEIGHTS)) ?? 1;
     const regionName = regionNameById.get(regionId) ?? "서울";
 
-    const { title, description } = makeGiveaway(rng, regionName);
+    const { slug, title, description } = makeGiveaway(rng, regionName);
 
     let createdAt = pickSeasonalPastDate(rng, now);
 
@@ -270,17 +286,23 @@ function generateGiveaways(
       updatedAt: updatedAt > now ? now : updatedAt,
     });
 
-    // 이미지 0~3장. sortOrder 는 글 안에서 unique 여야 한다.
-    const imageCount = randInt(rng, 0, 3);
+    // 이미지 0~3장. 품목 원본 -01 ~ -03 을 순서대로 쓰고, 최종 키는 실서비스 규약이다.
+    const imageCount = randInt(rng, 0, GIVEAWAY_IMAGE_VARIANT_COUNT);
 
     for (let order = 0; order < imageCount; order += 1) {
+      const destKey = `giveaways/${author.id}/${makeUuidV4(rng)}.webp`;
+
       images.push({
         id: imageId,
         giveawayId: currentId,
-        imageKey: giveawayImageKey(currentId, order),
+        imageKey: destKey,
         sortOrder: order,
         createdAt,
         updatedAt: createdAt,
+      });
+      imageCopies.push({
+        sourceKey: giveawaySourceKey(slug, order + 1),
+        destKey,
       });
       imageId += 1;
     }
@@ -376,7 +398,7 @@ function generateGiveaways(
     }
   }
 
-  return { giveaways, images, requests };
+  return { giveaways, images, requests, imageCopies };
 }
 
 export function generateCommunity(
