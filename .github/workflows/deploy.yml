@@ -3,14 +3,14 @@ name: Deploy Backend
 on:
   push:
     branches:
-      - dev
+      - main
 
 permissions:
   id-token: write
   contents: read
 
 concurrency:
-  group: deploy-backend-dev
+  group: deploy-backend-main
   cancel-in-progress: false
 
 jobs:
@@ -90,7 +90,7 @@ jobs:
           ARTIFACT_URL: ${{ steps.artifact.outputs.artifact_url }}
         run: |
           jq -n \
-            --arg command "sudo -iu ubuntu bash -lc 'cd /home/ubuntu/moving-backend && git fetch origin dev && git reset --hard origin/dev && bash scripts/deploy.sh \"${ARTIFACT_URL}\"'" \
+            --arg command "sudo -iu ubuntu bash -lc 'cd /home/ubuntu/moving-backend && git fetch origin main && git reset --hard origin/main && bash scripts/deploy.sh \"${ARTIFACT_URL}\"'" \
             '{commands: [$command]}' \
             > ssm-commands.json
 
