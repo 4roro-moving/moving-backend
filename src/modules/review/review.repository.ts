@@ -1,6 +1,8 @@
 import {
   EstimateRequestStatus,
   EstimateStatus,
+  LogAction,
+  LogTargetType,
   Prisma,
   type Prisma as PrismaType,
 } from "@prisma/client";
@@ -327,8 +329,8 @@ export const reviewRepository = {
 
     const logs = await db.activityLog.findMany({
       where: {
-        targetType: "REVIEW",
-        action: "HIDE",
+        targetType: LogTargetType.REVIEW,
+        action: LogAction.HIDE,
         targetId: { in: reviewIds.map(String) },
       },
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
