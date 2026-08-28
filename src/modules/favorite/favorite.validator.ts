@@ -1,0 +1,54 @@
+import { z } from "zod";
+
+export const favoriteMoverParamSchema = z.object({
+  moverId: z.uuid("유효하지 않은 기사님 ID입니다."),
+});
+
+export const listFavoriteMoverQuerySchema = z.object({
+  cursor: z
+    .string()
+    .min(1, "커서는 비어 있을 수 없습니다.")
+    .max(500, "커서는 최대 500자까지 입력할 수 있습니다.")
+    .optional(),
+  limit: z.coerce.number().int().positive().max(50).default(10),
+});
+
+const moverIdArraySchema = z
+  .array(z.uuid("유효하지 않은 기사님 ID입니다."))
+  .max(100, "한 번에 최대 100명까지 해제할 수 있습니다.");
+
+/** DELETE /favorites/movers — moverIds 또는 all(+excludedIds) */
+export const bulkDeleteFavoriteMoversSchema = z
+  .object({
+    moverIds: moverIdArraySchema.optional(),
+    all: z.boolean().optional(),
+    excludedIds: moverIdArraySchema.optional(),
+  })
+  .superRefine((value, ctx) => {
+    if (value.all === true) {
+      if (value.moverIds !== undefined) {
+        ctx.addIssue({
+          code: "custom",
+          path: ["moverIds"],
+          message: "전체 해제 시 moverIds를 함께 보낼 수 없습니다.",
+        });
+      }
+      return;
+    }
+
+    if (!value.moverIds || value.moverIds.length === 0) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["moverIds"],
+        message: "moverIds를 보내거나 all: true로 전체 해제를 요청해주세요.",
+      });
+    }
+
+    if (value.excludedIds !== undefined) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["excludedIds"],
+        message: "선택 해제 시 excludedIds를 함께 보낼 수 없습니다.",
+      });
+    }
+  });

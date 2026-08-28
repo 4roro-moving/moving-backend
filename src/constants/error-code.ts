@@ -1,0 +1,415 @@
+// 공통 에러 코드
+export const ERROR_CODES = {
+  BAD_REQUEST: {
+    status: 400,
+    code: "BAD_REQUEST",
+    message: "잘못된 요청입니다.",
+  },
+
+  UNAUTHORIZED: {
+    status: 401,
+    code: "UNAUTHORIZED",
+    message: "인증이 필요합니다.",
+  },
+
+  AUTH_ROLE_MISMATCH: {
+    status: 403,
+    code: "AUTH_ROLE_MISMATCH",
+    message: "선택한 회원 유형과 계정의 회원 유형이 일치하지 않습니다.",
+  },
+
+  FORBIDDEN: {
+    status: 403,
+    code: "FORBIDDEN",
+    message: "접근 권한이 없습니다.",
+  },
+
+  ACCOUNT_SUSPENDED: {
+    status: 403,
+    code: "ACCOUNT_SUSPENDED",
+    message: "이용이 제한된 계정입니다. 자세한 사항은 고객센터로 문의해 주세요.",
+  },
+
+  // 26.08.20 김나연 - [추가] 소셜 로그인으로 접근한 계정이 존재하지 않을 때 에러
+  OAUTH_ACCOUNT_NOT_FOUND: {
+    status: 404,
+    code: "OAUTH_ACCOUNT_NOT_FOUND",
+    message: "가입된 소셜 계정이 없습니다. 회원가입을 진행해 주세요.",
+  },
+
+  NOT_FOUND: {
+    status: 404,
+    code: "NOT_FOUND",
+    message: "요청한 리소스를 찾을 수 없습니다.",
+  },
+
+  CONFLICT: {
+    status: 409,
+    code: "CONFLICT",
+    message: "이미 존재하는 데이터입니다.",
+  },
+
+  TOO_MANY_REQUESTS: {
+    status: 429,
+    code: "TOO_MANY_REQUESTS",
+    message: "요청이 너무 많습니다. 잠시 후 다시 시도해주세요.",
+  },
+
+  INTERNAL_SERVER_ERROR: {
+    status: 500,
+    code: "INTERNAL_SERVER_ERROR",
+    message: "서버 내부 오류가 발생했습니다.",
+  },
+
+  BAD_GATEWAY: {
+    status: 502,
+    code: "BAD_GATEWAY",
+    message: "외부 인증 서버와 통신 중 오류가 발생했습니다.",
+  },
+
+  OAUTH_EMAIL_ALREADY_EXISTS: {
+    status: 409,
+    code: "OAUTH_EMAIL_ALREADY_EXISTS",
+    message: "동일한 이메일로 가입된 계정이 이미 존재합니다.",
+  },
+
+  VALIDATION_ERROR: {
+    status: 422,
+    code: "VALIDATION_ERROR",
+    message: "입력값이 올바르지 않습니다.",
+  },
+
+  ACTIVE_REQUEST_EXISTS: {
+    status: 409,
+    code: "ACTIVE_REQUEST_EXISTS",
+    message: "이미 진행 중인 견적 요청이 있습니다.",
+  },
+
+  INVALID_MOVE_DATE: {
+    status: 400,
+    code: "INVALID_MOVE_DATE",
+    message: "이사 예정일은 오늘 이후여야 합니다.",
+  },
+
+  REGION_NOT_FOUND: {
+    status: 400,
+    code: "REGION_NOT_FOUND",
+    message: "지원하지 않는 지역입니다.",
+  },
+
+  ESTIMATE_REQUEST_NOT_FOUND: {
+    status: 404,
+    code: "ESTIMATE_REQUEST_NOT_FOUND",
+    message: "견적 요청을 찾을 수 없습니다.",
+  },
+
+  REQUEST_NOT_EDITABLE: {
+    status: 409,
+    code: "REQUEST_NOT_EDITABLE",
+    message: "견적이 도착한 요청은 수정할 수 없습니다.",
+  },
+
+  // 2026.08.03 정슬기 - [추가] 견적 요청 취소 API 에러
+  ESTIMATE_REQUEST_ALREADY_CANCELED: {
+    status: 409,
+    code: "ESTIMATE_REQUEST_ALREADY_CANCELED",
+    message: "이미 취소된 견적 요청입니다.",
+  },
+
+  ESTIMATE_REQUEST_CANCEL_NOT_ALLOWED: {
+    status: 409,
+    code: "ESTIMATE_REQUEST_CANCEL_NOT_ALLOWED",
+    message: "현재 상태에서는 견적 요청을 취소할 수 없습니다.",
+  },
+
+  MOVER_NOT_FOUND: {
+    status: 404,
+    code: "MOVER_NOT_FOUND",
+    message: "존재하지 않는 기사님입니다.",
+  },
+
+  MOVER_PROFILE_REQUIRED: {
+    status: 409,
+    code: "MOVER_PROFILE_REQUIRED",
+    message: "프로필 정보가 없는 기사의 견적은 확정할 수 없습니다.",
+  },
+
+  MOVER_DATE_OFF: {
+    status: 409,
+    code: "MOVER_DATE_OFF",
+    message: "기사가 휴무로 지정한 날짜입니다.",
+  },
+
+  MOVER_DATE_FULL: {
+    status: 409,
+    code: "MOVER_DATE_FULL",
+    message: "이미 확정된 일정이 있는 날짜입니다.",
+  },
+
+  ALREADY_DESIGNATED: {
+    status: 409,
+    code: "ALREADY_DESIGNATED",
+    message: "이미 지정한 기사님입니다.",
+  },
+
+  DESIGNATION_LIMIT_EXCEEDED: {
+    status: 409,
+    code: "DESIGNATION_LIMIT_EXCEEDED",
+    message: "지정 견적은 최대 3명까지 요청할 수 있습니다.",
+  },
+
+  DESIGNATION_SERVICE_TYPE_MISMATCH: {
+    status: 409,
+    code: "DESIGNATION_SERVICE_TYPE_MISMATCH",
+    message: "기사님이 제공하지 않는 이사 유형입니다.",
+  },
+
+  DESIGNATION_NOT_FOUND: {
+    status: 404,
+    code: "DESIGNATION_NOT_FOUND",
+    message: "지정 견적 요청을 찾을 수 없습니다.",
+  },
+
+  DESIGNATION_CANCEL_NOT_ALLOWED: {
+    status: 409,
+    code: "DESIGNATION_CANCEL_NOT_ALLOWED",
+    message: "이미 견적을 제출한 기사님의 지정 요청은 취소할 수 없습니다.",
+  },
+
+  // 2026.07.24 정슬기 - [추가] 받은 견적 상세·확정 API용 에러 코드
+  ESTIMATE_NOT_FOUND: {
+    status: 404,
+    code: "ESTIMATE_NOT_FOUND",
+    message: "견적을 찾을 수 없습니다.",
+  },
+
+  ESTIMATE_ALREADY_CONFIRMED: {
+    status: 409,
+    code: "ESTIMATE_ALREADY_CONFIRMED",
+    message: "이미 확정된 견적이 있어 추가로 확정할 수 없습니다.",
+  },
+
+  ESTIMATE_NOT_CONFIRMABLE: {
+    status: 409,
+    code: "ESTIMATE_NOT_CONFIRMABLE",
+    message: "확정할 수 없는 견적입니다.",
+  },
+
+  // 2026.08.17 김나연 - [추가] 거주후기 API 에러 코드
+  RESIDENCE_REVIEW_NOT_FOUND: {
+    status: 404,
+    code: "RESIDENCE_REVIEW_NOT_FOUND",
+    message: "거주후기를 찾을 수 없습니다.",
+  },
+
+  // 2026.07.28 심현수 - [추가]관리자 공지사항
+  NOTICE_NOT_FOUND: {
+    status: 404,
+    code: "NOTICE_NOT_FOUND",
+    message: "공지를 찾을 수 없습니다.",
+  },
+
+  // 2026.07.29 심현수 - [추가]관리자 FAQ
+  FAQ_NOT_FOUND: {
+    status: 404,
+    code: "FAQ_NOT_FOUND",
+    message: "FAQ를 찾을 수 없습니다.",
+  },
+
+  // 2026.07.30 심현수 - [추가] 1:1 문의(QNA)
+  INQUIRY_NOT_FOUND: {
+    status: 404,
+    code: "INQUIRY_NOT_FOUND",
+    message: "문의를 찾을 수 없습니다.",
+  },
+  INQUIRY_CLOSED: {
+    status: 409,
+    code: "INQUIRY_CLOSED",
+    message: "이미 종료된 문의입니다. 새 문의를 등록해 주세요.",
+  },
+  // 2026.08.03 신영미 - [추가] 관리자 콘텐츠 관리
+  CONTENT_NOT_FOUND: {
+    status: 404,
+    code: "CONTENT_NOT_FOUND",
+    message: "콘텐츠를 찾을 수 없습니다.",
+  },
+  CONTENT_ALREADY_HIDDEN: {
+    status: 409,
+    code: "CONTENT_ALREADY_HIDDEN",
+    message: "이미 숨김 처리된 콘텐츠입니다.",
+  },
+  CONTENT_NOT_HIDDEN: {
+    status: 409,
+    code: "CONTENT_NOT_HIDDEN",
+    message: "숨김 상태가 아니므로 복구할 수 없습니다.",
+  },
+  REPORT_TARGET_NOT_FOUND: {
+    status: 404,
+    code: "REPORT_TARGET_NOT_FOUND",
+    message: "신고 대상을 찾을 수 없습니다.",
+  },
+  REPORT_ALREADY_EXISTS: {
+    status: 409,
+    code: "REPORT_ALREADY_EXISTS",
+    message: "이미 신고한 대상입니다.",
+  },
+  REPORT_SELF_NOT_ALLOWED: {
+    status: 403,
+    code: "REPORT_SELF_NOT_ALLOWED",
+    message: "본인 자신은 신고할 수 없습니다.",
+  },
+  REPORT_TARGET_NOT_REPORTABLE: {
+    status: 409,
+    code: "REPORT_TARGET_NOT_REPORTABLE",
+    message: "신고 가능한 대상이 아닙니다.",
+  },
+
+  // 2026.08.04 심현수 - [추가] 약관(Terms)
+  TERMS_NOT_FOUND: {
+    status: 404,
+    code: "TERMS_NOT_FOUND",
+    message: "약관을 찾을 수 없습니다.",
+  },
+  TERMS_NOT_EDITABLE: {
+    status: 409,
+    code: "TERMS_NOT_EDITABLE",
+    message: "작성 중(DRAFT) 상태의 약관만 수정할 수 있습니다.",
+  },
+  TERMS_NOT_PUBLISHABLE: {
+    status: 409,
+    code: "TERMS_NOT_PUBLISHABLE",
+    message: "작성 중(DRAFT) 상태의 약관만 게시할 수 있습니다.",
+  },
+  TERMS_NOT_DELETABLE: {
+    status: 409,
+    code: "TERMS_NOT_DELETABLE",
+    message: "작성 중(DRAFT) 상태의 약관만 삭제할 수 있습니다.",
+  },
+  TERMS_VERSION_DUPLICATED: {
+    status: 409,
+    code: "TERMS_VERSION_DUPLICATED",
+    message: "같은 유형에 이미 존재하는 버전입니다.",
+  },
+  // 관리자 고객 상세 / 상태 변경
+  USER_NOT_FOUND: {
+    status: 404,
+    code: "USER_NOT_FOUND",
+    message: "해당 회원을 찾을 수 없습니다.",
+  },
+  SELF_ACTION_NOT_ALLOWED: {
+    status: 403,
+    code: "SELF_ACTION_NOT_ALLOWED",
+    message: "관리자는 자신의 계정 상태를 변경할 수 없습니다.",
+  },
+  CUSTOMER_STATUS_ALREADY_PROCESSED: {
+    status: 409,
+    code: "CUSTOMER_STATUS_ALREADY_PROCESSED",
+    message: "이미 요청한 상태로 처리된 회원입니다.",
+  },
+  MOVER_STATUS_ALREADY_PROCESSED: {
+    status: 409,
+    code: "MOVER_STATUS_ALREADY_PROCESSED",
+    message: "이미 요청한 상태로 처리된 기사님입니다.",
+  },
+  DESIGNATION_ALREADY_REJECTED: {
+    status: 409,
+    code: "DESIGNATION_ALREADY_REJECTED",
+    message: "이미 해당 견적 요청을 반려한 기사님입니다.",
+  },
+  ADMIN_ESTIMATE_CANCEL_NOT_ALLOWED: {
+    status: 409,
+    code: "ADMIN_ESTIMATE_CANCEL_NOT_ALLOWED",
+    message: "확정된 진행 거래만 관리자가 취소할 수 있습니다.",
+  },
+
+  GIVEAWAY_NOT_FOUND: {
+    status: 404,
+    code: "GIVEAWAY_NOT_FOUND",
+    message: "나눔 글을 찾을 수 없습니다.",
+  },
+  GIVEAWAY_NOT_EDITABLE: {
+    status: 409,
+    code: "GIVEAWAY_NOT_EDITABLE",
+    message: "신청 가능 상태의 나눔 글만 수정할 수 있습니다.",
+  },
+  GIVEAWAY_UPDATE_CONFLICT: {
+    status: 409,
+    code: "GIVEAWAY_UPDATE_CONFLICT",
+    message:
+      "나눔 글이 다른 요청으로 먼저 수정되었습니다. 최신 내용을 확인한 뒤 다시 시도해 주세요.",
+  },
+  GIVEAWAY_NOT_DELETABLE: {
+    status: 409,
+    code: "GIVEAWAY_NOT_DELETABLE",
+    message: "신청 가능 상태의 나눔 글만 삭제할 수 있습니다.",
+  },
+  GIVEAWAY_NOT_REQUESTABLE: {
+    status: 409,
+    code: "GIVEAWAY_NOT_REQUESTABLE",
+    message: "현재 상태에서는 나눔을 신청할 수 없습니다.",
+  },
+  GIVEAWAY_NOT_COMPLETABLE: {
+    status: 409,
+    code: "GIVEAWAY_NOT_COMPLETABLE",
+    message: "진행 중인 나눔만 완료할 수 있습니다.",
+  },
+  GIVEAWAY_ALREADY_COMPLETED: {
+    status: 409,
+    code: "GIVEAWAY_ALREADY_COMPLETED",
+    message: "완료된 나눔은 변경할 수 없습니다.",
+  },
+  GIVEAWAY_RECEIVER_ALREADY_SELECTED: {
+    status: 409,
+    code: "GIVEAWAY_RECEIVER_ALREADY_SELECTED",
+    message: "이미 수령자가 선정된 나눔입니다.",
+  },
+  GIVEAWAY_SELF_REQUEST_NOT_ALLOWED: {
+    status: 403,
+    code: "GIVEAWAY_SELF_REQUEST_NOT_ALLOWED",
+    message: "본인이 작성한 나눔 글에는 신청할 수 없습니다.",
+  },
+  GIVEAWAY_REQUEST_NOT_FOUND: {
+    status: 404,
+    code: "GIVEAWAY_REQUEST_NOT_FOUND",
+    message: "나눔 신청을 찾을 수 없습니다.",
+  },
+  GIVEAWAY_REQUEST_ALREADY_EXISTS: {
+    status: 409,
+    code: "GIVEAWAY_REQUEST_ALREADY_EXISTS",
+    message: "이미 대기 중이거나 선정된 신청이 있습니다.",
+  },
+  GIVEAWAY_REQUEST_NOT_EDITABLE: {
+    status: 409,
+    code: "GIVEAWAY_REQUEST_NOT_EDITABLE",
+    message: "대기 중인 신청만 메시지를 수정할 수 있습니다.",
+  },
+  GIVEAWAY_REQUEST_CANCEL_NOT_ALLOWED: {
+    status: 409,
+    code: "GIVEAWAY_REQUEST_CANCEL_NOT_ALLOWED",
+    message: "현재 상태에서는 나눔 신청을 취소할 수 없습니다.",
+  },
+  GIVEAWAY_REQUEST_NOT_SELECTABLE: {
+    status: 409,
+    code: "GIVEAWAY_REQUEST_NOT_SELECTABLE",
+    message: "대기 중인 신청만 선정할 수 있습니다.",
+  },
+  GIVEAWAY_REQUEST_NOT_REJECTABLE: {
+    status: 409,
+    code: "GIVEAWAY_REQUEST_NOT_REJECTABLE",
+    message: "대기 중인 신청만 거절할 수 있습니다.",
+  },
+  // 이용약관 동의 처리
+  TERMS_AGREEMENT_REQUIRED: {
+    status: 400,
+    code: "TERMS_AGREEMENT_REQUIRED",
+    message: "필수 약관에 동의해야 가입할 수 있습니다.",
+  },
+  TERMS_AGREEMENT_INVALID: {
+    status: 400,
+    code: "TERMS_AGREEMENT_INVALID",
+    message: "약관 동의 정보가 올바르지 않습니다.",
+  },
+} as const;
+
+// ErrorCode의 key 타입
+export type ErrorCode = keyof typeof ERROR_CODES;

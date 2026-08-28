@@ -1,0 +1,81 @@
+import type { z } from "zod";
+
+import type {
+  chatImageUploadUrlBodySchema,
+  chatMessageListQuerySchema,
+  chatRoomParamSchema,
+  createChatRoomBodySchema,
+  joinChatRoomPayloadSchema,
+  requestEstimateRevisionPayloadSchema,
+  respondEstimateRevisionPayloadSchema,
+  sendChatImageMessagePayloadSchema,
+  sendChatMessagePayloadSchema,
+} from "./chat.validator";
+
+export type ChatRoomParam = z.infer<typeof chatRoomParamSchema>;
+export type CreateChatRoomBody = z.infer<typeof createChatRoomBodySchema>;
+export type ChatMessageListQuery = z.infer<typeof chatMessageListQuerySchema>;
+export type ChatImageUploadUrlBody = z.infer<typeof chatImageUploadUrlBodySchema>;
+export type JoinChatRoomPayload = z.infer<typeof joinChatRoomPayloadSchema>;
+export type SendChatMessagePayload = z.infer<typeof sendChatMessagePayloadSchema>;
+export type SendChatImageMessagePayload = z.infer<typeof sendChatImageMessagePayloadSchema>;
+export type RequestEstimateRevisionPayload = z.infer<typeof requestEstimateRevisionPayloadSchema>;
+export type RespondEstimateRevisionPayload = z.infer<typeof respondEstimateRevisionPayloadSchema>;
+
+export type ChatParticipant = {
+  id: string;
+  name: string;
+  role: "CUSTOMER" | "MOVER";
+};
+
+export type ChatRoomSummary = {
+  id: number;
+  estimateId: number;
+  estimateRequestId: number;
+  customer: ChatParticipant;
+  mover: ChatParticipant;
+  /** 현재 채팅방에서 텍스트·이미지 메시지를 전송할 수 있는지 여부입니다. */
+  canSendMessage: boolean;
+  /** 메시지 전송이 불가능한 경우 프론트에 표시할 안내 문구입니다. */
+  messageDisabledReason: string | null;
+  lastMessageAt: Date | null;
+  createdAt: Date;
+  updatedAt: Date;
+};
+
+export type ChatMessageResponse = {
+  id: number;
+  roomId: number;
+  // SYSTEM 메시지는 특정 사용자가 보낸 메시지가 아니므로 null입니다.
+  senderId: string | null;
+  type: "TEXT" | "IMAGE" | "SYSTEM" | "ESTIMATE_REVISION";
+  content: string | null;
+  imageUrl: string | null;
+  isRead: boolean;
+  readAt: Date | null;
+  createdAt: Date;
+  sender: ChatParticipant | null;
+  revision: ChatEstimateRevision | null;
+};
+
+export type ChatEstimateRevision = {
+  id: number;
+  estimateId: number;
+  requesterId: string;
+  responderId: string | null;
+  previousPrice: number;
+  requestedPrice: number;
+  previousMoveDate: Date;
+  requestedMoveDate: Date;
+  previousComment: string;
+  requestedComment: string;
+  status: "PENDING" | "APPROVED" | "REJECTED" | "CANCELED";
+  createdAt: Date;
+  respondedAt: Date | null;
+};
+
+export type MissedChatMessagesResponse = {
+  messages: ChatMessageResponse[];
+  hasMore: boolean;
+  nextMessageId: number | null;
+};
