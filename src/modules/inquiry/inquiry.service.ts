@@ -266,7 +266,8 @@ export const adminInquiryService = {
           userId: inquiry.authorId,
           type: "INQUIRY_ANSWERED",
           title: "문의에 답변이 등록되었어요",
-          content: "1:1 문의에 대한 답변이 도착했습니다.",
+          // FE는 suffix(inquiryAnswered)만 사용. content는 강조 fragment용이며 완성 문장을 넣지 않는다.
+          content: "",
           linkUrl: `/inquiries/${String(inquiryId)}`,
           expiresAt: null,
         },

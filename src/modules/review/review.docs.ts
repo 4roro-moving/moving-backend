@@ -26,6 +26,10 @@ registerRouterDocs(reviewRouter, {
         "",
         "- page 기본값은 1, 최대 1000입니다.",
         "- limit 기본값은 10, 최대 50입니다.",
+        "- 관리자가 숨긴 리뷰도 포함됩니다.",
+        "- `isHidden`: 숨김 여부.",
+        "- `hiddenReason`: 숨김일 때 최신 HIDE ActivityLog.memo(처리 사유). 공개면 null.",
+        "- 기사 마이페이지 및 공개 리뷰 목록 API에는 숨김 리뷰·사유를 노출하지 않습니다.",
       ].join("\n"),
       responses: {
         200: "내 리뷰 목록 조회 성공",
