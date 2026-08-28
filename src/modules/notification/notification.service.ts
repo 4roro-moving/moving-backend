@@ -97,6 +97,24 @@ const createNotification = async (
   return notificationRepository.create(input, db);
 };
 
+/**
+ * 동일/유사 알림을 다수 사용자에게 일괄 저장한 뒤 SSE refresh를 보낸다.
+ * createMany는 생성 row를 반환하지 않으므로 notification-refresh 이벤트를 사용한다.
+ */
+const createAndBroadcastNotifications = async (
+  inputs: CreateNotificationInput[],
+): Promise<number> => {
+  const createdCount = await notificationRepository.createMany(inputs);
+
+  if (inputs.length > 0) {
+    notificationSseService.sendNotificationRefresh([
+      ...new Set(inputs.map((input) => input.userId)),
+    ]);
+  }
+
+  return createdCount;
+};
+
 const createBulkNotification = async (input: CreateBulkNotificationInput): Promise<number> => {
   assertSupportedNoticeAudience(input.role);
   assertValidBulkNotificationSnapshotAt(input.snapshotAt);
@@ -172,6 +190,7 @@ export const notificationService = {
   readNotification,
   readAllNotifications,
   createNotification,
+  createAndBroadcastNotifications,
   createBulkNotification,
   sendNotification,
   cleanupExpiredNotifications,
