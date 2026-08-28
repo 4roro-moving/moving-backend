@@ -117,88 +117,92 @@ export const estimateRequestService = {
     const moveDate = resolveMoveDate(input.moveDate);
     const expiresAt = resolveExpiresAt(moveDate);
 
-    const result = await prisma.$transaction(async (tx) => {
-      const existing = await estimateRequestRepository.findActiveByCustomerId(customerId, tx);
+    // 견적 요청·이력 생성만 트랜잭션으로 원자화한다.
+    // 매칭 기사 조회/알림 N건 INSERT는 interactive TX(기본 5s)를 쉽게 초과하므로 커밋 이후 처리한다.
+    const created = await prisma.$transaction(
+      async (tx) => {
+        const existing = await estimateRequestRepository.findActiveByCustomerId(customerId, tx);
 
-      if (existing) {
-        throw new AppError("ACTIVE_REQUEST_EXISTS", {
-          data: { activeRequestId: existing.id },
-        });
-      }
+        if (existing) {
+          throw new AppError("ACTIVE_REQUEST_EXISTS", {
+            data: { activeRequestId: existing.id },
+          });
+        }
 
-      const [fromRegionId, toRegionId] = await Promise.all([
-        resolveRegionId(input.from, tx),
-        resolveRegionId(input.to, tx),
-      ]);
+        const [fromRegionId, toRegionId] = await Promise.all([
+          resolveRegionId(input.from, tx),
+          resolveRegionId(input.to, tx),
+        ]);
 
-      const created = await estimateRequestRepository.create(
-        {
-          customerId,
-          moveType: input.moveType,
-          moveDate,
-          fromZipCode: input.from.zipCode ?? "",
-          fromAddress: input.from.address,
-          ...(input.from.detailAddress !== undefined && {
-            fromDetailAddress: input.from.detailAddress,
-          }),
-          fromRegionId,
-          toZipCode: input.to.zipCode ?? "",
-          toAddress: input.to.address,
-          ...(input.to.detailAddress !== undefined && {
-            toDetailAddress: input.to.detailAddress,
-          }),
-          toRegionId,
-          status: "OPEN",
-          isActive: true,
-          expiresAt,
-        },
-        tx,
-      );
+        const created = await estimateRequestRepository.create(
+          {
+            customerId,
+            moveType: input.moveType,
+            moveDate,
+            fromZipCode: input.from.zipCode ?? "",
+            fromAddress: input.from.address,
+            ...(input.from.detailAddress !== undefined && {
+              fromDetailAddress: input.from.detailAddress,
+            }),
+            fromRegionId,
+            toZipCode: input.to.zipCode ?? "",
+            toAddress: input.to.address,
+            ...(input.to.detailAddress !== undefined && {
+              toDetailAddress: input.to.detailAddress,
+            }),
+            toRegionId,
+            status: "OPEN",
+            isActive: true,
+            expiresAt,
+          },
+          tx,
+        );
 
-      await estimateRequestRepository.createHistory(
-        {
-          estimateRequestId: created.id,
-          changedBy: customerId,
-          type: "CREATED",
-          changedData: toHistorySnapshot(created),
-        },
-        tx,
-      );
+        await estimateRequestRepository.createHistory(
+          {
+            estimateRequestId: created.id,
+            changedBy: customerId,
+            type: "CREATED",
+            changedData: toHistorySnapshot(created),
+          },
+          tx,
+        );
 
-      const moverIds = await estimateRequestRepository.findMatchingMoverIds(
-        { fromRegionId, toRegionId, moveType: input.moveType },
-        tx,
-      );
+        return created;
+      },
+      { timeout: 15_000 },
+    );
 
-      // 알림 DB 저장은 핵심 작업과 같은 트랜잭션에 포함한다(알림 필수).
-      // SSE 전송은 롤백이 불가하므로 커밋 이후 별도로 처리한다.
-      const notifications = await Promise.all(
-        moverIds.map(async (moverId) => {
-          const notification = await notificationService.createNotification(
-            {
-              userId: moverId,
-              type: "ESTIMATE_REQUEST_RECEIVED",
-              title: "새로운 견적 요청이 도착했어요",
-              content: MOVE_TYPE_LABEL[created.moveType],
-              linkUrl: `/estimate/received-requests`,
-              expiresAt: null,
-            },
-            tx,
-          );
-
-          return { userId: moverId, notification };
-        }),
-      );
-
-      return { created, notifications };
+    const moverIds = await estimateRequestRepository.findMatchingMoverIds({
+      fromRegionId: created.fromRegion.id,
+      toRegionId: created.toRegion.id,
+      moveType: created.moveType,
     });
 
-    // 커밋 이후 SSE 전송 (실패해도 이미 커밋된 견적 요청에는 영향 없음)
-    for (const { userId, notification } of result.notifications) {
-      notificationService.sendNotification(userId, notification);
+    // 취소 플로우와 동일하게 알림 실패가 생성 성공 응답을 덮지 않도록 격리한다.
+    if (moverIds.length > 0) {
+      try {
+        await notificationService.createAndBroadcastNotifications(
+          moverIds.map((moverId) => ({
+            userId: moverId,
+            type: "ESTIMATE_REQUEST_RECEIVED",
+            title: "새로운 견적 요청이 도착했어요",
+            content: MOVE_TYPE_LABEL[created.moveType],
+            linkUrl: `/estimate/received-requests`,
+            sourceId: String(created.id),
+            expiresAt: null,
+          })),
+        );
+      } catch (error) {
+        logger.error("Failed to create ESTIMATE_REQUEST_RECEIVED notifications.", {
+          error,
+          estimateRequestId: created.id,
+          moverCount: moverIds.length,
+        });
+      }
     }
 
-    return mapEstimateRequestProfileImageUrls(result.created);
+    return mapEstimateRequestProfileImageUrls(created);
   },
 
   /**
